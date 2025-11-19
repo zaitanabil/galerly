@@ -225,6 +225,7 @@ function showRAWPlaceholder(img) {
 /**
  * Enhanced image loading for all gallery images
  * Automatically upgrades all <img> tags with smart loading
+ * ONLY for HEIC, TIFF, and RAW formats - standard images load normally
  */
 function enhanceGalleryImages() {
     const images = document.querySelectorAll('.gallery-grid img, .gallery-photo img, .modal-image-wrapper img');
@@ -236,12 +237,13 @@ function enhanceGalleryImages() {
         const originalSrc = img.src || img.dataset.src;
         if (!originalSrc) return;
         
-        // Mark as enhanced
-        img.dataset.enhanced = 'true';
-        
-        // Check if it's a problematic format
+        // ONLY enhance problematic formats (HEIC, TIFF, RAW)
+        // Standard images (JPEG, PNG, GIF, WebP) should load normally
         if (isHEICUrl(originalSrc) || isTIFFUrl(originalSrc) || isRAWUrl(originalSrc)) {
             console.log(`🔍 Enhancing image: ${originalSrc}`);
+            
+            // Mark as enhanced BEFORE replacement
+            img.dataset.enhanced = 'true';
             
             // Replace src with loading placeholder
             img.src = 'data:image/svg+xml,' + encodeURIComponent(`
@@ -273,6 +275,7 @@ function enhanceGalleryImages() {
                 }
             );
         }
+        // Standard images (JPEG, PNG, etc.) - DO NOT mark as enhanced, let them load normally
     });
 }
 
