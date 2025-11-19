@@ -165,6 +165,19 @@ class UploadQueue {
      */
     async uploadFile(file) {
         try {
+            // 🚀 BIG TECH SOLUTION: Convert HEIC to JPEG (Instagram/Booking.com approach)
+            // This happens CLIENT-SIDE before upload for universal browser compatibility
+            if (typeof window.processImageForUpload === 'function') {
+                console.log(`📸 Processing image: ${file.name}`);
+                try {
+                    file = await window.processImageForUpload(file);
+                    console.log(`✅ Image processed: ${file.name}`);
+                } catch (processError) {
+                    console.warn(`⚠️  Image processing failed, using original:`, processError);
+                    // Continue with original file
+                }
+            }
+            
             // Step 1: Check for duplicates
             let checkResponse;
             try {
