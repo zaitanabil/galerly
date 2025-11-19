@@ -69,12 +69,12 @@ function addSelectionToolbar() {
     
     toolbar.innerHTML = `
         <div style="display: flex; align-items: center; gap: var(--size-m); flex-wrap: wrap;">
-            <!-- Prominent Download Button -->
+            <!-- Prominent Download Button - Fully Rounded -->
             <button id="downloadSelectedBtn" class="selection-btn-primary" onclick="downloadSelectedPhotos()" style="
                 padding: 12px 24px;
                 background: linear-gradient(135deg, #0066CC 0%, #0052A3 100%);
                 border: none;
-                border-radius: 8px;
+                border-radius: 9999px;
                 color: white;
                 cursor: pointer;
                 font-size: 1rem;
@@ -237,18 +237,23 @@ function updatePhotoCheckbox(photoId) {
         existingCheckmark.remove();
     }
     
-    // Update visual style for rounded checkbox
+    // Update visual style for rounded checkbox - ONLY CHECKMARK, NO DOT
     if (isSelected) {
         // Blue filled circle
         checkbox.style.background = '#007AFF';  // Apple blue
         checkbox.style.borderColor = '#007AFF';
         
-        // Add white checkmark in center
+        // Add white checkmark SVG (NO DOT!)
         const checkmark = document.createElement('div');
         checkmark.className = 'checkbox-checkmark';
         checkmark.innerHTML = `
-            <svg width="14" height="11" viewBox="0 0 14 11" fill="none" xmlns="http://www.w3.org/2000/svg" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);">
-                <path d="M1 5.5L5 9.5L13 1.5" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <svg width="16" height="13" viewBox="0 0 16 13" fill="none" xmlns="http://www.w3.org/2000/svg" style="
+                position: absolute; 
+                top: 50%; 
+                left: 50%; 
+                transform: translate(-50%, -50%);
+            ">
+                <path d="M2 6.5L6 10.5L14 2.5" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
         `;
         checkmark.style.cssText = `
@@ -262,7 +267,7 @@ function updatePhotoCheckbox(photoId) {
         `;
         checkboxWrapper.appendChild(checkmark);
     } else {
-        // White/light gray circle with border
+        // White/light gray circle with border (empty)
         checkbox.style.background = 'rgba(255, 255, 255, 0.95)';
         checkbox.style.borderColor = 'rgba(0, 0, 0, 0.15)';
     }

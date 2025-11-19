@@ -585,19 +585,6 @@ function renderPhotos(photos, startIndex, count) {
                         filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
                     "
                 />
-                ${isSelected ? `
-                    <div style="
-                        position: absolute;
-                        top: 50%;
-                        left: 50%;
-                        transform: translate(-50%, -50%);
-                        width: 8px;
-                        height: 8px;
-                        background: white;
-                        border-radius: 50%;
-                        pointer-events: none;
-                    "></div>
-                ` : ''}
             </div>
             <img 
                 src="${getImageUrl(photo.thumbnail_url || photo.url)}" 
@@ -639,12 +626,12 @@ function renderPhotos(photos, startIndex, count) {
     if (typeof window.initPhotoSelection === 'function') {
         window.initPhotoSelection();
     }
-    // Auto-select all photos after rendering (better UX)
+    // Auto-select ALL photos (including newly loaded ones from "Load More")
     setTimeout(() => {
-        if (typeof window.autoSelectAllPhotos === 'function' && window.selectedPhotos && window.selectedPhotos.size === 0) {
-            window.autoSelectAllPhotos();
+        if (typeof window.selectAllPhotos === 'function') {
+            window.selectAllPhotos(); // This will select ALL photos in window.galleryPhotos
         }
-    }, 800);
+    }, 300);
 }
 /**
  * Add "Load More" button
