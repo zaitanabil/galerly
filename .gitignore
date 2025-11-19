@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+.pytest_cache/
+.coverage
+
+# IDEs
+marketing/
+.cursor/
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Backend
+backend/venv/
+backend/env/
+backend/*.zip
+backend/package/
+backend/.env
+backend/python/
+
+# Logs
+*.log
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+
+# AWS
+*.pem
+*.key
+
+# Node modules (if any)
+node_modules/
+
+# Build artifacts
+dist/
+build/
