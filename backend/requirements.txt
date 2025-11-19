@@ -1,0 +1,27 @@
+# Galerly Backend Dependencies
+# Python 3.9+
+
+# AWS SDK
+boto3>=1.28.0
+
+# Stripe Payment Processing
+stripe>=7.0.0
+
+# Environment Variables
+python-dotenv>=1.0.0
+
+# Image Security & Processing
+Pillow>=10.0.0  # Image validation and sanitization
+pillow-heif>=0.13.0  # HEIC/HEIF support for Apple photos
+rawpy>=0.18.0  # RAW format support (CR2, NEF, ARW, DNG, etc.)
+# imagecodecs removed - too large for Lambda (45MB), rawpy includes necessary codecs
+
+# Note: Additional AWS services (DynamoDB, S3, SES) are accessed via boto3
+# No additional dependencies required for core functionality
+#
+# Duplicate detection uses only Python standard library (hashlib)
+# Image security uses Pillow for validation and sanitization
+
+# Development/Setup Tools
+# boto3 is already included above for Lambda configuration script
+

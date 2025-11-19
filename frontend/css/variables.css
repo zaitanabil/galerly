@@ -1,0 +1,748 @@
+/* ===================================================================
+   GALERLY DESIGN SYSTEM - Variables
+   Modern Color Palette & Design Tokens
+   =================================================================== */
+
+:root {
+  /* ===================================================================
+     PRIMARY COLORS
+     =================================================================== */
+  --color-blue: #0066CC;
+  --color-shark: #1D1D1F;
+  --color-gray: #F5F5F7;
+  --color-white: #FFFFFF;
+  --color-coral: #FF6F61;
+  --color-mint: #98FF98;
+  
+  /* Blue Variants */
+  --color-blue-light: #3A89E6;
+  --color-blue-lighter: #66A3FF;
+  --color-blue-dark: #004C99;
+  
+  /* Gray Variants */
+  --color-gray-dark: #86868B;
+  --color-gray-medium: #C7C7CC;
+  --color-gray-light: #E5E5EA;
+  --color-gray-lighter: #F2F2F7;
+  --color-light-gray: #F2F2F7;
+  
+  /* ===================================================================
+     GLASS EFFECTS
+     =================================================================== */
+  /* Light Glass */
+  --glass-bg-light: rgba(255, 255, 255, 0.7);
+  --glass-bg-light-strong: rgba(255, 255, 255, 0.85);
+  --glass-bg-light-subtle: rgba(255, 255, 255, 0.5);
+  --glass-border-light: rgba(255, 255, 255, 0.18);
+  
+  /* Dark Glass */
+  --glass-bg-dark: rgba(29, 29, 31, 0.7);
+  --glass-bg-dark-strong: rgba(29, 29, 31, 0.85);
+  --glass-bg-dark-subtle: rgba(29, 29, 31, 0.5);
+  --glass-border-dark: rgba(255, 255, 255, 0.1);
+  
+  /* Glass Effects */
+  --glass-blur: blur(20px);
+  --glass-blur-strong: blur(30px);
+  --glass-blur-subtle: blur(10px);
+  --glass-saturate: saturate(180%);
+  
+  /* Glass Shadows */
+  --glass-shadow-light: 0 8px 32px 0 rgba(0, 0, 0, 0.15);
+  --glass-shadow-dark: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+  --glass-shadow-subtle: 0 4px 16px 0 rgba(0, 0, 0, 0.1);
+  
+  /* ===================================================================
+     SPACING & LAYOUT
+     =================================================================== */
+  --top-page-padding: 180px;
+  --top-page-padding-mobile: 100px;
+  --letter-spacing: 0.12em;
+  
+  /* Sizes */
+  --size-xs: 4px;
+  --size-s: 8px;
+  --size-m: 16px;
+  --size-l: 24px;
+  --size-xl: 32px;
+  --size-2xl: 48px;
+  --size-3xl: 60px;
+  --size-4xl: 72px;
+  --size-5xl: 90px;
+  --size-6xl: 128px;
+  --size-7xl: 150px;
+  
+  /* Border Radius */
+  --border-radius-xs: 10px;
+  --border-radius-s: 12px;
+  --border-radius-m: 16px;
+  --border-radius-l: 20px;
+  --border-radius-xl: 28px;
+  --border-radius-2xl: 32px;
+  
+  /* ===================================================================
+     SEMANTIC COLOR SCALES
+     =================================================================== */
+  /* Primary Scale (Blue-based) */
+  --primary-1000: var(--color-shark);
+  --primary-100010: rgba(29, 29, 31, 0.1);
+  --primary-100070: rgba(29, 29, 31, 0.7);
+  --primary-900: #003D7A;
+  --primary-800: #00529E;
+  --primary-700: var(--color-blue-dark);
+  --primary-600: var(--color-blue);
+  --primary-500: var(--color-blue-light);
+  --primary-400: var(--color-blue-lighter);
+  --primary-300: #CCCCCC;
+  --primary-200: #E0E0E0;
+  --primary-100: #F0F0F0;
+  --primary-10070: rgba(240, 240, 240, 0.7);
+  --primary-50: #F5F5F7;
+  --primary-5090: rgba(245, 245, 247, 0.9);
+  --primary-5070: rgba(245, 245, 247, 0.7);
+  --primary-5030: rgba(245, 245, 247, 0.3);
+  
+  /* Secondary Scale (Coral-based) */
+  --secondary-1000: #8C2A1F;
+  --secondary-900: #B33625;
+  --secondary-800: #D9432C;
+  --secondary-700: var(--color-coral);
+  --secondary-600: #FF8577;
+  --secondary-500: #FF9B8D;
+  --secondary-400: #FFB1A3;
+  --secondary-300: #FFC7B9;
+  --secondary-200: #FFDDD0;
+  --secondary-100: #FFEEE7;
+  --secondary-50: #FFF7F4;
+  
+  /* Neutral Scale (Gray-based) */
+  --neutral-1000: var(--color-shark);
+  --neutral-900: #2C2C2E;
+  --neutral-800: #3A3A3C;
+  --neutral-700: #48484A;
+  --neutral-600: #636366;
+  --neutral-500: var(--color-gray-dark);
+  --neutral-400: #AEAEB2;
+  --neutral-300: var(--color-gray-medium);
+  --neutral-200: var(--color-gray-light);
+  --neutral-100: var(--color-gray-lighter);
+  --neutral-50: var(--color-gray);
+  --neutral-0: var(--color-white);
+  
+  /* Semantic Status Colors */
+  --semantic-success: var(--color-mint);
+  --semantic-warning: #FFB340;
+  --semantic-error: #FF3B30;
+  --semantic-info: var(--color-blue);
+  
+  /* Warning/Semantic Scale */
+  --semantic-1000: #7A4A00;
+  --semantic-900: #996000;
+  --semantic-800: #B37500;
+  --semantic-700: #CC8A00;
+  --semantic-600: #E6A000;
+  --semantic-500: #FFB340;
+  --semantic-400: #FFC266;
+  --semantic-300: #FFD18C;
+  --semantic-200: #FFE0B3;
+  --semantic-100: #FFF0D9;
+  --semantic-50: #FFF8EC;
+}
+
+/* ===================================================================
+   LIGHT MODE THEME
+   =================================================================== */
+.animation-9,
+.theme-light {
+  --background-primary: var(--color-gray);
+  --background-secondary: var(--color-white);
+  --background-glass: var(--glass-bg-light);
+  
+  --button-primary-fill: var(--color-blue);
+  --button-primary-hover: var(--color-blue-light);
+  --button-primary-active: var(--color-blue-dark);
+  --button-secondary-fill: var(--glass-bg-light-strong);
+  --button-tag-fill: var(--primary-100010);
+  
+  --tag-primary-fill: var(--primary-5030);
+  --tag-secondary-border: var(--primary-100010);
+  
+  --text-primary: var(--color-shark);
+  --text-secondary: var(--color-gray-dark);
+  --text-tertiary: var(--color-gray-medium);
+  --text-highlighted: var(--color-blue);
+  --text-on-background: var(--primary-100070);
+  --text-on-button-primary: var(--color-white);
+  --text-on-button-secondary: var(--color-shark);
+  --text-on-button-tertiary: var(--color-shark);
+  --text-on-button-tag: var(--color-shark);
+  --text-on-card: var(--color-shark);
+  
+  --border-color: var(--color-gray-light);
+  --border-glass: var(--glass-border-light);
+  --grid-color: var(--color-gray-lighter);
+  
+  --shadow-default: var(--glass-shadow-light);
+  --shadow-hover: 0 12px 40px 0 rgba(0, 0, 0, 0.2);
+}
+
+/* ===================================================================
+   DARK MODE THEME
+   =================================================================== */
+.text-9,
+.theme-dark {
+  --background-primary: var(--color-shark);
+  --background-secondary: #000000;
+  --background-glass: var(--glass-bg-dark);
+  
+  --button-primary-fill: var(--color-blue);
+  --button-primary-hover: var(--color-blue-light);
+  --button-primary-active: var(--color-blue-dark);
+  --button-secondary-fill: var(--glass-bg-dark-strong);
+  --button-tag-fill: var(--primary-5030);
+  
+  --tag-primary-fill: var(--primary-5030);
+  --tag-secondary-border: var(--primary-5030);
+  
+  --text-primary: var(--color-white);
+  --text-secondary: var(--color-gray-medium);
+  --text-tertiary: var(--color-gray-light);
+  --text-highlighted: var(--color-blue-light);
+  --text-on-background: var(--primary-10070);
+  --text-on-button-primary: var(--color-white);
+  --text-on-button-secondary: var(--color-white);
+  --text-on-button-tertiary: var(--color-white);
+  --text-on-button-tag: var(--color-white);
+  --text-on-card: var(--color-white);
+  
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-glass: var(--glass-border-dark);
+  --grid-color: rgba(255, 255, 255, 0.05);
+  
+  --shadow-default: var(--glass-shadow-dark);
+  --shadow-hover: 0 12px 40px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* ===================================================================
+   GLASS UTILITY CLASSES
+   =================================================================== */
+.glass-light {
+  background: var(--glass-bg-light);
+  backdrop-filter: var(--glass-blur) var(--glass-saturate);
+  -webkit-backdrop-filter: var(--glass-blur) var(--glass-saturate);
+  border: 1px solid var(--glass-border-light);
+  box-shadow: var(--glass-shadow-light);
+}
+
+.glass-dark {
+  background: var(--glass-bg-dark);
+  backdrop-filter: var(--glass-blur) var(--glass-saturate);
+  -webkit-backdrop-filter: var(--glass-blur) var(--glass-saturate);
+  border: 1px solid var(--glass-border-dark);
+  box-shadow: var(--glass-shadow-dark);
+}
+
+.glass-subtle {
+  background: var(--glass-bg-light-subtle);
+  backdrop-filter: var(--glass-blur-subtle) var(--glass-saturate);
+  -webkit-backdrop-filter: var(--glass-blur-subtle) var(--glass-saturate);
+  border: 1px solid var(--glass-border-light);
+  box-shadow: var(--glass-shadow-subtle);
+}
+
+.glass-strong {
+  background: var(--glass-bg-light-strong);
+  backdrop-filter: var(--glass-blur-strong) var(--glass-saturate);
+  -webkit-backdrop-filter: var(--glass-blur-strong) var(--glass-saturate);
+  border: 1px solid var(--glass-border-light);
+  box-shadow: var(--glass-shadow-light);
+}
+
+/* ===================================================================
+   TYPOGRAPHY - FONT FACES - SF PRO FONT SYSTEM
+   =================================================================== */
+
+/* SF Pro Display - Display Font for Headers */
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-Ultralight.otf') format('opentype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-UltralightItalic.otf') format('opentype');
+  font-weight: 100;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-Thin.otf') format('opentype');
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-ThinItalic.otf') format('opentype');
+  font-weight: 200;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-LightItalic.otf') format('opentype');
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-RegularItalic.otf') format('opentype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-MediumItalic.otf') format('opentype');
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-Semibold.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-SemiboldItalic.otf') format('opentype');
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-BoldItalic.otf') format('opentype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-Heavy.otf') format('opentype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-HeavyItalic.otf') format('opentype');
+  font-weight: 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-Black.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Display';
+  src: url('../fonts/SF-Pro-Display-BlackItalic.otf') format('opentype');
+  font-weight: 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* SF Pro Text - Body Font for Text */
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-Ultralight.otf') format('opentype');
+  font-weight: 100;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-UltralightItalic.otf') format('opentype');
+  font-weight: 100;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-Thin.otf') format('opentype');
+  font-weight: 200;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-ThinItalic.otf') format('opentype');
+  font-weight: 200;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-Light.otf') format('opentype');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-LightItalic.otf') format('opentype');
+  font-weight: 300;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-Regular.otf') format('opentype');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-RegularItalic.otf') format('opentype');
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-Medium.otf') format('opentype');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-MediumItalic.otf') format('opentype');
+  font-weight: 500;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-Semibold.otf') format('opentype');
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-SemiboldItalic.otf') format('opentype');
+  font-weight: 600;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-Bold.otf') format('opentype');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-BoldItalic.otf') format('opentype');
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-Heavy.otf') format('opentype');
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-HeavyItalic.otf') format('opentype');
+  font-weight: 800;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-Black.otf') format('opentype');
+  font-weight: 900;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'SF Pro Text';
+  src: url('../fonts/SF-Pro-Text-BlackItalic.otf') format('opentype');
+  font-weight: 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+/* ===================================================================
+   GLOBAL BASE STYLES
+   =================================================================== */
+html {
+  scroll-behavior: smooth;
+}
+
+* {
+  box-sizing: border-box;
+  --italic-font: "SF Pro Display";
+  --parabole-display-font: "SF Pro Display";
+  --parabole-font: "SF Pro Text";
+  --pp-neue-font: "SF Pro Text";
+  font-family: var(--pp-neue-font);
+}
+
+body {
+  margin: 0;
+  overflow-x: hidden;
+  background: var(--background-primary);
+  color: var(--text-primary);
+  animation: fadeIn 0.3s ease;
+}
+
+/* ===================================================================
+   TYPOGRAPHY BASE
+   =================================================================== */
+h1, h2, h3, h4, h5, h6, p {
+  margin: 0;
+}
+
+/* Headers - Size-based weight hierarchy */
+h1 {
+  font-family: "SF Pro Display";
+  font-weight: 300;  /* Light - Large hero headers */
+}
+
+h2 {
+  font-family: "SF Pro Display";
+  font-weight: 400;  /* Regular - Section headers */
+}
+
+h3 {
+  font-family: "SF Pro Text";
+  font-weight: 500;  /* Medium - Subsection headers */
+}
+
+h4 {
+  font-family: "SF Pro Text";
+  font-weight: 500;  /* Medium - Card/component headers */
+}
+
+h5, h6 {
+  font-family: "SF Pro Text";
+  font-weight: 400;  /* Regular - Small headers, labels */
+}
+
+p {
+  font-family: "SF Pro Text";
+  font-weight: 400;  /* Regular - Body text readability */
+}
+
+p > strong {
+  font-weight: 600;  /* Semibold - Clear emphasis */
+}
+
+p > em {
+  font-weight: 400;  /* Keep weight, use italic for emphasis */
+  font-style: italic;
+}
+
+p > a {
+  text-decoration: underline;
+  color: var(--color-blue);
+  transition: opacity 0.2s ease;
+}
+
+p > a:hover {
+  opacity: 0.8;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
+/* ===================================================================
+   FORM ELEMENTS BASE
+   =================================================================== */
+a, button, input, select, textarea {
+  -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+  transition: all 0.2s ease;
+}
+
+/* Custom Radio Buttons */
+input[type="radio"] {
+  -moz-appearance: none;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border: 1px solid var(--border-color);
+  background: var(--background-secondary);
+  margin-right: 10px;
+  cursor: pointer;
+  outline: 0;
+  transition: all 0.2s ease;
+  position: relative;
+  flex-shrink: 0;
+  border-radius: 50%;
+}
+
+input[type="radio"]:focus {
+  border: 2px solid var(--color-blue);
+  box-shadow: 0 0 0 4px rgba(0, 102, 204, 0.1);
+}
+
+input[type="radio"]:after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 8px;
+  height: 8px;
+  background: var(--color-white);
+  border-radius: 50%;
+  transform: scale(0);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+input[type="radio"]:checked {
+  background: var(--color-blue);
+  border: 1px solid var(--color-blue);
+}
+
+input[type="radio"]:checked:after {
+  transform: scale(1);
+}
+
+/* ===================================================================
+   UTILITY CLASSES
+   =================================================================== */
+.blueText {
+  color: var(--color-blue);
+}
+
+.gradientText {
+  background: linear-gradient(135deg, var(--color-blue) 0%, var(--color-blue-light) 100%);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  -webkit-box-decoration-break: clone;
+}
+
+.d-none {
+  display: none;
+}
+
+/* ===================================================================
+   ANIMATIONS
+   =================================================================== */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glassShimmer {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+/* ===================================================================
+   SMOOTH TRANSITIONS
+   =================================================================== */
+* {
+  transition-property: background, border, box-shadow, transform, opacity;
+  transition-duration: 0.2s;
+  transition-timing-function: ease;
+}

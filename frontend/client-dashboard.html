@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta http-equiv="content-type" content="text/html;charset=utf-8" />
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#F5F5F7" />
+    <title>My Photography Galleries - Client Dashboard | Galerly</title>
+    <meta name="description"
+        content="Client dashboard for accessing your photography galleries. View photos shared by photographers, select favorites, comment, and download images." />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="msapplication-TileColor" content="#F5F5F7" />
+    <link rel="canonical" href="dashboard" />
+    <link href="img/android-icon-36x36.png" rel="icon" sizes="36x36" type="image/png">
+    <link href="img/android-icon-48x48.png" rel="icon" sizes="48x48" type="image/png">
+    <link href="img/android-icon-72x72.png" rel="icon" sizes="72x72" type="image/png">
+    <link href="img/android-icon-96x96.png" rel="icon" sizes="96x96" type="image/png">
+    <link href="img/android-icon-144x144.png" rel="icon" sizes="144x144" type="image/png">
+    <link href="img/android-icon-192x192.png" rel="icon" sizes="192x192" type="image/png">
+    <link href="img/favicon-32x32.png" rel="icon" sizes="32x32" type="image/png">
+    <link href="img/favicon-96x96.png" rel="icon" sizes="96x96" type="image/png">
+    <link href="img/favicon-16x16.png" rel="icon" sizes="16x16" type="image/png">
+    <link href="img/apple-icon-57x57.png" rel="apple-touch-icon" sizes="57x57" type="image/png">
+    <link href="img/apple-icon-60x60.png" rel="apple-touch-icon" sizes="60x60" type="image/png">
+    <link href="img/apple-icon-72x72.png" rel="apple-touch-icon" sizes="72x72" type="image/png">
+    <link href="img/apple-icon-76x76.png" rel="apple-touch-icon" sizes="76x76" type="image/png">
+    <link href="img/apple-icon-114x114.png" rel="apple-touch-icon" sizes="114x114" type="image/png">
+    <link href="img/apple-icon-120x120.png" rel="apple-touch-icon" sizes="120x120" type="image/png">
+    <link href="img/apple-icon-144x144.png" rel="apple-touch-icon" sizes="144x144" type="image/png">
+    <link href="img/apple-icon-152x152.png" rel="apple-touch-icon" sizes="152x152" type="image/png">
+    <link href="img/apple-icon-180x180.png" rel="apple-touch-icon" sizes="180x180" type="image/png">
+    <link rel="stylesheet" href="css/variables.css" />
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/custom.css" />
+    <link rel="stylesheet" href="css/gallery.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <script src="https://unpkg.com/split-type"></script>
+</head>
+
+<body>
+    <div class="grid-11 footer-0">
+        <div>
+            <div>
+                <div class="grid-0"></div>
+                <div style="position: fixed; width: 100vw; height: 100dvh; z-index: -1000; background-color: #e8f1ff;"
+                    class="animation-18 icon-0">
+                    <div class="background-18 hero-5"></div>
+                    <div class="header-19 card-6"></div>
+                </div>
+                <div class="grid-0"></div>
+                <div class="nav-12 textarea-6 form-0"></div>
+                <header class="container-16 section-7 grid-7 text-9">
+                    <div class="form-18 grid-16 feature-0 nav-8">
+                        <div class="item-16 logo-8">
+                            <a href="/">
+                                <div class="input-16 animation-8">
+                                    <img src="img/mobile-header-logo-white.svg" />
+                                </div>
+                                <img src="img/header-logo-white.svg" class="form-16 link-0" />
+                            </a>
+                            <div class="link-16 feature-1 main-10">
+                                <div class="textarea-16 input-1"></div>
+                                <div class="list-16 footer-2"></div>
+                                <div class="icon-16 container-2"></div>
+                            </div>
+                            <nav aria-label="Main" class="header-17 header-3" data-orientation="horizontal" dir="ltr">
+                                <div style="position: relative">
+                                    <ul class="nav-17 list-9" data-orientation="horizontal" dir="ltr">
+                                        <li class="main-17 subtitle-3">
+                                            <a class="section-17 button-4" data-radix-collection-item
+                                                href="client-dashboard"> My Galleries </a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </nav>
+                            <!-- Desktop Auth Button (hidden on mobile) -->
+                            <a href="auth" aria-label="Sign In" class="logo-18 header-0" id="desktop-auth-button"
+                                style="display: none; background: var(--color-blue); color: var(--color-white);">
+                                <div class="title-18 main-6">
+                                    <span style="order: 0">
+                                        <span class="subtitle-18 form-6"> Sign In </span>
+                                    </span>
+                                </div>
+                            </a>
+                        </div>
+                    </div>
+                </header>
+                <div class="icon-15 hero-6 animation-9">
+                    <div class="link-15 feature-6">
+                        <a href="/">
+                            <div class="input-16 button-6">
+                                <img src="img/mobile-header-logo-white.svg" />
+                            </div>
+                        </a>
+                        <div class="link-16 text-6">
+                            <div class="textarea-16 input-1"></div>
+                            <div class="list-16 footer-2"></div>
+                            <div class="icon-16 container-2"></div>
+                        </div>
+                    </div>
+                    <div class="form-18 list-15 feature-0 title-6">
+                        <nav class="item-15 subtitle-6">
+                            <a href="client-dashboard"> My Galleries </a>
+                            <a href="auth"
+                                style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.1);">
+                                Sign In
+                            </a>
+                        </nav>
+                    </div>
+                </div>
+                <!-- Dashboard Content -->
+                <div class="header-13 subtitle-7" id="dashboard">
+                    <section class="card-17 link-6 text-9">
+                        <div class="main-14 list-6"></div>
+                        <div class="title-13 nav-0"></div>
+                        <div class="button-17 textarea-0 image-0">
+                            <div class="subtitle-17 item-6">
+                                <div class="form-18 image-17 feature-0 animation-6">
+                                    <div class="container-17 background-6">
+                                        <p>
+                                            <span aria-label="YOUR GALLERIES" class="title-14 header-7">
+                                                <span class="subtitle-14 nav-7">YOUR GALLERIES</span>
+                                            </span>
+                                        </p>
+                                        <div class="grid-17 main-7">
+                                            <span class="form-17 card-0"></span>
+                                            <p> Shared with love • From talented photographers • Just for you </p>
+                                        </div>
+                                        <div class="title-17 footer-7">
+                                            <a aria-label="Browse Galleries" class="image-18 hero-7"
+                                                href="#your-galleries">
+                                                <div class="title-18 main-6 container-0">
+                                                    <span>Browse Galleries <span class="text-18 feature-7">
+                                                            <svg width="17" height="14" viewBox="0 0 17 14" fill="none"
+                                                                color="var(--text-on-button-tertiary)">
+                                                                <path
+                                                                    d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
+                                                                    stroke="var(--text-on-button-tertiary)"
+                                                                    stroke-linecap="round"></path>
+                                                                <path d="M1 7L16 7"
+                                                                    stroke="var(--text-on-button-tertiary)"
+                                                                    stroke-linecap="round"></path>
+                                                            </svg>
+                                                        </span>
+                                                    </span>
+                                                </div>
+                                            </a>
+                                        </div>
+                                    </div>
+                                    <div class="input-17 card-7">
+                                        <h1> Your memories, beautifully preserved. </h1>
+                                        <div class="text-17 button-7">
+                                            <p> View, comment, and download your photo galleries from professional
+                                                photographers. Every image
+                                                captured with care, shared with you. </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                    <section>
+                        <div class="form-18 list-11 feature-0 input-0">
+                            <div class="item-11 input-7">
+                                <!-- Portfolio Impact Cards -->
+                                <div class="card-18 hero-10 animation-11 textarea-7" id="client-stat-galleries">
+                                    <div class="button-18 list-7">
+                                        <div class="container-15 item-7">
+                                            <h3 class="grid-15 animation-7"> Your Galleries </h3>
+                                            <div class="input-15 background-7">
+                                                <div style="display: flex; align-items: baseline; margin: 24px 0;">
+                                                    <span style="font-size: 48px; font-weight: 800; line-height: 1;"
+                                                        id="client-stat-galleries-count">0</span>
+                                                    <span style="font-size: 18px; margin-left: 8px; opacity: 0.7;"
+                                                        id="client-stat-galleries-label">galleries</span>
+                                                </div>
+                                                <p id="client-stat-galleries-desc"> Photo collections shared with you
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-18 hero-10 animation-11 textarea-7" id="client-stat-photos">
+                                    <div class="button-18 list-7">
+                                        <div class="container-15 item-7">
+                                            <h3 class="grid-15 animation-7"> Total Photos </h3>
+                                            <div class="input-15 background-7">
+                                                <div style="display: flex; align-items: baseline; margin: 24px 0;">
+                                                    <span style="font-size: 48px; font-weight: 800; line-height: 1;"
+                                                        id="client-stat-photos-count">0</span>
+                                                    <span style="font-size: 18px; margin-left: 8px; opacity: 0.7;"
+                                                        id="client-stat-photos-label">photos</span>
+                                                </div>
+                                                <p id="client-stat-photos-desc"> All photos approved </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="card-18 hero-10 animation-11 textarea-7" id="client-stat-photographers">
+                                    <div class="button-18 list-7">
+                                        <div class="container-15 item-7">
+                                            <h3 class="grid-15 animation-7"> Photographers </h3>
+                                            <div class="input-15 background-7">
+                                                <div style="display: flex; align-items: baseline; margin: 24px 0;">
+                                                    <span style="font-size: 48px; font-weight: 800; line-height: 1;"
+                                                        id="client-stat-photographers-count">0</span>
+                                                    <span style="font-size: 18px; margin-left: 8px; opacity: 0.7;"
+                                                        id="client-stat-photographers-label">photographers</span>
+                                                </div>
+                                                <p id="client-stat-photographers-desc"> Professionals sharing their art
+                                                    with you </p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Your Galleries Section -->
+                            <div style="margin-top: 120px;" id="your-galleries">
+                                <div class="header-14 logo-7">
+                                    <h2 class="link-13 image-7">
+                                        <span>
+                                            <span aria-label="YOUR GALLERIES" class="title-14 header-7">
+                                                <span class="subtitle-14 nav-7">YOUR GALLERIES</span>
+                                            </span>
+                                        </span>
+                                        <span>—
+                                            <!-- -->FROM PHOTOGRAPHERS
+                                        </span>
+                                    </h2>
+                                    <div class="feature-17 nav-14 container-7 form-7">
+                                        <p> View and enjoy photo galleries shared with you by professional
+                                            photographers. Comment, download,
+                                            and relive every moment. </p>
+                                    </div>
+                                </div>
+                                <div class="item-11 input-7" id="client-galleries-container">
+                                    <!-- Gallery Cards will be loaded dynamically from AWS -->
+                                    <div style="grid-column: 1/-1; text-align: center; padding: 60px; opacity: 0.6;">
+                                        <p style="font-size: 18px; margin-bottom: 12px;">Loading your galleries...</p>
+                                        <p style="font-size: 14px;">Your collections will appear here momentarily.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+                </div>
+                <!-- Footer -->
+                <footer class="card-10 input-4 animation-9 grid-0">
+                    <div class="logo-14 textarea-4 "></div>
+                    <div class="form-18 feature-0">
+                        <section class="textarea-10 link-4">
+                            <div class="header-11 list-4">
+                                <div class="text-10 item-4">
+                                    <div class="background-10 animation-4">
+                                        <div>
+                                            <span aria-label="Stay" class="title-14 header-7">
+                                                <span class="subtitle-14 nav-7">Stay</span>
+                                            </span>
+                                        </div>
+                                        <div style="font-style: italic"> — Connected</div>
+                                    </div>
+                                    <p class="title-10 background-4">
+                                        <strong>Join photographers worldwide</strong>
+                                        <br />Get updates, tips, and exclusive features
+                                    </p>
+                                </div>
+                                <div id="newsletter">
+                                    <form id="newsletter_form" class="subtitle-10 header-5"
+                                        enctype="multipart/form-data">
+                                        <div style="margin-bottom: 8px" class="logo-10 nav-5">
+                                            <input type="text" required="" placeholder="Your name"
+                                                class="image-10 main-5" name="firstName" />
+                                        </div>
+                                        <div class="logo-10 nav-5">
+                                            <input type="email" required="" placeholder="Your e-mail"
+                                                class="image-10 main-5" name="email" />
+                                            <button aria-label="Confirm" type="submit" class="logo-18 footer-5">
+                                                <div class="title-18 main-6 container-0">
+                                                    <span style="order: 0">Confirm</span>
+                                                    <span class="text-18 feature-7">
+                                                        <svg width="17" height="14" viewBox="0 0 17 14" fill="none"
+                                                            color="var(--text-on-button-secondary)">
+                                                            <path
+                                                                d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
+                                                                stroke="var(--text-on-button-secondary)"
+                                                                stroke-linecap="round"></path>
+                                                            <path d="M1 7L16 7" stroke="var(--text-on-button-secondary)"
+                                                                stroke-linecap="round"></path>
+                                                        </svg>
+                                                    </span>
+                                                </div>
+                                            </button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+                    <div class="form-18 feature-0">
+                        <section class="list-10 section-5">
+                            <div class="button-10 card-5"> SHARE ART, <br />NOT FILES </div>
+                            <div class="item-10 button-5">
+                                <div class="animation-10 text-5">
+                                    <div style="flex-shrink: 0">
+                                        <span class="input-10 title-5">Galerly</span>
+                                        <ul id="siteLinksParagraph" class="form-10 subtitle-5">
+                                            <li>
+                                                <a class="grid-10 logo-5" href="/">Platform</a>
+                                            </li>
+                                            <li>
+                                                <a class="grid-10 logo-5" href="pricing">Pricing</a>
+                                            </li>
+                                            <li>
+                                                <a class="grid-10 logo-5" href="faq">FAQ</a>
+                                            </li>
+                                            <li>
+                                                <a class="grid-10 logo-5" href="contact">Support</a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                    <div style="flex-shrink: 0">
+                                        <span class="input-10 title-5">Follow us</span>
+                                        <ul id="socialLinksParagraph" class="form-10 subtitle-5">
+                                            <li>
+                                                <a title="Instagram" target="_blank" rel="noopener noreferrer"
+                                                    class="grid-10 logo-5"
+                                                    href="https://www.instagram.com/withgalerly/">Instagram <svg
+                                                        xmlns="http://www.w3.org/2000/svg" width="12" height="12"
+                                                        viewBox="0 0 12 12" fill="none" class="container-10 main-0">
+                                                        <path
+                                                            d="M11.0435 9.88557L9.48515 9.89576V3.43836L1.12313 11.8004L0.00276604 10.68L8.36478 2.318L1.91758 2.32818V0.759669H11.0435V9.88557Z"
+                                                            fill="#101116"></path>
+                                                    </svg>
+                                                </a>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </section>
+                        <div class="icon-10 image-5">
+                            <a href="/" class="link-10 container-5">
+                                <img src="img/footer-logo-dark.svg" />
+                            </a>
+                            <a class="grid-10 logo-5" href="legal-notice">Legal notice</a>
+                            <a class="grid-10 logo-5" href="privacy">Privacy policy</a>
+                            <div> 2025 © Galerly </div>
+                        </div>
+                    </div>
+                    <div class="grid-0"></div>
+                </footer>
+            </div>
+            <div class="main-16 grid-5 animation-9" style="
+            pointer-events: none;
+            border-radius: 48px;
+            opacity: 0;
+            transform: translateY(100px) translateZ(0);
+          ">
+                <div class="section-16 form-5">
+                    <div class="hero-16 textarea-5"> Our website uses cookies </div>
+                    <div class="feature-16 icon-5"> Our website uses cookies to measure our audience, track performance
+                        during
+                        advertising campaigns and provide the best experience. </div>
+                    <div class="footer-16 link-5">
+                        <button aria-label="Deny all" class="logo-18 list-5">
+                            <div class="title-18 main-6">
+                                <span style="order: 0">
+                                    <span class="subtitle-18 form-6"> Deny all </span>
+                                </span>
+                            </div>
+                        </button>
+                        <button aria-label="Accept all" class="logo-18 item-5">
+                            <div class="title-18 main-6">
+                                <span style="order: 0">
+                                    <span class="subtitle-18 form-6"> Accept all </span>
+                                </span>
+                            </div>
+                        </button>
+                        <button aria-label="Customize" class="logo-18 header-0">
+                            <div class="title-18 main-6">
+                                <span style="order: 0">
+                                    <span class="subtitle-18 form-6"> Customize </span>
+                                </span>
+                            </div>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script src="js/rbac.js"></script>
+        <script src="js/auth-check.js"></script>
+        <script src="js/main.js"></script>
+        <!-- Configuration -->
+        <script src="js/env-production.js"></script>
+        <script src="js/config.js"></script>
+        <!-- Client dashboard loader -->
+        <script src="js/client-dashboard.js"></script>
+        <script src="js/cookie-consent.js"></script>
+        <script src="js/visitor-tracking.js"></script>
+</body>
+
+</html>

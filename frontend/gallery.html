@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<meta http-equiv="content-type" content="text/html;charset=utf-8" />
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#F5F5F7" />
+  <title>Photography Gallery - View & Manage Photos | Galerly</title>
+  <meta name="description" content="View and manage your photography gallery. Browse photos, edit gallery settings, track client interactions, and share with clients." />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="msapplication-TileColor" content="#F5F5F7" />
+  <link rel="canonical" href="gallery" />
+  <link href="img/android-icon-36x36.png" rel="icon" sizes="36x36" type="image/png">
+  <link href="img/android-icon-48x48.png" rel="icon" sizes="48x48" type="image/png">
+  <link href="img/android-icon-72x72.png" rel="icon" sizes="72x72" type="image/png">
+  <link href="img/android-icon-96x96.png" rel="icon" sizes="96x96" type="image/png">
+  <link href="img/android-icon-144x144.png" rel="icon" sizes="144x144" type="image/png">
+  <link href="img/android-icon-192x192.png" rel="icon" sizes="192x192" type="image/png">
+  <link href="img/favicon-32x32.png" rel="icon" sizes="32x32" type="image/png">
+  <link href="img/favicon-96x96.png" rel="icon" sizes="96x96" type="image/png">
+  <link href="img/favicon-16x16.png" rel="icon" sizes="16x16" type="image/png">
+  <link href="img/apple-icon-57x57.png" rel="apple-touch-icon" sizes="57x57" type="image/png">
+  <link href="img/apple-icon-60x60.png" rel="apple-touch-icon" sizes="60x60" type="image/png">
+  <link href="img/apple-icon-72x72.png" rel="apple-touch-icon" sizes="72x72" type="image/png">
+  <link href="img/apple-icon-76x76.png" rel="apple-touch-icon" sizes="76x76" type="image/png">
+  <link href="img/apple-icon-114x114.png" rel="apple-touch-icon" sizes="114x114" type="image/png">
+  <link href="img/apple-icon-120x120.png" rel="apple-touch-icon" sizes="120x120" type="image/png">
+  <link href="img/apple-icon-144x144.png" rel="apple-touch-icon" sizes="144x144" type="image/png">
+  <link href="img/apple-icon-152x152.png" rel="apple-touch-icon" sizes="152x152" type="image/png">
+  <link href="img/apple-icon-180x180.png" rel="apple-touch-icon" sizes="180x180" type="image/png">
+  <link rel="stylesheet" href="css/variables.css" />
+  <link rel="stylesheet" href="css/style.css" />
+  <link rel="stylesheet" href="css/custom.css" />
+  <link rel="stylesheet" href="css/gallery.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+  <script src="https://unpkg.com/split-type"></script>
+</head>
+
+<body>
+  <div class="grid-11 footer-0">
+    <div>
+      <div>
+        <div class="grid-0"></div>
+        <div style="position: fixed; width: 100vw; height: 100dvh; z-index: -1000; background-color: #e8f1ff;"
+          class="animation-18 icon-0">
+          <div class="background-18 hero-5"></div>
+          <div class="header-19 card-6"></div>
+        </div>
+        <div class="grid-0"></div>
+        <div class="nav-12 textarea-6 form-0"></div>
+        <header class="container-16 section-7 grid-7 text-9">
+          <div class="form-18 grid-16 feature-0 nav-8">
+            <div class="item-16 logo-8">
+              <a href="/">
+                <div class="input-16 animation-8">
+                  <img src="img/mobile-header-logo-white.svg" />
+                </div>
+                <img src="img/header-logo-white.svg" class="form-16 link-0" />
+              </a>
+              <div class="link-16 feature-1 main-10">
+                <div class="textarea-16 input-1"></div>
+                <div class="list-16 footer-2"></div>
+                <div class="icon-16 container-2"></div>
+              </div>
+              <nav aria-label="Main" class="header-17 header-3" data-orientation="horizontal" dir="ltr">
+                <div style="position: relative">
+                  <ul class="nav-17 list-9" data-orientation="horizontal" dir="ltr">
+                    <li class="main-17 subtitle-3">
+                      <a class="section-17 button-4" data-radix-collection-item href="/"> Platform </a>
+                    </li>
+                    <li class="main-17 subtitle-3">
+                      <a class="section-17 button-4" data-radix-collection-item href="dashboard"> Dashboard </a>
+                    </li>
+                    <li class="main-17 subtitle-3">
+                      <a class="section-17 button-4" data-radix-collection-item href="new-gallery"> New Gallery </a>
+                    </li>
+                    <li class="main-17 subtitle-3">
+                      <a class="section-17 button-4" data-radix-collection-item href="billing"> Billing </a>
+                    </li>
+                    <li class="main-17 subtitle-3">
+                      <a class="section-17 button-4" data-radix-collection-item href="profile-settings"> Profile </a>
+                    </li>
+                  </ul>
+                </div>
+              </nav>
+              <!-- Desktop Auth Button (hidden on mobile) -->
+              <a href="auth" aria-label="Sign In" class="logo-18 header-0" id="desktop-auth-button"
+                style="display: none; background: var(--color-blue); color: var(--color-white);">
+                <div class="title-18 main-6">
+                  <span style="order: 0">
+                    <span class="subtitle-18 form-6"> Sign In </span>
+                  </span>
+                </div>
+              </a>
+            </div>
+          </div>
+        </header>
+        <div class="icon-15 hero-6 animation-9">
+          <div class="link-15 feature-6">
+            <a href="/">
+              <div class="input-16 button-6">
+                <img src="img/mobile-header-logo-white.svg" />
+              </div>
+            </a>
+            <div class="link-16 text-6">
+              <div class="textarea-16 input-1"></div>
+              <div class="list-16 footer-2"></div>
+              <div class="icon-16 container-2"></div>
+            </div>
+          </div>
+          <div class="form-18 list-15 feature-0 title-6">
+            <nav class="item-15 subtitle-6">
+              <a href="/"> Platform </a>
+              <a href="dashboard"> Dashboard </a>
+              <a href="new-gallery"> New Gallery </a>
+              <a href="billing"> Billing </a>
+              <a href="profile-settings"> Profile </a>
+              <a href="auth"
+                style="margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255, 255, 255, 0.1);"> Sign In
+              </a>
+            </nav>
+          </div>
+        </div>
+        <!-- Gallery View Content -->
+        <div class="header-13 subtitle-7" id="gallery-view">
+          <section class="card-17 link-6 text-9">
+            <div class="main-14 list-6"></div>
+            <div class="title-13 nav-0"></div>
+            <div class="button-17 textarea-0 image-0">
+              <div class="subtitle-17 item-6">
+                <div class="form-18 image-17 feature-0 animation-6">
+                  <div class="container-17 background-6">
+                    <p>
+                      <span aria-label="LOADING" class="title-14 header-7">
+                        <span class="subtitle-14 nav-7">LOADING...</span>
+                      </span>
+                    </p>
+                    <div class="grid-17 main-7">
+                      <span class="form-17 card-0"></span>
+                      <p> Loading gallery information... </p>
+                    </div>
+                    <div class="title-17 footer-7">
+                      <a aria-label="Share Gallery" class="image-18 nav-6 container-0" href="#share"
+                        onclick="shareGalleryFromHeader(); return false;">
+                        <div class="title-18 main-6">
+                          <span>Share <span class="text-18 feature-7">
+                              <svg width="17" height="14" viewBox="0 0 17 14" fill="none"
+                                color="var(--text-on-button-tertiary)">
+                                <path
+                                  d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
+                                  stroke="var(--text-on-button-tertiary)" stroke-linecap="round"></path>
+                                <path d="M1 7L16 7" stroke="var(--text-on-button-tertiary)" stroke-linecap="round">
+                                </path>
+                              </svg>
+                            </span>
+                          </span>
+                        </div>
+                      </a>
+                      <a aria-label="Gallery Settings" class="image-18 hero-7" href="#settings"
+                        onclick="openSettingsModal(); return false;">
+                        <div class="title-18 main-6 container-0">
+                          <span>Settings <span class="text-18 feature-7">
+                              <svg width="17" height="14" viewBox="0 0 17 14" fill="none"
+                                color="var(--text-on-button-tertiary)">
+                                <path
+                                  d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
+                                  stroke="var(--text-on-button-tertiary)" stroke-linecap="round"></path>
+                                <path d="M1 7L16 7" stroke="var(--text-on-button-tertiary)" stroke-linecap="round">
+                                </path>
+                              </svg>
+                            </span>
+                          </span>
+                        </div>
+                      </a>
+                      <a aria-label="Send Email to Clients" class="image-18 nav-6 container-0" href="#notify"
+                        onclick="sendBatchEmailNotification(); return false;" id="notifyClientsButton"
+                        style="display: none;">
+                        <div class="title-18 main-6">
+                          <span>Send Email <span class="text-18 feature-7">
+                              <svg width="17" height="14" viewBox="0 0 17 14" fill="none"
+                                color="var(--text-on-button-tertiary)">
+                                <path
+                                  d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
+                                  stroke="var(--text-on-button-tertiary)" stroke-linecap="round"></path>
+                                <path d="M1 7L16 7" stroke="var(--text-on-button-tertiary)" stroke-linecap="round">
+                                </path>
+                              </svg>
+                            </span>
+                          </span>
+                        </div>
+                      </a>
+                      <a aria-label="Remind Clients to Select" class="image-18 hero-7" href="#remind"
+                        onclick="sendSelectionReminder(); return false;" id="remindClientsButton"
+                        style="display: none;">
+                        <div class="title-18 main-6 container-0">
+                          <span>Remind Clients <span class="text-18 feature-7">
+                              <svg width="17" height="14" viewBox="0 0 17 14" fill="none"
+                                color="var(--text-on-button-tertiary)">
+                                <path
+                                  d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
+                                  stroke="var(--text-on-button-tertiary)" stroke-linecap="round"></path>
+                                <path d="M1 7L16 7" stroke="var(--text-on-button-tertiary)" stroke-linecap="round">
+                                </path>
+                              </svg>
+                            </span>
+                          </span>
+                        </div>
+                      </a>
+                    </div>
+                  </div>
+                  <div class="input-17 card-7">
+                    <h1 id="galleryDescriptionTitle"> Loading gallery description... </h1>
+                    <div class="text-17 button-7">
+                      <p id="galleryDescriptionText"> Please wait while we load your gallery. </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section>
+            <div class="form-18 list-11 feature-0 input-0">
+              <!-- Upload Section (hidden initially, shown by JS) -->
+              <div class="upload-section" id="uploadSection" style="display: none;">
+                <input type="file" id="fileInput" multiple
+                  accept="image/*,.dng,.cr2,.cr3,.nef,.arw,.raf,.orf,.rw2,.pef,.3fr,.heic,.heif"
+                  style="display: none;" />
+                <!-- Upload Area with same style as "No Photos Yet" - Entire area clickable -->
+                <div onclick="triggerFileUpload()"
+                  style="grid-column: 1/-1; text-align: center; padding: 60px 20px; opacity: 0.6; margin-bottom: 40px; cursor: pointer; transition: opacity 0.2s;"
+                  onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'">
+                  <svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg"
+                    style="margin: 0 auto 20px; pointer-events: none;">
+                    <circle cx="40" cy="40" r="38" stroke="currentColor" stroke-width="1.5" opacity="0.2" />
+                    <path d="M25 40h30M40 25v30" stroke="currentColor" stroke-width="2" stroke-linecap="round" />
+                  </svg>
+                  <h3 style="font-size: 20px; margin-bottom: 12px; pointer-events: none;">Add Photos to Gallery</h3>
+                  <p style="font-size: 14px; margin-bottom: 24px; pointer-events: none;">Upload images to share with
+                    your
+                    client</p>
+                  <button type="button" class="item-5 idtTuz submit-btn"
+                    onclick="event.stopPropagation(); triggerFileUpload()">
+                    <div class="main-6 jpIyal">
+                      <span>Choose Files</span>
+                    </div>
+                  </button>
+                </div>
+                <!-- Upload Progress -->
+                <div class="upload-progress" id="uploadProgress" style="display: none;">
+                  <div class="upload-files-list" id="uploadFilesList"></div>
+                </div>
+              </div>
+              <!-- Photo Grid -->
+              <div class="header-14 logo-7" style="margin-bottom: 40px;">
+                <h2 class="link-13 image-7">
+                  <span>
+                    <span aria-label="PHOTOS" class="title-14 header-7">
+                      <span class="subtitle-14 nav-7">PHOTOS</span>
+                    </span>
+                  </span>
+                  <span class="dynamic-photo-count">—
+                    <!-- Photo count loaded by JavaScript -->
+                  </span>
+                </h2>
+              </div>
+              <div class="gallery-grid">
+                <!-- Photos will be loaded dynamically from AWS -->
+                <div style="grid-column: 1/-1; text-align: center; padding: 40px; opacity: 0.6;">
+                  <p>Loading photos from your gallery...</p>
+                </div>
+              </div>
+              <!-- Load More Section (hidden by default, shown only when there are photos to load) -->
+              <div id="loadMoreSection" style="display: none; text-align: center; margin-top: 60px;">
+                <a aria-label="Load More Photos" class="image-18 hero-7" href="#load-more"
+                  onclick="loadMorePhotos(); return false;">
+                  <div class="title-18 main-6 container-0">
+                    <span>Load More Photos <span class="text-18 feature-7">
+                        <svg width="17" height="14" viewBox="0 0 17 14" fill="none">
+                          <path
+                            d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
+                            stroke-linecap="round"></path>
+                          <path d="M1 7L16 7" stroke-linecap="round">
+                          </path>
+                        </svg>
+                      </span>
+                    </span>
+                  </div>
+                </a>
+              </div>
+            </div>
+          </section>
+        </div>
+        <!-- Footer -->
+        <footer class="card-10 input-4 animation-9 grid-0">
+          <div class="logo-14 textarea-4 "></div>
+          <div class="form-18 feature-0">
+            <section class="textarea-10 link-4">
+              <div class="header-11 list-4">
+                <div class="text-10 item-4">
+                  <div class="background-10 animation-4">
+                    <div>
+                      <span aria-label="Stay" class="title-14 header-7">
+                        <span class="subtitle-14 nav-7">Stay</span>
+                      </span>
+                    </div>
+                    <div style="font-style: italic"> — Connected</div>
+                  </div>
+                  <p class="title-10 background-4">
+                    <strong>Join photographers worldwide</strong>
+                    <br />Get updates, tips, and exclusive features
+                  </p>
+                </div>
+                <div id="newsletter">
+                  <form id="newsletter_form" class="subtitle-10 header-5" enctype="multipart/form-data">
+                    <div style="margin-bottom: 8px" class="logo-10 nav-5">
+                      <input type="text" required="" placeholder="Your name" class="image-10 main-5" name="firstName" />
+                    </div>
+                    <div class="logo-10 nav-5">
+                      <input type="email" required="" placeholder="Your e-mail" class="image-10 main-5" name="email" />
+                      <button aria-label="Confirm" type="submit" class="logo-18 footer-5">
+                        <div class="title-18 main-6 container-0">
+                          <span style="order: 0">Confirm</span>
+                          <span class="text-18 feature-7">
+                            <svg width="17" height="14" viewBox="0 0 17 14" fill="none"
+                              color="var(--text-on-button-secondary)">
+                              <path
+                                d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
+                                stroke="var(--text-on-button-secondary)" stroke-linecap="round"></path>
+                              <path d="M1 7L16 7" stroke="var(--text-on-button-secondary)" stroke-linecap="round">
+                              </path>
+                            </svg>
+                          </span>
+                        </div>
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div class="form-18 feature-0">
+            <section class="list-10 section-5">
+              <div class="button-10 card-5"> SHARE ART, <br />NOT FILES </div>
+              <div class="item-10 button-5">
+                <div class="animation-10 text-5">
+                  <div style="flex-shrink: 0">
+                    <span class="input-10 title-5">Galerly</span>
+                    <ul id="siteLinksParagraph" class="form-10 subtitle-5">
+                      <li>
+                        <a class="grid-10 logo-5" href="/">Platform</a>
+                      </li>
+                      <li>
+                        <a class="grid-10 logo-5" href="pricing">Pricing</a>
+                      </li>
+                      <li>
+                        <a class="grid-10 logo-5" href="faq">FAQ</a>
+                      </li>
+                      <li>
+                        <a class="grid-10 logo-5" href="contact">Support</a>
+                      </li>
+                    </ul>
+                  </div>
+                  <div style="flex-shrink: 0">
+                    <span class="input-10 title-5">Follow us</span>
+                    <ul id="socialLinksParagraph" class="form-10 subtitle-5">
+                      <li>
+                        <a title="Instagram" target="_blank" rel="noopener noreferrer" class="grid-10 logo-5"
+                          href="https://www.instagram.com/withgalerly/">Instagram <svg
+                            xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none"
+                            class="container-10 main-0">
+                            <path
+                              d="M11.0435 9.88557L9.48515 9.89576V3.43836L1.12313 11.8004L0.00276604 10.68L8.36478 2.318L1.91758 2.32818V0.759669H11.0435V9.88557Z"
+                              fill="#101116"></path>
+                          </svg>
+                        </a>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <div class="icon-10 image-5">
+              <a href="/" class="link-10 container-5">
+                <img src="img/footer-logo-dark.svg" />
+              </a>
+              <a class="grid-10 logo-5" href="legal-notice">Legal notice</a>
+              <a class="grid-10 logo-5" href="privacy">Privacy policy</a>
+              <div> 2025 © Galerly </div>
+            </div>
+          </div>
+          <div class="grid-0"></div>
+        </footer>
+      </div>
+      <div class="main-16 grid-5 animation-9" style="
+            pointer-events: none;
+            border-radius: 48px;
+            opacity: 0;
+            transform: translateY(100px) translateZ(0);
+          ">
+        <div class="section-16 form-5">
+          <div class="hero-16 textarea-5"> Our website uses cookies </div>
+          <div class="feature-16 icon-5"> Our website uses cookies to measure our audience, track performance during
+            advertising campaigns and provide the best experience. </div>
+          <div class="footer-16 link-5">
+            <button aria-label="Deny all" class="logo-18 list-5">
+              <div class="title-18 main-6">
+                <span style="order: 0">
+                  <span class="subtitle-18 form-6"> Deny all </span>
+                </span>
+              </div>
+            </button>
+            <button aria-label="Accept all" class="logo-18 item-5">
+              <div class="title-18 main-6">
+                <span style="order: 0">
+                  <span class="subtitle-18 form-6"> Accept all </span>
+                </span>
+              </div>
+            </button>
+            <button aria-label="Customize" class="logo-18 header-0">
+              <div class="title-18 main-6">
+                <span style="order: 0">
+                  <span class="subtitle-18 form-6"> Customize </span>
+                </span>
+              </div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Photo Modal -->
+  <div id="photoModal" class="photo-modal">
+    <!-- Background matching site design -->
+    <div class="modal-background">
+      <div class="background-18"></div>
+      <div class="header-19"></div>
+    </div>
+    <!-- Modal Content -->
+    <div class="modal-container">
+      <!-- Image Card -->
+      <div class="modal-image-card">
+        <div class="modal-image-wrapper">
+          <button class="modal-nav-btn prev" onclick="navigatePhoto(-1)">‹</button>
+          <img id="modalImage" src="" alt="Photo">
+          <button class="modal-nav-btn next" onclick="navigatePhoto(1)">›</button>
+        </div>
+        <!-- Action Bar - Simple and Fluid -->
+        <div class="modal-action-bar">
+          <div class="photo-info-quick">
+            <span id="statusIndicator" class="status-indicator pending">
+              <span class="status-dot"></span>
+              <span>Pending</span>
+            </span>
+            <span class="photo-number-text" id="photoNumber">Photo 1 of 9</span>
+          </div>
+          <div class="action-buttons-simple" id="actionButtonsSimple">
+            <button class="action-btn-simple share" id="sharePhotoBtn" onclick="shareCurrentPhoto()"> Share </button>
+            <button class="action-btn-simple download" id="downloadPhotoBtn" onclick="downloadPhoto()"
+              style="display: none;"> Download </button>
+            <button class="action-btn-simple approve" onclick="approvePhoto()"> Approve </button>
+          </div>
+        </div>
+      </div>
+      <!-- Comments Card -->
+      <div class="modal-comments-card" id="commentsCard">
+        <!-- Close Button -->
+        <div class="modal-close-overlay">
+          <button class="modal-close-btn" onclick="closePhotoModal()">Close</button>
+        </div>
+        <h3>Comments</h3>
+        <!-- Comment Input -->
+        <div class="comment-input-wrapper" id="commentInputWrapper">
+          <textarea id="commentInput" class="comment-input" placeholder="Add your thoughts..." rows="2"></textarea>
+          <button class="comment-submit-btn" onclick="addComment()">Post Comment</button>
+        </div>
+        <!-- Existing Comments -->
+        <div class="comments-list" id="commentsList">
+          <!-- Comments will be loaded dynamically from backend -->
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="settings-modal">
+    <!-- Background matching site design -->
+    <div class="modal-background">
+      <div class="background-18"></div>
+      <div class="header-19"></div>
+    </div>
+    <!-- Modal Content -->
+    <div class="settings-modal-container">
+      <div class="settings-modal-card">
+        <!-- Close Button -->
+        <div class="modal-close-overlay">
+          <button class="modal-close-btn" onclick="closeSettingsModal()">Close</button>
+        </div>
+        <h2 class="settings-modal-title">Gallery Settings</h2>
+        <p class="settings-modal-subtitle">Manage your gallery preferences</p>
+        <!-- Settings Form -->
+        <form id="settingsForm" class="settings-form">
+          <!-- Gallery Name -->
+          <div class="settings-field">
+            <label class="settings-label">Gallery Name</label>
+            <input type="text" class="settings-input" name="galleryName" value="" placeholder="Enter gallery name">
+          </div>
+          <!-- Client Name -->
+          <div class="settings-field">
+            <label class="settings-label">Client Name</label>
+            <input type="text" class="settings-input" name="clientName" value="" placeholder="Enter client name">
+          </div>
+          <!-- Client Emails (Multiple) -->
+          <div class="settings-field">
+            <label class="settings-label">Client Emails</label>
+            <p class="settings-helper-text"
+              style="font-size: 13px; color: var(--text-secondary, #6E6E73); margin-top: 4px; margin-bottom: 12px;">Add
+              multiple clients who can view and approve photos. Press Enter after each email.</p>
+            <div id="clientEmailsList" class="client-emails-list" style="margin-bottom: 12px;">
+              <!-- Dynamic list populated by JavaScript -->
+            </div>
+            <div class="add-client-container" style="display: flex; gap: 8px; align-items: stretch;">
+              <input type="email" id="newClientEmail" class="settings-input" placeholder="client@example.com"
+                onkeypress="handleClientEmailKeyPress(event)" style="flex: 1;" />
+              <button type="button" onclick="addClientEmail()" style="
+                                    padding: 0 24px;
+                                    white-space: nowrap;
+                                    background: var(--button-secondary-fill, #E8E8ED);
+                                    border: none;
+                                    border-radius: var(--border-radius-m, 8px);
+                                    cursor: pointer;
+                                    font-family: var(--pp-neue-font);
+                                    font-size: 14px;
+                                    font-weight: 500;
+                                    color: var(--text-primary);
+                                    transition: all 0.2s;
+                                " onmouseover="this.style.background='var(--button-secondary-hover, #D1D1D6)'"
+                onmouseout="this.style.background='var(--button-secondary-fill, #E8E8ED)'"> Add Client </button>
+            </div>
+          </div>
+          <!-- Gallery Description -->
+          <div class="settings-field">
+            <label class="settings-label">Description</label>
+            <textarea class="settings-textarea" rows="3" name="description"
+              placeholder="Describe your gallery"></textarea>
+          </div>
+          <!-- Portfolio Visibility -->
+          <div class="settings-field">
+            <label class="settings-label">Portfolio Visibility</label>
+            <p class="settings-field-hint">Control whether this gallery appears on your public photographer portfolio
+            </p>
+            <div class="settings-permissions-grid">
+              <label class="settings-permission-card" style="grid-column: 1/-1;">
+                <div>
+                  <span style="font-weight: 600;">Show in Public Portfolio</span>
+                  <p style="font-size: 0.875rem; opacity: 0.7; margin-top: 4px;">When enabled, this gallery will be
+                    visible to everyone on your portfolio page. Client names are always private.</p>
+                </div>
+                <label class="toggle-switch">
+                  <input type="checkbox" name="privacy" id="privacyToggle">
+                  <span class="toggle-slider"></span>
+                </label>
+              </label>
+            </div>
+          </div>
+          <!-- Permissions Grid -->
+          <div class="settings-field">
+            <label class="settings-label">Permissions</label>
+            <div class="settings-permissions-grid">
+              <label class="settings-permission-card">
+                <span>Downloads</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" name="allowDownloads" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </label>
+              <label class="settings-permission-card">
+                <span>Comments</span>
+                <label class="toggle-switch">
+                  <input type="checkbox" name="allowComments" checked>
+                  <span class="toggle-slider"></span>
+                </label>
+              </label>
+            </div>
+          </div>
+          <!-- Expiry -->
+          <div class="settings-field">
+            <label class="settings-label">Expiry</label>
+            <p class="settings-field-hint">Set when this gallery link will expire</p>
+            <select class="settings-select" name="expiry" id="expirySelect">
+              <option value="never">Never</option>
+              <!-- Options will be dynamically populated by JavaScript based on plan -->
+            </select>
+          </div>
+          <!-- Actions -->
+          <div class="settings-actions">
+            <button type="button" class="settings-btn-delete" onclick="deleteGallery()">Delete Gallery</button>
+            <button type="submit" class="item-5 idtTuz submit-btn">
+              <div class="main-6 jpIyal">
+                <span>Save</span>
+              </div>
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script src="js/main.js"></script>
+  <script src="js/rbac.js"></script>
+  <script src="js/auth-check.js"></script>
+  <!-- Configuration -->
+  <script src="js/env-production.js"></script>
+  <script src="js/config.js"></script>
+  <!-- Gallery upload progress -->
+  <script src="js/gallery-upload-progress.js"></script>
+  <!-- Gallery upload queue manager -->
+  <script src="js/gallery-upload-queue.js"></script>
+  <!-- Gallery data loader -->
+  <script src="js/gallery-loader.js"></script>
+  <!-- Duplicate photo comparison modal -->
+  <script src="js/duplicate-comparison-modal.js"></script>
+  <!-- Analytics tracking -->
+  <script src="js/analytics.js"></script>
+  <!-- Enhanced comments system -->
+  <script src="js/enhanced-comments.js"></script>
+  <!-- Social sharing -->
+  <script src="js/sharing.js"></script>
+  <!-- Lightbox slideshow -->
+  <script src="js/lightbox-slideshow.js"></script>
+  <!-- Photo deletion management -->
+  <script src="js/photo-deletion.js"></script>
+  <!-- Gallery expiration -->
+  <script src="js/gallery-expiration.js"></script>
+  <!-- Page-specific JavaScript -->
+  <script src="js/gallery.js"></script>
+  <script src="js/cookie-consent.js"></script>
+  <script src="js/visitor-tracking.js"></script>
+</body>
+
+</html>
