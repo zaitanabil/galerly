@@ -753,7 +753,7 @@ function showGalleryShareModal(galleryId, authenticated = false) {
                 <!-- Social Section -->
                 <div style="
                     display: grid;
-                    grid-template-columns: repeat(${isSmallScreen ? '3' : (isMobile ? '4' : '7')}, 1fr);
+                    grid-template-columns: repeat(auto-fit, minmax(${isSmallScreen ? '48px' : (isMobile ? '52px' : '48px')}, 1fr));
                     gap: ${isSmallScreen ? '8px' : (isMobile ? '9px' : '10px')};
                     margin-bottom: ${isMobile ? '16px' : '18px'};
                 ">
@@ -1185,7 +1185,7 @@ function showPhotoShareModal(photoId, authenticated = false) {
                 <!-- Social Section -->
                 <div style="
                             display: grid;
-                            grid-template-columns: repeat(${isSmallScreen ? '3' : (isMobile ? '3' : '6')}, 1fr);
+                            grid-template-columns: repeat(auto-fit, minmax(${isSmallScreen ? '48px' : (isMobile ? '52px' : '48px')}, 1fr));
                             gap: ${isSmallScreen ? '8px' : (isMobile ? '9px' : '10px')};
                     margin-bottom: ${isMobile ? '16px' : '18px'};
                         ">
