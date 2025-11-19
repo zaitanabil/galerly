@@ -450,6 +450,20 @@ jobs:
           echo ""
           echo "✅ CDN tests passed"
 
+      - name: Run Image Transformation Tests
+        env: ${{ secrets }}
+        run: |
+          echo "=========================================="
+          echo "🖼️  TESTING IMAGE TRANSFORMATION"
+          echo "=========================================="
+          cd backend
+          
+          # Run image transformation tests
+          pytest tests/test_image_transformation.py -v
+          
+          echo ""
+          echo "✅ Image transformation tests passed"
+
       - name: Run Endpoint Tests
         env: ${{ secrets }}
         run: |

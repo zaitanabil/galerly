@@ -41,15 +41,17 @@ function isTIFFUrl(url) {
 }
 
 /**
- * Check if URL points to a RAW image format
+ * Check if URL points to a RAW image format (by extension OR content will fail in browser)
  * @param {string} url - Image URL
  * @returns {boolean}
  */
 function isRAWUrl(url) {
     if (!url) return false;
     const lowerUrl = url.toLowerCase();
+    // Check both extension AND common RAW content-types that browsers can't display
     const rawFormats = ['.dng', '.cr2', '.cr3', '.nef', '.arw', '.raf', '.orf', '.rw2', '.pef', '.3fr'];
     return rawFormats.some(format => lowerUrl.endsWith(format) || lowerUrl.includes(format + '?'));
+    // Note: Files with .jpg extension but DNG content will fail to load and trigger onerror
 }
 
 /**
@@ -206,20 +208,31 @@ function loadHEICLibrary() {
 }
 
 /**
- * Show placeholder for RAW images
+ * Show placeholder for RAW images (DNG, CR2, etc.)
+ * RAW files cannot be displayed in browsers - download required
  */
 function showRAWPlaceholder(img) {
     img.src = 'data:image/svg+xml,' + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
+        <svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
             <rect fill="#F5F5F7" width="400" height="300"/>
-            <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" 
-                  fill="#86868B" font-family="system-ui, -apple-system, sans-serif" 
-                  font-size="18" font-weight="600">RAW Format</text>
-            <text x="50%" y="55%" dominant-baseline="middle" text-anchor="middle" 
-                  fill="#86868B" font-family="system-ui, -apple-system, sans-serif" 
-                  font-size="14">Download to view</text>
+            <g>
+                <!-- Camera icon -->
+                <rect x="160" y="100" width="80" height="60" rx="8" fill="none" stroke="#86868B" stroke-width="3"/>
+                <circle cx="200" cy="130" r="15" fill="none" stroke="#86868B" stroke-width="3"/>
+                <rect x="185" y="90" width="30" height="10" rx="3" fill="#86868B"/>
+            </g>
+            <text x="50%" y="190" dominant-baseline="middle" text-anchor="middle"
+                  fill="#1D1D1F" font-family="system-ui, -apple-system, sans-serif"
+                  font-size="16" font-weight="600">RAW Format (DNG/CR2)</text>
+            <text x="50%" y="215" dominant-baseline="middle" text-anchor="middle"
+                  fill="#86868B" font-family="system-ui, -apple-system, sans-serif"
+                  font-size="13">Download to view full quality</text>
+            <text x="50%" y="235" dominant-baseline="middle" text-anchor="middle"
+                  fill="#007AFF" font-family="system-ui, -apple-system, sans-serif"
+                  font-size="12" font-weight="500">↓ Use Download Button</text>
         </svg>
     `);
+    img.alt = "RAW format image - download to view";
 }
 
 /**

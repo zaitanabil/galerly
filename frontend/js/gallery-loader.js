@@ -316,9 +316,11 @@ function renderGalleryPhotos(photos, startIndex, count) {
                  alt="${photo.title || `Photo ${i + 1}`}"
                  data-full="${fullUrl}"
                  data-photo-id="${photo.id}"
+                 data-filename="${photo.filename || ''}"
                  loading="lazy"
+                 crossorigin="anonymous"
                  style="${isApproved ? 'border: 3px solid #10b981;' : ''}"
-                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27400%27 height=%27300%27%3E%3Crect fill=%27%23f0f0f0%27 width=%27400%27 height=%27300%27/%3E%3Ctext x=%2750%25%27 y=%2750%25%27 dominant-baseline=%27middle%27 text-anchor=%27middle%27 fill=%27%23999%27%3EImage not found%3C/text%3E%3C/svg%3E'">
+                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27400%27 height=%27300%27 viewBox=%270 0 400 300%27%3E%3Crect fill=%27%23F5F5F7%27 width=%27400%27 height=%27300%27/%3E%3Crect x=%27160%27 y=%27100%27 width=%2780%27 height=%2760%27 rx=%278%27 fill=%27none%27 stroke=%27%2386868B%27 stroke-width=%273%27/%3E%3Ccircle cx=%27200%27 cy=%27130%27 r=%2715%27 fill=%27none%27 stroke=%27%2386868B%27 stroke-width=%273%27/%3E%3Crect x=%27185%27 y=%2790%27 width=%2730%27 height=%2710%27 rx=%273%27 fill=%27%2386868B%27/%3E%3Ctext x=%2750%25%27 y=%27190%27 text-anchor=%27middle%27 fill=%27%231D1D1F%27 font-family=%27system-ui%27 font-size=%2716%27 font-weight=%27600%27%3ERAW Format%3C/text%3E%3Ctext x=%2750%25%27 y=%27215%27 text-anchor=%27middle%27 fill=%27%2386868B%27 font-family=%27system-ui%27 font-size=%2713%27%3EDownload for full quality%3C/text%3E%3C/svg%3E'">
             ${isFavorite ? `
                 <div style="
                     position: absolute;

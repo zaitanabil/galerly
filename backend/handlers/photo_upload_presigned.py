@@ -134,7 +134,17 @@ def handle_confirm_upload(gallery_id, user, event):
             # Use original file size
             file_size = len(image_data)
             
-            # Generate CloudFront CDN URLs with automatic resizing
+            # ==========================================
+            # BIG TECH APPROACH: Store originals, transform via CDN
+            # Instagram/Google Photos method:
+            # - Accept ALL formats (RAW, HEIC, JPEG, etc.)
+            # - Store original in S3
+            # - CloudFront transforms for display (via URL params)
+            # - Download gives original
+            # ==========================================
+            
+            # Generate CloudFront CDN URLs
+            # CloudFront will handle format conversion via URL parameters
             photo_urls = get_photo_urls(s3_key)
             
         except ImageSecurityError as security_error:

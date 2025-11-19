@@ -99,26 +99,21 @@ function isHEIC(file) {
 
 /**
  * Process image file before upload (Big Tech approach)
- * - Convert HEIC → JPEG
- * - Validate dimensions
- * - Optimize for web
+ * Instagram/Google Photos method: Accept all formats, transform at CDN level
  * 
  * @param {File} file - Image file
  * @returns {Promise<File>} - Processed file
  */
 async function processImageForUpload(file) {
     try {
-        // Step 1: Convert HEIC to JPEG if needed
-        if (isHEIC(file)) {
-            file = await convertHEICtoJPEG(file);
-        }
-        
-        // Step 2: Optional - Validate image
+        // Step 1: Validate image dimensions only
         const isValid = await validateImageFile(file);
         if (!isValid) {
-            throw new Error('Invalid image file');
+            throw new Error('Invalid image file - check dimensions (320-8000px)');
         }
         
+        // Accept ALL formats - CloudFront will handle transformation
+        console.log(`✅ Accepted: ${file.name} (${file.type})`);
         return file;
         
     } catch (error) {

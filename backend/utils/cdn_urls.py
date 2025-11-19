@@ -24,29 +24,48 @@ IMAGE_SIZES = {
 }
 
 
-def get_cdn_url(s3_key, size=None):
+def get_cdn_url(s3_key, size=None, format='auto'):
     """
-    Generate CloudFront CDN URL for image
+    Generate CloudFront CDN URL for image with transformation parameters
     
     Args:
         s3_key: S3 object key (e.g. "gallery123/photo456.jpg")
-        size: Ignored (no resizing in this version)
+        size: Target size tuple (width, height) or None for original
+        format: Output format ('auto', 'jpeg', 'webp', 'png')
     
     Returns:
-        CloudFront URL
+        CloudFront URL with transformation parameters
     
     Example:
-        get_cdn_url('gallery123/photo456.jpg')
-        -> https://cdn.galerly.com/gallery123/photo456.jpg
+        get_cdn_url('gallery123/photo456.dng', size=(800, 600), format='jpeg')
+        -> https://cdn.galerly.com/gallery123/photo456.dng?format=jpeg&width=800&height=600
+    
+    Note: CloudFront + Lambda@Edge will handle the transformation
     """
-    return f"https://{CDN_DOMAIN}/{s3_key}"
+    base_url = f"https://{CDN_DOMAIN}/{s3_key}"
+    
+    # Add transformation parameters
+    params = []
+    if format and format != 'auto':
+        params.append(f"format={format}")
+    if size:
+        width, height = size
+        params.append(f"width={width}")
+        params.append(f"height={height}")
+        params.append("fit=inside")  # Maintain aspect ratio
+    
+    if params:
+        return f"{base_url}?{'&'.join(params)}"
+    
+    return base_url
 
 
 def get_photo_urls(s3_key):
     """
-    Generate all URL variants for a photo
+    Generate all URL variants for a photo with CloudFront transformation
     
-    All URLs point to original (served via CloudFront for fast delivery)
+    Returns different sizes for responsive display, all transformed to JPEG
+    Original URL has no transformation (for download)
     
     Args:
         s3_key: S3 object key
@@ -54,14 +73,16 @@ def get_photo_urls(s3_key):
     Returns:
         dict with url, medium_url, thumbnail_url, small_thumb_url
     """
-    url = get_cdn_url(s3_key)
+    # Original (no transformation) - for download
+    original_url = f"https://{CDN_DOMAIN}/{s3_key}"
     
+    # Transformed versions (JPEG) - for display
     return {
-        'url': url,                 # Original via CloudFront
-        'medium_url': url,          # Same (CloudFront cached)
-        'thumbnail_url': url,       # Same (CloudFront cached)
-        'small_thumb_url': url,     # Same (CloudFront cached)
-}
+        'url': original_url,  # Original for download
+        'medium_url': get_cdn_url(s3_key, size=(2000, 2000), format='jpeg'),  # Display (large)
+        'thumbnail_url': get_cdn_url(s3_key, size=(800, 600), format='jpeg'),  # Gallery grid
+        'small_thumb_url': get_cdn_url(s3_key, size=(400, 400), format='jpeg'),  # Small thumbnails
+    }
 
 
 def get_responsive_srcset(s3_key):
