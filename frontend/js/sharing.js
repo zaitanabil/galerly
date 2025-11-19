@@ -326,14 +326,14 @@ function showNotification(message, type = 'success') {
         right: 24px;
         background: ${type === 'success' ? '#98FF98' : '#FF6F61'};
         color: ${type === 'success' ? '#1D1D1F' : '#FFFFFF'};
-        padding: 16px 24px;
+        padding: 14px 20px;
         border-radius: 12px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
         z-index: 10000;
         font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
         font-size: 15px;
         font-weight: 500;
-        animation: slideIn 0.3s ease-out;
+        animation: slideIn 0.2s ease-out;
     `;
     notification.textContent = message;
     
@@ -356,12 +356,12 @@ function showNotification(message, type = 'success') {
     document.body.appendChild(notification);
     
     setTimeout(() => {
-        notification.style.animation = 'slideIn 0.3s ease-out reverse';
+        notification.style.animation = 'slideIn 0.2s ease-out reverse';
         setTimeout(() => {
             document.body.removeChild(notification);
             document.head.removeChild(style);
-        }, 300);
-    }, 3000);
+        }, 200);
+    }, 2500);
 }
 
 /**
@@ -566,7 +566,7 @@ async function copyGalleryLink(galleryId, authenticated = false) {
         const success = await copyToClipboard(shareInfo.share_url);
         
         if (success) {
-            showNotification('Gallery link copied to clipboard!');
+            showNotification('Gallery link copied to clipboard');
         } else {
             showNotification('Failed to copy link', 'error');
         }
@@ -585,7 +585,7 @@ async function copyPhotoLink(photoId, authenticated = false) {
         const success = await copyToClipboard(shareInfo.share_url);
         
         if (success) {
-            showNotification('Photo link copied to clipboard!');
+            showNotification('Photo link copied to clipboard');
         } else {
             showNotification('Failed to copy link', 'error');
         }
@@ -604,7 +604,7 @@ async function copyEmbedCode(galleryId, authenticated = false) {
         const success = await copyToClipboard(shareInfo.embed_code);
         
         if (success) {
-            showNotification('Embed code copied to clipboard!');
+            showNotification('Embed code copied to clipboard');
         } else {
             showNotification('Failed to copy embed code', 'error');
         }
@@ -632,15 +632,15 @@ function showGalleryShareModal(galleryId, authenticated = false) {
         left: 0;
         width: 100%;
         height: 100%;
-        background: rgba(29, 29, 31, 0.6);
-        backdrop-filter: blur(12px);
-        -webkit-backdrop-filter: blur(12px);
+        background: rgba(29, 29, 31, 0.75);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
         z-index: 10000;
         display: flex;
         align-items: center;
         justify-content: center;
         animation: fadeIn 0.2s ease-out;
-        padding: 24px;
+        padding: 20px;
         box-sizing: border-box;
     `;
     
@@ -649,14 +649,14 @@ function showGalleryShareModal(galleryId, authenticated = false) {
     
     modal.innerHTML = `
         <div style="
-            background: rgba(255, 255, 255, 0.9);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border-radius: ${isMobile ? '20px' : '28px'};
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(40px);
+            -webkit-backdrop-filter: blur(40px);
+            border-radius: ${isMobile ? '20px' : '24px'};
             padding: 0;
-            max-width: ${isMobile ? '100%' : '520px'};
+            max-width: ${isMobile ? '100%' : '480px'};
             width: 100%;
-            max-height: calc(100vh - 48px);
+            max-height: ${isMobile ? 'calc(100vh - 40px)' : 'calc(100vh - 80px)'};
             overflow: hidden;
             position: relative;
             box-sizing: border-box;
@@ -664,273 +664,222 @@ function showGalleryShareModal(galleryId, authenticated = false) {
         " role="dialog" aria-labelledby="shareModalTitle" aria-modal="true">
             <!-- Header -->
             <div style="
-                padding: ${isMobile ? '32px 24px 24px' : '40px 40px 32px'};
-                border-bottom: 1px solid rgba(29, 29, 31, 0.1);
+                padding: ${isMobile ? '24px 20px 16px' : '28px 28px 20px'};
+                border-bottom: 1px solid rgba(29, 29, 31, 0.08);
                 position: relative;
             ">
                 <h2 id="shareModalTitle" style="
                     margin: 0;
                     font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
-                    font-size: ${isMobile ? '28px' : '32px'};
+                    font-size: ${isMobile ? '24px' : '28px'};
                     font-weight: 300;
                     color: #1D1D1F;
-                    letter-spacing: -0.03em;
-                    padding-right: 48px;
+                    letter-spacing: -0.02em;
+                    padding-right: 40px;
                     line-height: 1.2;
                 ">Share</h2>
                 <button onclick="closeShareModal()" aria-label="Close" style="
                     position: absolute;
-                    top: ${isMobile ? '32px' : '40px'};
-                    right: ${isMobile ? '24px' : '40px'};
+                    top: ${isMobile ? '24px' : '28px'};
+                    right: ${isMobile ? '20px' : '28px'};
                     background: transparent;
                     border: none;
-                    width: 32px;
-                    height: 32px;
+                    width: 28px;
+                    height: 28px;
                     border-radius: 50%;
                     cursor: pointer;
                     color: #86868B;
-                    font-size: 24px;
+                    font-size: 28px;
+                    line-height: 1;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    transition: all 0.2s ease;
-                " onmouseover="this.style.background='#F5F5F7'; this.style.color='#1D1D1F'" onmouseout="this.style.background='transparent'; this.style.color='#86868B'">&times;</button>
+                    transition: all 0.15s ease;
+                " onmouseover="this.style.background='rgba(0,0,0,0.05)'; this.style.color='#1D1D1F'" onmouseout="this.style.background='transparent'; this.style.color='#86868B'">&times;</button>
             </div>
             
             <!-- Content -->
-            <div style="
-                overflow-y: auto;
-                max-height: calc(100vh - ${isMobile ? '180px' : '220px'});
+            <div id="shareModalLoading" style="
+                text-align: center;
+                padding: ${isMobile ? '40px 20px' : '48px 28px'};
             ">
-                <div id="shareModalLoading" style="
-                    text-align: center;
-                    padding: ${isMobile ? '48px 24px' : '64px 40px'};
-                ">
-                    <div style="
-                        display: inline-block;
-                        width: 40px;
-                        height: 40px;
-                        border: 2px solid #F5F5F7;
-                        border-top: 2px solid #0066CC;
-                        border-radius: 50%;
-                        animation: spin 0.8s linear infinite;
-                    "></div>
-                    <p style="
-                        margin-top: 24px;
-                        font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
-                        font-size: 15px;
-                        font-weight: 400;
-                        color: #86868B;
-                    ">Loading...</p>
+                <div style="
+                    display: inline-block;
+                    width: 32px;
+                    height: 32px;
+                    border: 2px solid #F5F5F7;
+                    border-top: 2px solid #0066CC;
+                    border-radius: 50%;
+                    animation: spin 0.8s linear infinite;
+                "></div>
             </div>
             
-                <div id="shareModalContent" style="display: none; padding: ${isMobile ? '32px 24px' : '40px'};">
-                    <!-- Link Section -->
-                    <div style="margin-bottom: 32px;">
-                        <label style="
-                            display: block;
-                            margin-bottom: 16px;
+            <div id="shareModalContent" style="display: none; padding: ${isMobile ? '20px' : '24px 28px 28px'};">
+                <!-- Link Section -->
+                <div style="margin-bottom: ${isMobile ? '20px' : '24px'};">
+                    <div style="
+                        display: flex;
+                        gap: 8px;
+                        ${isMobile ? 'flex-direction: column;' : ''}
+                    ">
+                        <input type="text" id="shareLinkInput" readonly aria-label="Share link" style="
+                            flex: 1;
+                            padding: ${isMobile ? '12px 14px' : '14px 16px'};
+                            background: #F5F5F7;
+                            border: none;
+                            border-radius: 12px;
+                            font-family: 'SF Mono', monospace;
+                            font-size: ${isMobile ? '13px' : '14px'};
+                            color: #1D1D1F;
+                            transition: all 0.15s ease;
+                        " onclick="this.select();">
+                        <button id="copyLinkBtn" onclick="copyGalleryLinkFromModal('${galleryId}', ${authenticated})" aria-label="Copy link" style="
+                            padding: ${isMobile ? '12px 28px' : '14px 32px'};
+                            background: #0066CC;
+                            color: white;
+                            border: none;
+                            border-radius: 12px;
+                            cursor: pointer;
                             font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
-                            font-weight: 400;
-                            font-size: 13px;
-                            color: #86868B;
-                            text-transform: uppercase;
-                            letter-spacing: 0.05em;
-                        ">LINK</label>
-                        <div style="
-                            display: flex;
-                            gap: 8px;
-                            ${isMobile ? 'flex-direction: column;' : ''}
-                        ">
-                            <input type="text" id="shareLinkInput" readonly aria-label="Share link" style="
-                                flex: 1;
-                                padding: ${isMobile ? '14px 16px' : '16px 18px'};
-                                background: #F5F5F7;
-                                border: none;
-                                border-radius: 12px;
-                                font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
-                                font-size: 14px;
-                                color: #1D1D1F;
-                                transition: all 0.2s ease;
-                            " onclick="this.select();">
-                            <button id="copyLinkBtn" onclick="copyGalleryLinkFromModal('${galleryId}', ${authenticated})" aria-label="Copy link" style="
-                                padding: ${isMobile ? '14px 32px' : '16px 36px'};
-                                background: #0066CC;
-                                color: white;
-                                border: none;
-                                border-radius: 12px;
-                                cursor: pointer;
-                                font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
-                                font-weight: 500;
-                                font-size: 15px;
-                                transition: all 0.2s ease;
-                                white-space: nowrap;
-                            " onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Copy</button>
+                            font-weight: 500;
+                            font-size: 15px;
+                            transition: all 0.15s ease;
+                            white-space: nowrap;
+                        " onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">Copy</button>
                     </div>
                 </div>
-            
-                    <!-- Social Section -->
-                    <div style="margin-bottom: 32px;">
-                        <label style="
-                            display: block;
-                            margin-bottom: 16px;
-                            font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
-                            font-weight: 400;
-                            font-size: 13px;
-                            color: #86868B;
-                            text-transform: uppercase;
-                            letter-spacing: 0.05em;
-                        ">SHARE</label>
-                        <div style="
-                            display: grid;
-                            grid-template-columns: repeat(${isMobile ? '3' : '7'}, 1fr);
-                            gap: 12px;
-                        ">
-                            <button onclick="shareGalleryToSocial('${galleryId}', 'facebook', ${authenticated})" aria-label="Facebook" title="Facebook" style="
-                                padding: 18px;
-                                background: #1877F2;
-                                color: white;
-                                border: none;
-                                border-radius: 12px;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                transition: all 0.2s ease;
-                                aspect-ratio: 1;
-                            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+        
+                <!-- Social Section -->
+                <div style="
+                    display: grid;
+                    grid-template-columns: repeat(${isMobile ? '4' : '7'}, 1fr);
+                    gap: ${isMobile ? '10px' : '12px'};
+                    margin-bottom: ${isMobile ? '20px' : '24px'};
+                ">
+                    <button onclick="shareGalleryToSocial('${galleryId}', 'facebook', ${authenticated})" aria-label="Facebook" title="Facebook" style="
+                        padding: ${isMobile ? '14px' : '16px'};
+                        background: #1877F2;
+                        color: white;
+                        border: none;
+                        border-radius: 12px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: transform 0.15s ease;
+                        aspect-ratio: 1;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <svg width="${isMobile ? '18' : '20'}" height="${isMobile ? '18' : '20'}" viewBox="0 0 24 24" fill="white"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
                     </button>
-                            <button onclick="shareGalleryToSocial('${galleryId}', 'twitter', ${authenticated})" aria-label="X" title="X" style="
-                                padding: 18px;
-                                background: #000000;
-                                color: white;
-                                border: none;
-                                border-radius: 12px;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                transition: all 0.2s ease;
-                                aspect-ratio: 1;
-                            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                    <button onclick="shareGalleryToSocial('${galleryId}', 'twitter', ${authenticated})" aria-label="X" title="X" style="
+                        padding: ${isMobile ? '14px' : '16px'};
+                        background: #000000;
+                        color: white;
+                        border: none;
+                        border-radius: 12px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: transform 0.15s ease;
+                        aspect-ratio: 1;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <svg width="${isMobile ? '18' : '20'}" height="${isMobile ? '18' : '20'}" viewBox="0 0 24 24" fill="white"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
                     </button>
-                            <button onclick="shareGalleryToSocial('${galleryId}', 'instagram', ${authenticated})" aria-label="Instagram" title="Instagram" style="
-                                padding: 18px;
-                                background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%,#d6249f 60%,#285AEB 90%);
-                                color: white;
-                                border: none;
-                                border-radius: 12px;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                transition: all 0.2s ease;
-                                aspect-ratio: 1;
-                            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
+                    <button onclick="shareGalleryToSocial('${galleryId}', 'instagram', ${authenticated})" aria-label="Instagram" title="Instagram" style="
+                        padding: ${isMobile ? '14px' : '16px'};
+                        background: radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%,#d6249f 60%,#285AEB 90%);
+                        color: white;
+                        border: none;
+                        border-radius: 12px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: transform 0.15s ease;
+                        aspect-ratio: 1;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <svg width="${isMobile ? '18' : '20'}" height="${isMobile ? '18' : '20'}" viewBox="0 0 24 24" fill="white"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z"/></svg>
                     </button>
-                            <button onclick="shareGalleryToSocial('${galleryId}', 'linkedin', ${authenticated})" aria-label="LinkedIn" title="LinkedIn" style="
-                                padding: 18px;
-                                background: #0077B5;
-                                color: white;
-                                border: none;
-                                border-radius: 12px;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                transition: all 0.2s ease;
-                                aspect-ratio: 1;
-                            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
+                    <button onclick="shareGalleryToSocial('${galleryId}', 'linkedin', ${authenticated})" aria-label="LinkedIn" title="LinkedIn" style="
+                        padding: ${isMobile ? '14px' : '16px'};
+                        background: #0077B5;
+                        color: white;
+                        border: none;
+                        border-radius: 12px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: transform 0.15s ease;
+                        aspect-ratio: 1;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <svg width="${isMobile ? '18' : '20'}" height="${isMobile ? '18' : '20'}" viewBox="0 0 24 24" fill="white"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433c-1.144 0-2.063-.926-2.063-2.065 0-1.138.92-2.063 2.063-2.063 1.14 0 2.064.925 2.064 2.063 0 1.139-.925 2.065-2.064 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></svg>
                     </button>
-                            <button onclick="shareGalleryToSocial('${galleryId}', 'pinterest', ${authenticated})" aria-label="Pinterest" title="Pinterest" style="
-                                padding: 18px;
-                                background: #BD081C;
-                                color: white;
-                                border: none;
-                                border-radius: 12px;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                transition: all 0.2s ease;
-                                aspect-ratio: 1;
-                            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.401.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.354-.629-2.758-1.379l-.749 2.848c-.269 1.045-1.004 2.352-1.498 3.146 1.123.345 2.306.535 3.55.535 6.607 0 11.985-5.365 11.985-11.987C23.97 5.39 18.592.026 11.985.026L12.017 0z"/></svg>
+                    <button onclick="shareGalleryToSocial('${galleryId}', 'pinterest', ${authenticated})" aria-label="Pinterest" title="Pinterest" style="
+                        padding: ${isMobile ? '14px' : '16px'};
+                        background: #BD081C;
+                        color: white;
+                        border: none;
+                        border-radius: 12px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: transform 0.15s ease;
+                        aspect-ratio: 1;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <svg width="${isMobile ? '18' : '20'}" height="${isMobile ? '18' : '20'}" viewBox="0 0 24 24" fill="white"><path d="M12.017 0C5.396 0 .029 5.367.029 11.987c0 5.079 3.158 9.417 7.618 11.162-.105-.949-.199-2.403.041-3.439.219-.937 1.406-5.957 1.406-5.957s-.359-.72-.359-1.781c0-1.663.967-2.911 2.168-2.911 1.024 0 1.518.769 1.518 1.688 0 1.029-.653 2.567-.992 3.992-.285 1.193.6 2.165 1.775 2.165 2.128 0 3.768-2.245 3.768-5.487 0-2.861-2.063-4.869-5.008-4.869-3.41 0-5.409 2.562-5.409 5.199 0 1.033.394 2.143.889 2.741.099.12.112.225.085.345-.09.375-.293 1.199-.334 1.363-.053.225-.172.271-.401.165-1.495-.69-2.433-2.878-2.433-4.646 0-3.776 2.748-7.252 7.92-7.252 4.158 0 7.392 2.967 7.392 6.923 0 4.135-2.607 7.462-6.233 7.462-1.214 0-2.354-.629-2.758-1.379l-.749 2.848c-.269 1.045-1.004 2.352-1.498 3.146 1.123.345 2.306.535 3.55.535 6.607 0 11.985-5.365 11.985-11.987C23.97 5.39 18.592.026 11.985.026L12.017 0z"/></svg>
                     </button>
-                            <button onclick="shareGalleryToSocial('${galleryId}', 'whatsapp', ${authenticated})" aria-label="WhatsApp" title="WhatsApp" style="
-                                padding: 18px;
-                                background: #25D366;
-                                color: white;
-                                border: none;
-                                border-radius: 12px;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                transition: all 0.2s ease;
-                                aspect-ratio: 1;
-                            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                    <button onclick="shareGalleryToSocial('${galleryId}', 'whatsapp', ${authenticated})" aria-label="WhatsApp" title="WhatsApp" style="
+                        padding: ${isMobile ? '14px' : '16px'};
+                        background: #25D366;
+                        color: white;
+                        border: none;
+                        border-radius: 12px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: transform 0.15s ease;
+                        aspect-ratio: 1;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <svg width="${isMobile ? '18' : '20'}" height="${isMobile ? '18' : '20'}" viewBox="0 0 24 24" fill="white"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.890-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                     </button>
-                            <button onclick="shareGalleryToSocial('${galleryId}', 'email', ${authenticated})" aria-label="Email" title="Email" style="
-                                padding: 18px;
-                                background: #636366;
-                                color: white;
-                                border: none;
-                                border-radius: 12px;
-                                cursor: pointer;
-                                display: flex;
-                                align-items: center;
-                                justify-content: center;
-                                transition: all 0.2s ease;
-                                aspect-ratio: 1;
-                            " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
+                    <button onclick="shareGalleryToSocial('${galleryId}', 'email', ${authenticated})" aria-label="Email" title="Email" style="
+                        padding: ${isMobile ? '14px' : '16px'};
+                        background: #636366;
+                        color: white;
+                        border: none;
+                        border-radius: 12px;
+                        cursor: pointer;
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                        transition: transform 0.15s ease;
+                        aspect-ratio: 1;
+                    " onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'">
+                        <svg width="${isMobile ? '18' : '20'}" height="${isMobile ? '18' : '20'}" viewBox="0 0 24 24" fill="white"><path d="M20 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4l-8 5-8-5V6l8 5 8-5v2z"/></svg>
                     </button>
                 </div>
-            </div>
-            
-                    <!-- QR Code Section -->
-                    <div>
-                        <label style="
-                            display: block;
-                            margin-bottom: 16px;
-                            font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
-                            font-weight: 400;
-                            font-size: 13px;
-                            color: #86868B;
-                            text-transform: uppercase;
-                            letter-spacing: 0.05em;
-                        ">QR CODE</label>
-                        <div style="
-                            text-align: center;
-                            padding: ${isMobile ? '32px 24px' : '40px'};
-                            background: #F5F5F7;
-                            border-radius: 16px;
-                        ">
-                            <p style="
-                                color: #86868B;
-                                font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
-                                font-size: 14px;
-                                font-weight: 400;
-                                margin: 0 0 24px 0;
-                            ">Scan to open</p>
-                            <img id="qrCodeImage" src="" alt="QR Code" style="
-                                max-width: ${isMobile ? '180px' : '200px'};
-                                width: 100%;
-                                height: auto;
-                                border-radius: 12px;
-                                display: none;
-                                margin: 0 auto;
-                                background: white;
-                                padding: 16px;
-                            ">
-                </div>
-            </div>
+        
+                <!-- QR Code Section -->
+                <div style="
+                    text-align: center;
+                    padding: ${isMobile ? '16px' : '20px'};
+                    background: #F5F5F7;
+                    border-radius: 16px;
+                ">
+                    <img id="qrCodeImage" src="" alt="QR Code" style="
+                        max-width: ${isMobile ? '140px' : '160px'};
+                        width: 100%;
+                        height: auto;
+                        border-radius: 12px;
+                        display: none;
+                        margin: 0 auto;
+                        background: white;
+                        padding: 12px;
+                    ">
                 </div>
             </div>
         </div>
@@ -1688,7 +1637,7 @@ window.updateEmbedCode = async function(galleryId, authenticated) {
 </iframe>`;
     
     embedInput.value = embedCode;
-    showNotification('Embed code updated!', 'success');
+    showNotification('Embed code updated', 'success');
 };
 
 /**
@@ -1699,7 +1648,7 @@ window.testGalleryLink = async function(galleryId, authenticated) {
         const shareInfo = await getGalleryShareInfo(galleryId, authenticated);
         if (shareInfo && shareInfo.share_url) {
             window.open(shareInfo.share_url, '_blank');
-            showNotification('Opening share link in new tab...', 'success');
+            showNotification('Opening share link', 'success');
         } else {
             showNotification('Share link not available', 'error');
         }
@@ -1717,7 +1666,7 @@ window.testPhotoLink = async function(photoId, authenticated) {
         const shareInfo = await getPhotoShareInfo(photoId, authenticated);
         if (shareInfo && shareInfo.share_url) {
             window.open(shareInfo.share_url, '_blank');
-            showNotification('Opening share link in new tab...', 'success');
+            showNotification('Opening share link', 'success');
         } else {
             showNotification('Share link not available', 'error');
         }
@@ -1790,7 +1739,7 @@ window.retryShareInfo = async function(id, authenticated, type = 'gallery') {
         // Show content
         if (loadingEl) loadingEl.style.display = 'none';
         if (contentEl) contentEl.style.display = 'block';
-        showNotification('Share information loaded successfully!', 'success');
+        showNotification('Share information loaded', 'success');
     } catch (error) {
         console.error('Error retrying share info:', error);
         
