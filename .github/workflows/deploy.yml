@@ -297,7 +297,7 @@ jobs:
   test-aws-infrastructure:
     name: ☁️  Test AWS Infrastructure
     runs-on: ubuntu-latest
-    needs: [setup-aws-infrastructure, setup-cloudfront-cdn]
+    needs: [setup-aws-infrastructure]
     
     steps:
       - name: Checkout code
