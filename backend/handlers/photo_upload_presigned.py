@@ -36,9 +36,13 @@ def handle_get_upload_url(gallery_id, user, event):
         content_type = body.get('content_type', 'image/jpeg')
         file_size = body.get('file_size', 0)
         
-        # Generate unique photo ID and S3 key
+        # Extract file extension from original filename to preserve format
+        import os
+        file_extension = os.path.splitext(filename)[1] or '.jpg'  # Default to .jpg if no extension
+        
+        # Generate unique photo ID and S3 key with original extension
         photo_id = str(uuid.uuid4())
-        s3_key = f"{gallery_id}/{photo_id}.jpg"
+        s3_key = f"{gallery_id}/{photo_id}{file_extension}"
         
         # Generate presigned POST URL (allows uploads up to 5TB!)
         presigned_data = s3_client.generate_presigned_post(
@@ -216,6 +220,17 @@ def handle_confirm_upload(gallery_id, user, event):
         gallery['storage_used'] = Decimal(str(round(new_storage_mb, 2)))
         gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
         galleries_table.put_item(Item=gallery)
+        
+        # Regenerate gallery ZIP file (async - don't block upload)
+        try:
+            from utils.zip_generator import generate_gallery_zip
+            # Run in background - don't wait for completion
+            import threading
+            threading.Thread(target=generate_gallery_zip, args=(gallery_id,), daemon=True).start()
+            print(f"🔄 Started ZIP regeneration for gallery {gallery_id}")
+        except Exception as zip_error:
+            print(f"⚠️  Failed to regenerate ZIP: {str(zip_error)}")
+            # Don't fail upload if ZIP generation fails
         
         # ✅ SEND "GALLERY READY" NOTIFICATION - When FIRST photo is uploaded
         if previous_photo_count == 0 and new_photo_count == 1:

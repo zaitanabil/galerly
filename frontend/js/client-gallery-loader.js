@@ -242,15 +242,11 @@ function applyGalleryPermissions() {
         if (selectionToolbar) {
             selectionToolbar.style.display = 'none';
         }
-        // Hide all checkboxes for photo selection
+        // Hide all checkboxes for photo selection (if they exist)
         const checkboxWrappers = document.querySelectorAll('.photo-checkbox-wrapper');
         checkboxWrappers.forEach(wrapper => {
             wrapper.style.display = 'none';
         });
-        // Clear selections
-        if (typeof window.clearSelections === 'function') {
-            window.clearSelections();
-        }
     } else {
         // Show download features
         const downloadPhotoBtn = document.getElementById('downloadPhotoBtn');
@@ -261,10 +257,7 @@ function applyGalleryPermissions() {
         if (selectionToolbar) {
             selectionToolbar.style.display = 'flex';
         }
-        const checkboxWrappers = document.querySelectorAll('.photo-checkbox-wrapper');
-        checkboxWrappers.forEach(wrapper => {
-            wrapper.style.display = 'flex';
-        });
+        // Checkboxes removed - no longer needed for download all
     }
     // Handle COMMENTS permission
     if (!commentsAllowed) {
@@ -653,60 +646,17 @@ function renderPhotos(photos, startIndex, count) {
         const photoCard = document.createElement('div');
         photoCard.className = 'gallery-photo-card';
         photoCard.setAttribute('data-photo-id', photo.id);
-        // Handle click - open modal (but allow checkbox clicks)
-        photoCard.onclick = (e) => {
-            // Don't open modal if clicking checkbox
-            if (e.target.type === 'checkbox' || e.target.closest('.photo-checkbox-wrapper')) {
-                e.stopPropagation();
-                return;
-            }
+        // Handle click - open modal
+        photoCard.onclick = () => {
             openPhotoModal(i);
         };
         // Add visual indicator for pending photos
         // Hide pending status from public/non-authenticated viewers
         const isPending = !window.isPublicGalleryAccess && photo.status === 'pending';
         const isFavorite = photo.is_favorite === true;
-        // Check if photo is selected (wait for photo-selection.js to initialize)
-        const isSelected = (window.selectedPhotos && typeof window.selectedPhotos.has === 'function' && window.selectedPhotos.has(photo.id)) || false;
         // Show favorite indicator ONLY for authenticated users (not public viewers)
         const showFavoriteIndicator = !window.isPublicGalleryAccess && isFavorite;
         photoCard.innerHTML = `
-            <!-- Selection Checkbox -->
-            <div class="photo-checkbox-wrapper" onclick="event.stopPropagation(); togglePhotoSelection('${photo.id}')" style="
-                position: absolute;
-                top: 10px;
-                left: 10px;
-                z-index: 10;
-                width: 36px;
-                height: 36px;
-                background: transparent;
-                border-radius: 50%;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                cursor: pointer;
-                transition: all 0.2s ease;
-            " onmouseover="this.style.background='rgba(255, 255, 255, 0.2)'" onmouseout="this.style.background='transparent'">
-                <input 
-                    type="checkbox" 
-                    class="photo-checkbox" 
-                    data-photo-id="${photo.id}"
-                    ${isSelected ? 'checked' : ''}
-                    onclick="event.stopPropagation(); togglePhotoSelection('${photo.id}')"
-                    style="
-                        width: 24px;
-                        height: 24px;
-                        cursor: pointer;
-                        border-radius: 50%;
-                        appearance: none;
-                        -webkit-appearance: none;
-                        background: ${isSelected ? 'var(--color-blue)' : 'rgba(255, 255, 255, 0.9)'};
-                        border: 2px solid ${isSelected ? 'var(--color-blue)' : 'rgba(0, 0, 0, 0.2)'};
-                        position: relative;
-                        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
-                    "
-                />
-            </div>
             <img 
                 src="${getImageUrl(photo.thumbnail_url || photo.url)}" 
                 alt="${photo.title || 'Photo'}"
@@ -740,16 +690,10 @@ function renderPhotos(photos, startIndex, count) {
         grid.appendChild(photoCard);
     }
     paginationPhotoIndex = endIndex;
-    // Initialize photo selection if not already done
+    // Initialize download toolbar if not already done
     if (typeof window.initPhotoSelection === 'function') {
         window.initPhotoSelection();
     }
-    // Auto-select ALL photos (including newly loaded ones from "Load More")
-    setTimeout(() => {
-        if (typeof window.selectAllPhotos === 'function') {
-            window.selectAllPhotos(); // This will select ALL photos in window.galleryPhotos
-        }
-    }, 300);
 }
 /**
  * Add "Load More" button

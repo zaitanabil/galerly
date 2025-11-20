@@ -1,44 +1,14 @@
 /**
- * Photo Selection Tool
- * Allows clients to select photos for batch operations (download, etc.)
+ * Photo Download Tool
+ * Provides Download All functionality with pre-generated ZIP files
  */
 
-// Track selected photos (global for access from other scripts)
-window.selectedPhotos = new Set();
-let selectedPhotos = window.selectedPhotos;
-
 /**
- * Initialize photo selection mode
+ * Initialize download toolbar
  */
 function initPhotoSelection() {
-    // Add selection toolbar if it doesn't exist
+    // Add download toolbar if it doesn't exist
     addSelectionToolbar();
-    
-    // Load saved selections from localStorage
-    loadSavedSelections();
-    
-    // Auto-select all photos by default for better UX
-    // This happens after a short delay to ensure photos are loaded
-    setTimeout(() => {
-        // Only auto-select if no saved selections exist
-        if (selectedPhotos.size === 0) {
-            autoSelectAllPhotos();
-        }
-    }, 500);
-    
-    // Update UI
-    updateSelectionUI();
-}
-
-/**
- * Auto-select all photos by default for better UX
- */
-function autoSelectAllPhotos() {
-    const photos = window.galleryPhotos || [];
-    photos.forEach(photo => {
-        selectedPhotos.add(photo.id);
-    });
-    updateSelectionUI();
 }
 
 /**
@@ -69,8 +39,8 @@ function addSelectionToolbar() {
     
     toolbar.innerHTML = `
         <div style="display: flex; align-items: center; gap: var(--size-m); flex-wrap: wrap;">
-            <!-- Prominent Download Button - Fully Rounded -->
-            <button id="downloadSelectedBtn" class="selection-btn-primary" onclick="downloadSelectedPhotos()" style="
+            <!-- Download All Button - Fully Rounded -->
+            <button id="downloadAllBtn" class="selection-btn-primary" onclick="downloadAllPhotos()" style="
                 padding: 12px 24px;
                 background: linear-gradient(135deg, #0066CC 0%, #0052A3 100%);
                 border: none;
@@ -90,46 +60,8 @@ function addSelectionToolbar() {
                     <polyline points="7 10 12 15 17 10"></polyline>
                     <line x1="12" y1="15" x2="12" y2="3"></line>
                 </svg>
-                <span>Download <span id="downloadCount">0</span> Photos</span>
+                <span>Download All Photos</span>
             </button>
-            
-            <!-- Selection Info & Controls -->
-            <div style="display: flex; align-items: center; gap: var(--size-m); flex-wrap: wrap;">
-                <span id="selectionCount" style="
-                    font-size: 0.95rem;
-                    font-weight: 500;
-                    padding: 8px 16px;
-                    background: rgba(255, 255, 255, 0.1);
-                    border-radius: 6px;
-                ">0 photos selected</span>
-                
-            <button id="selectAllBtn" class="selection-btn" onclick="selectAllPhotos()" style="
-                    padding: 8px 16px;
-                background: transparent;
-                    border: 1.5px solid rgba(255, 255, 255, 0.3);
-                    border-radius: 6px;
-                color: var(--color-text-primary);
-                cursor: pointer;
-                font-size: 0.875rem;
-                    font-weight: 500;
-                transition: all 0.2s ease;
-                " onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.borderColor='rgba(255,255,255,0.5)'" onmouseout="this.style.background='transparent'; this.style.borderColor='rgba(255,255,255,0.3)'">
-                Select All
-            </button>
-            <button id="deselectAllBtn" class="selection-btn" onclick="deselectAllPhotos()" style="
-                    padding: 8px 16px;
-                background: transparent;
-                    border: 1.5px solid rgba(255, 255, 255, 0.3);
-                    border-radius: 6px;
-                color: var(--color-text-primary);
-                cursor: pointer;
-                font-size: 0.875rem;
-                    font-weight: 500;
-                transition: all 0.2s ease;
-                " onmouseover="this.style.background='rgba(255,255,255,0.1)'; this.style.borderColor='rgba(255,255,255,0.5)'" onmouseout="this.style.background='transparent'; this.style.borderColor='rgba(255,255,255,0.3)'">
-                Deselect All
-            </button>
-        </div>
         </div>
     `;
     
@@ -140,165 +72,22 @@ function addSelectionToolbar() {
     }
 }
 
-/**
- * Toggle photo selection
- */
-function togglePhotoSelection(photoId) {
-    if (selectedPhotos.has(photoId)) {
-        selectedPhotos.delete(photoId);
-    } else {
-        selectedPhotos.add(photoId);
-    }
-    
-    // Keep window.selectedPhotos in sync
-    window.selectedPhotos = selectedPhotos;
-    
-    // Save to localStorage
-    saveSelections();
-    
-    // Update UI
-    updateSelectionUI();
-    updatePhotoCheckbox(photoId);
-}
+// Selection functions removed - no longer needed
 
 /**
- * Select all photos
+ * Download all photos as ZIP
+ * Downloads pre-generated ZIP file from S3/CloudFront (instant download)
+ * Supports both authenticated and token-based access
  */
-function selectAllPhotos() {
-    const photos = window.galleryPhotos || [];
-    photos.forEach(photo => {
-        selectedPhotos.add(photo.id);
-    });
-    
-    // Keep window.selectedPhotos in sync
-    window.selectedPhotos = selectedPhotos;
-    
-    saveSelections();
-    updateSelectionUI();
-    updateAllPhotoCheckboxes();
-}
-
-/**
- * Deselect all photos
- */
-function deselectAllPhotos() {
-    selectedPhotos.clear();
-    window.selectedPhotos = selectedPhotos; // Keep in sync
-    
-    saveSelections();
-    updateSelectionUI();
-    updateAllPhotoCheckboxes();
-}
-
-/**
- * Update selection UI (toolbar buttons, count)
- */
-function updateSelectionUI() {
-    const count = selectedPhotos.size;
-    const countEl = document.getElementById('selectionCount');
-    const downloadCountEl = document.getElementById('downloadCount');
-    const downloadBtn = document.getElementById('downloadSelectedBtn');
-    
-    if (countEl) {
-        countEl.textContent = `${count} ${count === 1 ? 'photo' : 'photos'} selected`;
-    }
-    
-    if (downloadCountEl) {
-        downloadCountEl.textContent = count;
-    }
-    
-    if (downloadBtn) {
-        if (count > 0) {
-            downloadBtn.style.opacity = '1';
-            downloadBtn.style.pointerEvents = 'auto';
-        } else {
-            downloadBtn.style.opacity = '0.5';
-            downloadBtn.style.pointerEvents = 'none';
-        }
-    }
-}
-
-/**
- * Update single photo checkbox
- */
-function updatePhotoCheckbox(photoId) {
-    const checkboxWrapper = document.querySelector(`[data-photo-id="${photoId}"] .photo-checkbox-wrapper`);
-    if (!checkboxWrapper) return;
-    
-    const checkbox = checkboxWrapper.querySelector('.photo-checkbox');
-    if (!checkbox) return;
-    
-    const isSelected = selectedPhotos.has(photoId);
-    checkbox.checked = isSelected;
-    
-    // Remove existing checkmark if present
-    const existingCheckmark = checkboxWrapper.querySelector('.checkbox-checkmark');
-    if (existingCheckmark) {
-        existingCheckmark.remove();
-    }
-    
-    // Update visual style for rounded checkbox - ONLY CHECKMARK, NO DOT
-    if (isSelected) {
-        // Blue filled circle
-        checkbox.style.background = '#007AFF';  // Apple blue
-        checkbox.style.borderColor = '#007AFF';
-        
-        // Add white checkmark SVG (NO DOT!)
-        const checkmark = document.createElement('div');
-        checkmark.className = 'checkbox-checkmark';
-        checkmark.innerHTML = `
-            <svg width="16" height="13" viewBox="0 0 16 13" fill="none" xmlns="http://www.w3.org/2000/svg" style="
-                position: absolute; 
-                top: 50%; 
-                left: 50%; 
-                transform: translate(-50%, -50%);
-            ">
-                <path d="M2 6.5L6 10.5L14 2.5" stroke="white" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-        `;
-        checkmark.style.cssText = `
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none;
-            z-index: 1;
-        `;
-        checkboxWrapper.appendChild(checkmark);
-    } else {
-        // White/light gray circle with border (empty)
-        checkbox.style.background = 'rgba(255, 255, 255, 0.95)';
-        checkbox.style.borderColor = 'rgba(0, 0, 0, 0.15)';
-    }
-}
-
-/**
- * Update all photo checkboxes
- */
-function updateAllPhotoCheckboxes() {
-    const photos = window.galleryPhotos || [];
-    photos.forEach(photo => {
-        updatePhotoCheckbox(photo.id);
-    });
-}
-
-/**
- * Download selected photos as ZIP
- * Uses CLIENT-SIDE ZIP generation with CloudFront for 10x faster downloads
- * Big Tech approach: Instagram, Google Photos, Dropbox
- */
-async function downloadSelectedPhotos() {
-    const photos = window.galleryPhotos || [];
-    const selected = photos.filter(p => selectedPhotos.has(p.id));
-    
-    if (selected.length === 0) {
-        showNotification('No photos selected', 'warning');
+async function downloadAllPhotos() {
+    const galleryId = window.currentGalleryId;
+    if (!galleryId) {
+        showNotification('Gallery ID not available', 'error');
         return;
     }
     
-    const downloadBtn = document.getElementById('downloadSelectedBtn');
-    const originalText = downloadBtn ? downloadBtn.innerHTML : 'Download';
+    const downloadBtn = document.getElementById('downloadAllBtn');
+    const originalText = downloadBtn ? downloadBtn.innerHTML : 'Download All Photos';
     
     if (downloadBtn) {
         downloadBtn.innerHTML = `
@@ -306,25 +95,56 @@ async function downloadSelectedPhotos() {
                 <circle cx="12" cy="12" r="10"></circle>
                 <polyline points="12 6 12 12 16 10"></polyline>
             </svg>
-            <span>Preparing ${selected.length} photos...</span>
+            <span>Preparing download...</span>
         `;
         downloadBtn.disabled = true;
     }
     
     try {
-        // PRIMARY: Client-side ZIP with CloudFront (10x faster!)
-        // This uses parallel downloads from CloudFront edge locations
-        await downloadSelectedPhotosClientSide(selected);
+        let response;
+        
+        // Check if accessing via token (public access)
+        const urlParams = new URLSearchParams(window.location.search);
+        const shareToken = urlParams.get('token');
+        
+        if (shareToken && window.isPublicGalleryAccess) {
+            // Use token-based endpoint for public access
+            response = await apiRequest('downloads/bulk/by-token', {
+                method: 'POST',
+                body: JSON.stringify({ token: shareToken })
+            });
+        } else {
+            // Use authenticated endpoint
+            response = await apiRequest(`galleries/${galleryId}/download-bulk`, {
+                method: 'POST',
+                body: JSON.stringify({})
+            });
+        }
+        
+        if (!response.zip_url) {
+            throw new Error('ZIP URL not available');
+        }
+        
+        // Download ZIP file directly from CloudFront
+        const link = document.createElement('a');
+        link.href = response.zip_url;
+        link.download = response.filename || 'gallery-photos.zip';
+        link.style.display = 'none';
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
         
         // Track downloads
         if (typeof window.trackPhotoDownload === 'function' && window.currentGalleryId) {
-            selected.forEach(photo => {
+            const photos = window.galleryPhotos || [];
+            photos.forEach(photo => {
                 try {
                     window.trackPhotoDownload(photo.id, window.currentGalleryId, {
                         ip: '',
                         user_agent: navigator.userAgent,
                         batch_download: true,
-                        method: 'client-side'
+                        method: 'pre-generated-zip'
                     });
                 } catch (err) {
                     console.error('Error tracking download:', err);
@@ -332,9 +152,11 @@ async function downloadSelectedPhotos() {
             });
         }
         
+        showNotification(`Download started! ${response.photo_count || 0} photos`);
+        
     } catch (error) {
-        console.error('Error creating download:', error);
-            showNotification('Failed to prepare download. Please try again.', 'error');
+        console.error('Error downloading all photos:', error);
+        showNotification('Failed to download. Please try again.', 'error');
     } finally {
         if (downloadBtn) {
             downloadBtn.innerHTML = originalText;
@@ -343,196 +165,7 @@ async function downloadSelectedPhotos() {
     }
 }
 
-/**
- * Client-side ZIP generation with CloudFront CDN
- * Big Tech approach: Fast parallel downloads from edge locations
- */
-async function downloadSelectedPhotosClientSide(selected) {
-    try {
-        // Dynamically load JSZip if not already loaded
-        if (typeof JSZip === 'undefined') {
-            await loadJSZip();
-        }
-        
-        const zip = new JSZip();
-        const galleryName = (window.currentGalleryData?.name || 'galerly-photos').replace(/[^a-z0-9]/gi, '-');
-        
-        // Track used filenames to handle duplicates
-        const usedFilenames = new Map();
-        
-        const downloadBtn = document.getElementById('downloadSelectedBtn');
-            
-        // Fetch and add all photos to ZIP (parallel downloads)
-        const downloadPromises = selected.map(async (photo, i) => {
-            try {
-                // Use CloudFront URL (fast edge location download)
-                const imageUrl = window.getImageUrl(photo.url);
-                
-                // Update progress
-                if (downloadBtn) {
-                    const progress = Math.round(((i + 1) / selected.length) * 100);
-                    downloadBtn.innerHTML = `
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <polyline points="12 6 12 12 16 10"></polyline>
-                        </svg>
-                        <span>Downloading ${i + 1}/${selected.length}</span>
-                    `;
-                }
-                
-                const response = await fetch(imageUrl, {
-                    method: 'GET',
-                    mode: 'cors',
-                    cache: 'force-cache',  // Use browser cache if available
-                    credentials: 'omit'
-                });
-                
-                if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
-                
-                const blob = await response.blob();
-                let baseFilename = photo.filename || `photo-${photo.id}.jpg`;
-                
-                // Handle duplicate filenames
-                let finalFilename = baseFilename;
-                if (usedFilenames.has(baseFilename)) {
-                    const lastDotIndex = baseFilename.lastIndexOf('.');
-                    const nameWithoutExt = lastDotIndex > 0 ? baseFilename.substring(0, lastDotIndex) : baseFilename;
-                    const extension = lastDotIndex > 0 ? baseFilename.substring(lastDotIndex) : '';
-                    
-                    const timestamp = photo.created_at 
-                        ? new Date(photo.created_at).getTime() 
-                        : Date.now() + i;
-                    
-                    finalFilename = `${nameWithoutExt}_${timestamp}${extension}`;
-                    
-                    let counter = 1;
-                    while (usedFilenames.has(finalFilename)) {
-                        finalFilename = `${nameWithoutExt}_${timestamp}_${counter}${extension}`;
-                        counter++;
-                    }
-                }
-                
-                usedFilenames.set(finalFilename, true);
-                zip.file(finalFilename, blob);
-                
-                return { success: true, filename: finalFilename };
-            } catch (error) {
-                console.error(`Error fetching photo ${photo.id}:`, error);
-                return { success: false, photo_id: photo.id, error };
-            }
-        });
-        
-        // Wait for all downloads (parallel)
-        const results = await Promise.all(downloadPromises);
-        const successful = results.filter(r => r.success).length;
-        
-        console.log(`✅ Downloaded ${successful}/${selected.length} photos from CloudFront`);
-        
-        // Update to "Creating ZIP..."
-        if (downloadBtn) {
-            downloadBtn.innerHTML = `
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                    <circle cx="12" cy="12" r="10"></circle>
-                </svg>
-                <span>Creating ZIP...</span>
-            `;
-        }
-        
-        // Generate ZIP
-        const zipBlob = await zip.generateAsync({ 
-            type: 'blob',
-            compression: 'DEFLATE',
-            compressionOptions: { level: 6 }
-        });
-        
-        // Download ZIP file
-        const zipUrl = URL.createObjectURL(zipBlob);
-        const link = document.createElement('a');
-        link.href = zipUrl;
-        link.download = `${galleryName}-${successful}-photos.zip`;
-        link.style.display = 'none';
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        setTimeout(() => URL.revokeObjectURL(zipUrl), 1000);
-        
-        showNotification(`Successfully downloaded ${successful} ${successful === 1 ? 'photo' : 'photos'} as ZIP!`);
-        
-    } catch (error) {
-        console.error('Error creating client-side ZIP:', error);
-        showNotification('Failed to create ZIP. Please try again.', 'error');
-        throw error;  // Re-throw for parent handler
-    }
-}
-
-/**
- * Load JSZip library dynamically
- */
-function loadJSZip() {
-    return new Promise((resolve, reject) => {
-        if (typeof JSZip !== 'undefined') {
-            resolve();
-            return;
-        }
-        
-        const script = document.createElement('script');
-        script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js';
-        script.onload = resolve;
-        script.onerror = () => reject(new Error('Failed to load JSZip'));
-        document.head.appendChild(script);
-    });
-}
-
-/**
- * Save selections to localStorage
- */
-function saveSelections() {
-    const galleryId = window.currentGalleryId;
-    if (!galleryId) return;
-    
-    const key = `selected_photos_${galleryId}`;
-    localStorage.setItem(key, JSON.stringify(Array.from(selectedPhotos)));
-}
-
-/**
- * Load saved selections from localStorage
- */
-function loadSavedSelections() {
-    const galleryId = window.currentGalleryId;
-    if (!galleryId) return;
-    
-    const key = `selected_photos_${galleryId}`;
-    const saved = localStorage.getItem(key);
-    
-    if (saved) {
-        try {
-            selectedPhotos = new Set(JSON.parse(saved));
-            window.selectedPhotos = selectedPhotos; // Keep in sync
-        } catch (e) {
-            console.error('Error loading saved selections:', e);
-            selectedPhotos = new Set();
-            window.selectedPhotos = selectedPhotos;
-        }
-    }
-}
-
-/**
- * Clear selections for current gallery
- */
-function clearSelections() {
-    selectedPhotos.clear();
-    window.selectedPhotos = selectedPhotos; // Keep in sync
-    
-    const galleryId = window.currentGalleryId;
-    if (galleryId) {
-        const key = `selected_photos_${galleryId}`;
-        localStorage.removeItem(key);
-    }
-    updateSelectionUI();
-    updateAllPhotoCheckboxes();
-}
+// Selection persistence functions removed - no longer needed
 
 /**
  * Show notification
@@ -562,13 +195,8 @@ function showNotification(message, type = 'success') {
 }
 
 // Export functions to global scope
-window.togglePhotoSelection = togglePhotoSelection;
-window.selectAllPhotos = selectAllPhotos;
-window.deselectAllPhotos = deselectAllPhotos;
-window.downloadSelectedPhotos = downloadSelectedPhotos;
+window.downloadAllPhotos = downloadAllPhotos;
 window.initPhotoSelection = initPhotoSelection;
-window.clearSelections = clearSelections;
-window.autoSelectAllPhotos = autoSelectAllPhotos;
 
 // Initialize when DOM is ready
 if (document.readyState === 'loading') {

@@ -558,7 +558,7 @@ async function downloadPhoto() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-            
+        
             // Clean up blob URL after a short delay
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
         

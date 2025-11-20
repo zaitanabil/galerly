@@ -167,21 +167,29 @@ def handle_upload_photo(gallery_id, user, event):
         file_size = get_file_size(image_data)
         size_mb = file_size / (1024 * 1024)  # Convert bytes to MB
         
+        # Extract file extension from original filename to preserve format
+        import os
+        file_extension = os.path.splitext(filename_from_client)[1] or '.jpg'  # Default to .jpg if no extension
+        
         photo_id = str(uuid.uuid4())
-        s3_key_full = f"{gallery_id}/{photo_id}.jpg"
+        s3_key_full = f"{gallery_id}/{photo_id}{file_extension}"
         
         # ⚡ PERFORMANCE FIX: Skip thumbnail generation for faster uploads
         # Thumbnails will be generated on-demand by CloudFront + Lambda@Edge
         print(f"⚡ FAST UPLOAD: Skipping thumbnail generation (CloudFront will generate on-demand)")
+        
+        # Get proper MIME type from file extension
+        from utils.mime_types import get_mime_type
+        content_type = get_mime_type(filename_from_client)
         
         # Upload FULL-RES to S3 (original quality for download)
         s3_client.put_object(
             Bucket=S3_BUCKET,
             Key=s3_key_full,
             Body=image_data,
-            ContentType='image/jpeg'
+            ContentType=content_type
         )
-        print(f"✅ Full-res uploaded: {s3_key_full} ({len(image_data):,} bytes)")
+        print(f"✅ Full-res uploaded: {s3_key_full} ({len(image_data):,} bytes, {content_type})")
         
         # Generate CloudFront CDN URLs with automatic resizing
         # URL format: https://cdn.galerly.com/resize/{width}x{height}/{s3_key}
@@ -220,6 +228,17 @@ def handle_upload_photo(gallery_id, user, event):
         gallery['storage_used'] = Decimal(str(round(new_storage_mb, 2)))  # Use Decimal for DynamoDB
         gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
         galleries_table.put_item(Item=gallery)
+        
+        # Regenerate gallery ZIP file (async - don't block upload)
+        try:
+            from utils.zip_generator import generate_gallery_zip
+            # Run in background - don't wait for completion
+            import threading
+            threading.Thread(target=generate_gallery_zip, args=(gallery_id,), daemon=True).start()
+            print(f"🔄 Started ZIP regeneration for gallery {gallery_id}")
+        except Exception as zip_error:
+            print(f"⚠️  Failed to regenerate ZIP: {str(zip_error)}")
+            # Don't fail upload if ZIP generation fails
         
         # EMAIL NOTIFICATIONS DISABLED FOR AUTO-SEND
         # Photographer must manually send batch notification via "Send Email Notification" button
@@ -801,6 +820,17 @@ def handle_delete_photos(gallery_id, user, event):
             gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
             galleries_table.put_item(Item=gallery)
             print(f"✅ Updated gallery: photo_count={new_photo_count}, storage={new_storage_mb}MB (freed {total_size_mb_deleted}MB)")
+            
+            # Regenerate gallery ZIP file (async - don't block deletion)
+            try:
+                from utils.zip_generator import generate_gallery_zip
+                # Run in background - don't wait for completion
+                import threading
+                threading.Thread(target=generate_gallery_zip, args=(gallery_id,), daemon=True).start()
+                print(f"🔄 Started ZIP regeneration for gallery {gallery_id}")
+            except Exception as zip_error:
+                print(f"⚠️  Failed to regenerate ZIP: {str(zip_error)}")
+                # Don't fail deletion if ZIP generation fails
         
         response_data = {
             'deleted_count': deleted_count,
