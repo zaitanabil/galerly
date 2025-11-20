@@ -92,7 +92,6 @@ def handle_bulk_download_by_token(event):
     ZIP is pre-generated and stored in S3, so download is instant
     """
     import json
-    from utils.token import verify_gallery_token
     
     try:
         # Parse request body
@@ -102,25 +101,20 @@ def handle_bulk_download_by_token(event):
         if not token:
             return create_response(400, {'error': 'Token required'})
         
-        # Verify token and get gallery_id
-        token_data = verify_gallery_token(token)
-        if not token_data:
-            return create_response(403, {'error': 'Invalid or expired token'})
-        
-        gallery_id = token_data.get('gallery_id')
-        
-        print(f"📦 Token-based bulk download for gallery {gallery_id}")
-        
-        # Get gallery
+        # Verify token by looking up gallery with matching share_token
         gallery_response = galleries_table.scan(
-            FilterExpression='id = :gid',
-            ExpressionAttributeValues={':gid': gallery_id}
+            FilterExpression='share_token = :token',
+            ExpressionAttributeValues={':token': token}
         )
         
-        if not gallery_response.get('Items'):
-            return create_response(404, {'error': 'Gallery not found'})
+        galleries = gallery_response.get('Items', [])
+        if not galleries:
+            return create_response(403, {'error': 'Invalid or expired token'})
         
-        gallery = gallery_response['Items'][0]
+        gallery = galleries[0]
+        gallery_id = gallery.get('id')
+        
+        print(f"📦 Token-based bulk download for gallery {gallery_id}")
         
         # Get pre-generated ZIP URL from S3
         zip_s3_key = f"{gallery_id}/gallery-all-photos.zip"
