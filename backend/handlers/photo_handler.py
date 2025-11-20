@@ -232,9 +232,10 @@ def handle_upload_photo(gallery_id, user, event):
         # Regenerate gallery ZIP file (async - don't block upload)
         try:
             from utils.zip_generator import generate_gallery_zip
-            # Run in background - don't wait for completion
+            # Run in background - Lambda will wait for non-daemon threads
             import threading
-            threading.Thread(target=generate_gallery_zip, args=(gallery_id,), daemon=True).start()
+            thread = threading.Thread(target=generate_gallery_zip, args=(gallery_id,))
+            thread.start()
             print(f"🔄 Started ZIP regeneration for gallery {gallery_id}")
         except Exception as zip_error:
             print(f"⚠️  Failed to regenerate ZIP: {str(zip_error)}")
@@ -824,9 +825,10 @@ def handle_delete_photos(gallery_id, user, event):
             # Regenerate gallery ZIP file (async - don't block deletion)
             try:
                 from utils.zip_generator import generate_gallery_zip
-                # Run in background - don't wait for completion
+                # Run in background - Lambda will wait for non-daemon threads
                 import threading
-                threading.Thread(target=generate_gallery_zip, args=(gallery_id,), daemon=True).start()
+                thread = threading.Thread(target=generate_gallery_zip, args=(gallery_id,))
+                thread.start()
                 print(f"🔄 Started ZIP regeneration for gallery {gallery_id}")
             except Exception as zip_error:
                 print(f"⚠️  Failed to regenerate ZIP: {str(zip_error)}")
