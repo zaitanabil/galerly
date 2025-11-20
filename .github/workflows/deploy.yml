@@ -737,6 +737,14 @@ jobs:
           echo "🔄 SYNCING GitHub Secrets to Lambda Environment Variables..."
           echo ""
           
+          # STEP 0: Wait for previous Lambda update to complete
+          echo "⏳ STEP 0: Waiting for previous Lambda deployment to complete..."
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }}
+          echo "✅ Lambda is ready for configuration update"
+          echo ""
+          
           # STEP 1: Get current Lambda environment variables
           echo "📋 STEP 1: Reading current Lambda environment variables..."
           aws lambda get-function-configuration \
