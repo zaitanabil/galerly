@@ -705,6 +705,20 @@ jobs:
           
           cd backend
           
+          # Set up Python virtual environment (required by deploy-lambda.sh)
+          echo "📦 Setting up Python virtual environment..."
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          echo "✅ Virtual environment created"
+          echo ""
+          
+          # Install dependencies (required before deploy-lambda.sh runs)
+          echo "📚 Installing dependencies from requirements.txt..."
+          pip install -r requirements.txt --upgrade
+          echo "✅ Dependencies installed"
+          echo ""
+          
           # Make script executable
           chmod +x deploy-lambda.sh
           
