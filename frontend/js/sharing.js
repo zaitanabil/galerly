@@ -320,15 +320,21 @@ function generateQRCodeUrl(text, size = 200) {
  */
 function showNotification(message, type = 'success') {
     const notification = document.createElement('div');
+    
+    // Full rounded green pill for all success notifications (especially "Link copied")
+    const isSuccess = type === 'success';
+    const bgColor = isSuccess ? '#34C759' : '#FF6F61';
+    const shadowColor = isSuccess ? 'rgba(52, 199, 89, 0.5)' : 'rgba(255, 111, 97, 0.4)';
+    
     notification.style.cssText = `
         position: fixed;
         top: 24px;
         right: 24px;
-        background: ${type === 'success' ? '#34C759' : '#FF6F61'};
+        background: ${bgColor};
         color: #FFFFFF;
         padding: 16px 32px;
         border-radius: 100px;
-        box-shadow: 0 8px 24px rgba(52, 199, 89, 0.4);
+        box-shadow: 0 8px 24px ${shadowColor};
         z-index: 10000;
         font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
         font-size: 15px;
@@ -740,7 +746,7 @@ function showGalleryShareModal(galleryId, authenticated = false) {
                             background: #0066CC;
                             color: white;
                             border: none;
-                            border-radius: 50px;
+                            border-radius: 100px;
                             cursor: pointer;
                             font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
                             font-weight: 500;
@@ -1172,7 +1178,7 @@ function showPhotoShareModal(photoId, authenticated = false) {
                             background: #0066CC;
                                 color: white;
                                 border: none;
-                            border-radius: 50px;
+                            border-radius: 100px;
                                 cursor: pointer;
                                 font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
                             font-weight: 500;
@@ -1482,8 +1488,8 @@ window.copyGalleryLinkFromModal = async function(galleryId, authenticated) {
             if (copyBtn) {
                 const originalText = copyBtn.textContent;
                 copyBtn.textContent = 'Copied';
-                copyBtn.style.background = '#98FF98';
-                copyBtn.style.color = '#1D1D1F';
+                copyBtn.style.background = '#34C759';
+                copyBtn.style.color = '#FFFFFF';
                 setTimeout(() => {
                     copyBtn.textContent = originalText;
                     copyBtn.style.background = '#0066CC';
@@ -1508,8 +1514,8 @@ window.copyPhotoLinkFromModal = async function(photoId, authenticated) {
             if (copyBtn) {
                 const originalText = copyBtn.textContent;
                 copyBtn.textContent = 'Copied';
-                copyBtn.style.background = '#98FF98';
-                copyBtn.style.color = '#1D1D1F';
+                copyBtn.style.background = '#34C759';
+                copyBtn.style.color = '#FFFFFF';
                 setTimeout(() => {
                     copyBtn.textContent = originalText;
                     copyBtn.style.background = '#0066CC';
@@ -1534,8 +1540,8 @@ window.copyEmbedCodeFromModal = async function(galleryId, authenticated) {
             if (copyBtn && copyBtn.tagName === 'BUTTON') {
                 const originalText = copyBtn.textContent;
                 copyBtn.textContent = 'Copied';
-                copyBtn.style.background = '#98FF98';
-                copyBtn.style.color = '#1D1D1F';
+                copyBtn.style.background = '#34C759';
+                copyBtn.style.color = '#FFFFFF';
                 setTimeout(() => {
                     copyBtn.textContent = originalText;
                     copyBtn.style.background = '#0066CC';

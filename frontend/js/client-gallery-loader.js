@@ -410,21 +410,13 @@ async function loadGalleryData(galleryId) {
         addFeedbackButton(galleryId);
         
         // Show CTA section for non-authenticated viewers
-        console.log('🔍 Auth check result:', isAuthenticated);
         if (!isAuthenticated) {
-            console.log('✅ User is NOT authenticated - showing CTA section');
             setTimeout(() => {
                 const ctaSection = document.getElementById('viewerCtaSection');
-                console.log('📍 CTA Section element:', ctaSection);
                 if (ctaSection) {
                     ctaSection.style.display = 'block';
-                    console.log('✅ CTA Section display set to block');
-                } else {
-                    console.error('❌ CTA Section element not found in DOM');
                 }
             }, 100);
-        } else {
-            console.log('❌ User IS authenticated - hiding CTA section');
         }
         
         // Load and display photos
@@ -521,21 +513,13 @@ async function loadGalleryDataByToken(shareToken) {
         }
         
         // Show CTA section for non-authenticated viewers
-        console.log('🔍 Auth check result (token):', isAuthenticated);
         if (!isAuthenticated) {
-            console.log('✅ User is NOT authenticated - showing CTA section (token access)');
             setTimeout(() => {
                 const ctaSection = document.getElementById('viewerCtaSection');
-                console.log('📍 CTA Section element (token):', ctaSection);
                 if (ctaSection) {
                     ctaSection.style.display = 'block';
-                    console.log('✅ CTA Section display set to block (token)');
-                } else {
-                    console.error('❌ CTA Section element not found in DOM (token)');
                 }
             }, 100);
-        } else {
-            console.log('❌ User IS authenticated - hiding CTA section (token)');
         }
         
         // Load and display photos
