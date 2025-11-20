@@ -831,7 +831,13 @@ jobs:
             --query 'LayerVersions[0].LayerVersionArn' \
             --output text)
           
-          echo "LAYER_ARN=$LAYER_ARN" >> $GITHUB_OUTPUT
+          # Use heredoc syntax to properly handle ARN with colons
+          {
+            echo "LAYER_ARN<<EOF"
+            echo "$LAYER_ARN"
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
+          
           echo "📋 Layer ARN: $LAYER_ARN"
 
       - name: Package Lambda Function (Lightweight)
