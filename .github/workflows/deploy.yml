@@ -824,21 +824,31 @@ jobs:
           echo "✅ Layer published: Version $LAYER_VERSION"
           echo "LAYER_VERSION=$LAYER_VERSION" >> $GITHUB_OUTPUT
           
-          # Get Layer ARN
+          # Get Layer ARN and clean it thoroughly
           LAYER_ARN=$(aws lambda list-layer-versions \
             --layer-name galerly-image-processing \
             --region ${{ env.AWS_REGION }} \
             --query 'LayerVersions[0].LayerVersionArn' \
-            --output text)
+            --output text | xargs)
           
-          # Use heredoc syntax to properly handle ARN with colons
-          {
-            echo "LAYER_ARN<<EOF"
-            echo "$LAYER_ARN"
-            echo "EOF"
-          } >> $GITHUB_OUTPUT
+          # Validate ARN format before storing (simple validation)
+          if [[ ! "$LAYER_ARN" == arn:aws:lambda:* ]] || [[ "$LAYER_ARN" == *$'\n'* ]]; then
+            echo "❌ ERROR: Invalid Layer ARN format: '$LAYER_ARN'"
+            echo "Expected format: arn:aws:lambda:region:account:layer:name:version"
+            exit 1
+          fi
+          
+          # Verify ARN contains layer name
+          if [[ ! "$LAYER_ARN" == *"galerly-image-processing"* ]]; then
+            echo "❌ ERROR: Layer ARN does not contain expected layer name"
+            exit 1
+          fi
+          
+          # Store using simple format (xargs already removed all whitespace)
+          echo "LAYER_ARN=$LAYER_ARN" >> $GITHUB_OUTPUT
           
           echo "📋 Layer ARN: $LAYER_ARN"
+          echo "✅ ARN validated and stored successfully"
 
       - name: Package Lambda Function (Lightweight)
         run: |
