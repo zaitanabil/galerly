@@ -14,15 +14,9 @@ from utils.response import create_response
 AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
 dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
 
-# Initialize table with error handling
-try:
-    visitor_table = dynamodb.Table('galerly-visitor-tracking')
-    # Test table access
-    visitor_table.meta.client.describe_table(TableName='galerly-visitor-tracking')
-except Exception as e:
-    print(f"⚠️  Warning: Could not access visitor-tracking table: {e}")
-    # Create a dummy table object - operations will fail gracefully
-    visitor_table = None
+# Initialize table - don't test access at import time (causes Lambda crashes)
+# We'll check availability in each function instead
+visitor_table = dynamodb.Table('galerly-visitor-tracking')
 
 
 def safe_decimal(value, default=0):
@@ -63,11 +57,6 @@ def handle_track_visit(body):
     - interaction: Interaction data (scroll, clicks)
     - session_pages_viewed: Total pages viewed in session
     """
-    # Check if table is available
-    if visitor_table is None:
-        print("⚠️  Visitor tracking table not available, skipping tracking")
-        return create_response(200, {'success': True, 'message': 'Tracking skipped (table unavailable)'})
-    
     try:
         event_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat() + 'Z'
@@ -214,11 +203,6 @@ def handle_track_event(body):
     - page_url: Current page
     - metadata: Additional event data (JSON object)
     """
-    # Check if table is available
-    if visitor_table is None:
-        print("⚠️  Visitor tracking table not available, skipping tracking")
-        return create_response(200, {'success': True, 'message': 'Tracking skipped (table unavailable)'})
-    
     try:
         event_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat() + 'Z'
@@ -309,11 +293,6 @@ def handle_track_session_end(body):
     - final_clicks: Total clicks
     - exit_page: Last page viewed
     """
-    # Check if table is available
-    if visitor_table is None:
-        print("⚠️  Visitor tracking table not available, skipping tracking")
-        return create_response(200, {'success': True, 'message': 'Tracking skipped (table unavailable)'})
-    
     try:
         event_id = str(uuid.uuid4())
         timestamp = datetime.utcnow().isoformat() + 'Z'
@@ -374,11 +353,6 @@ def handle_get_visitor_analytics(user, query_params):
     - event_type: Specific event type
     - limit: Number of records to return (default 100, max 1000)
     """
-    # Check if table is available
-    if visitor_table is None:
-        print("⚠️  Visitor tracking table not available")
-        return create_response(200, {'summary': {}, 'events': [], 'count': 0})
-    
     try:
         limit = min(int(query_params.get('limit', 100)), 1000)
         event_type_filter = query_params.get('event_type')
