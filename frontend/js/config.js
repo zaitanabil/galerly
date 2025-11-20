@@ -93,9 +93,41 @@ function getAuthHeaders() {
     return headers;
 }
 // Helper function to check if user is authenticated
-function isAuthenticated() {
-    // Check if there's user data in localStorage (for UI state only)
-    // Actual auth is handled by HttpOnly cookie
+// This function should ONLY be used for UI state (not security decisions)
+// For security decisions, always verify with the backend
+async function isAuthenticated() {
+    try {
+        // Verify with backend using HttpOnly cookie
+        const response = await fetch(getApiUrl('auth/me'), {
+            method: 'GET',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const userData = await response.json();
+            // Sync localStorage with actual auth state (for UI only)
+            localStorage.setItem(CONFIG.USER_DATA_KEY, JSON.stringify(userData));
+            return true;
+        } else {
+            // Not authenticated - clear stale localStorage
+            localStorage.removeItem(CONFIG.USER_DATA_KEY);
+            return false;
+        }
+    } catch (error) {
+        // On error, clear localStorage and return false
+        localStorage.removeItem(CONFIG.USER_DATA_KEY);
+        return false;
+    }
+}
+
+// Synchronous helper for UI state ONLY - NOT for security decisions
+// Use isAuthenticated() instead when you need actual verification
+function hasLocalUserData() {
+    // ONLY for UI state - checks if localStorage has user data
+    // This is NOT secure and should NOT be used for access control
     const userData = localStorage.getItem(CONFIG.USER_DATA_KEY);
     return userData !== null && userData !== undefined && userData !== '';
 }
@@ -199,6 +231,7 @@ if (typeof window !== 'undefined') {
     window.getImageUrl = getImageUrl;
     window.getAuthHeaders = getAuthHeaders;
     window.isAuthenticated = isAuthenticated;
+    window.hasLocalUserData = hasLocalUserData;
     window.getUserData = getUserData;
     window.logout = logout;
     window.validateFile = validateFile;

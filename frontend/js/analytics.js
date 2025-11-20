@@ -297,7 +297,9 @@ function createActivityChart(analytics) {
 
 // Initialize analytics in dashboard
 async function initDashboardAnalytics() {
-    if (!window.isAuthenticated || !window.isAuthenticated()) {
+    // Verify authentication with backend (HttpOnly cookie)
+    const isAuth = window.isAuthenticated ? await window.isAuthenticated() : false;
+    if (!isAuth) {
         return;
     }
     

@@ -78,12 +78,19 @@
         return null;
     }
     /**
-     * Check if user is authenticated
+     * Check if user is authenticated by verifying with backend
      */
-    function isAuthenticated() {
-        // Check for user data in localStorage (UI state only)
-        // Actual auth is handled by HttpOnly cookie
-        return localStorage.getItem('galerly_user_data') !== null;
+    async function isAuthenticated() {
+        try {
+            if (typeof window.isAuthenticated === 'function') {
+                return await window.isAuthenticated();
+            }
+            // Fallback: check localStorage (not recommended)
+            return localStorage.getItem('galerly_user_data') !== null;
+        } catch (error) {
+            console.error('Auth check error:', error);
+            return false;
+        }
     }
     /**
      * Check if current page is in a list
@@ -99,10 +106,10 @@
     /**
      * Check if user has access to current page
      */
-    function checkAccess() {
+    async function checkAccess() {
         const currentPage = getCurrentPage();
         const userRole = getUserRole();
-        const authenticated = isAuthenticated();
+        const authenticated = await isAuthenticated();
         // Always allow access to 404 page
         if (currentPage === '404') {
             return true;
@@ -151,8 +158,8 @@
     /**
      * Run access control check
      */
-    function runAccessControl() {
-        const hasAccess = checkAccess();
+    async function runAccessControl() {
+        const hasAccess = await checkAccess();
         if (!hasAccess) {
             redirectTo404();
         }

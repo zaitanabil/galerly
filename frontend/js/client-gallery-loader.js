@@ -11,6 +11,16 @@ document.addEventListener('DOMContentLoaded', async function() {
     const shareToken = urlParams.get('token');
     // Store whether this is public access (via token)
     window.isPublicGalleryAccess = !!shareToken;
+    
+    // For public access (token-based), verify actual auth state
+    if (shareToken) {
+        const isActuallyAuthenticated = await checkActualAuth();
+        if (!isActuallyAuthenticated) {
+            // Clear any stale localStorage for public viewers
+            localStorage.removeItem('galerly_user_data');
+        }
+    }
+    
     if (!galleryId && !shareToken) {
         showError('No gallery ID or share token provided');
         return;
@@ -22,6 +32,42 @@ document.addEventListener('DOMContentLoaded', async function() {
     await loadGalleryData(galleryId);
     }
 });
+/**
+ * Check if user is actually authenticated by verifying with backend
+ * Don't trust localStorage - verify HttpOnly cookie with server
+ */
+async function checkActualAuth() {
+    try {
+        // Get API base URL
+        const apiUrl = window.CONFIG?.API_BASE_URL || window.API_BASE_URL || '';
+        
+        // Call auth/me endpoint to verify HttpOnly cookie
+        const response = await fetch(`${apiUrl}/auth/me`, {
+            method: 'GET',
+            credentials: 'include', // Send HttpOnly cookie
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (response.ok) {
+            const userData = await response.json();
+            // Sync localStorage with actual auth state
+            localStorage.setItem('galerly_user_data', JSON.stringify(userData));
+            return true;
+        } else {
+            // Not authenticated - clear any stale localStorage
+            localStorage.removeItem('galerly_user_data');
+            return false;
+        }
+    } catch (error) {
+        console.error('Auth check error:', error);
+        // On error, assume not authenticated and clear localStorage
+        localStorage.removeItem('galerly_user_data');
+        return false;
+    }
+}
+
 /**
  * Hide features for public/external viewers (viewing via token)
  */
@@ -123,6 +169,31 @@ function hidePublicAccessFeatures() {
     logoutButtons.forEach(btn => {
         if (btn) btn.style.display = 'none';
     });
+    
+    // Force desktop auth button to show "Sign In" for public viewers
+    const desktopAuthButton = document.getElementById('desktop-auth-button');
+    if (desktopAuthButton) {
+        desktopAuthButton.setAttribute('aria-label', 'Sign In');
+        desktopAuthButton.setAttribute('href', 'auth');
+        desktopAuthButton.style.background = 'var(--color-blue)';
+        desktopAuthButton.style.color = 'var(--color-white)';
+        desktopAuthButton.style.display = 'inline-flex';
+        const buttonText = desktopAuthButton.querySelector('.subtitle-18');
+        if (buttonText) {
+            buttonText.textContent = 'Sign In';
+        }
+        desktopAuthButton.onclick = null; // Remove any logout onclick handler
+    }
+    
+    // Force mobile menu auth links to show "Sign In" for public viewers
+    const mobileAuthLinks = document.querySelectorAll('.item-15.subtitle-6 a[href="auth"]');
+    mobileAuthLinks.forEach(link => {
+        if (link) {
+            link.textContent = 'Sign In';
+            link.style.display = 'block';
+        }
+    });
+    
     // ISSUE #4: Hide "My Galleries" link in both desktop and mobile menus
     const myGalleriesLinks = document.querySelectorAll('a[href="client-dashboard"]');
     myGalleriesLinks.forEach(link => {
@@ -328,7 +399,7 @@ async function loadGalleryData(galleryId) {
         // HIDE settings button (clients cannot edit settings)
         const settingsBtn = document.querySelector('a[aria-label="Gallery Settings"]');
         if (settingsBtn) {
-            settingsBtn.parentElement.remove();
+            settingsBtn.remove();
         }
         // Store gallery data globally (before loading photos)
         window.currentGalleryId = galleryId;
@@ -410,7 +481,7 @@ async function loadGalleryDataByToken(shareToken) {
         // HIDE settings button (clients cannot edit settings)
         const settingsBtn = document.querySelector('a[aria-label="Gallery Settings"]');
         if (settingsBtn) {
-            settingsBtn.parentElement.remove();
+            settingsBtn.remove();
         }
         // Store gallery data globally (before loading photos)
         window.currentGalleryId = gallery.id;

@@ -511,7 +511,9 @@ function displayBillingHistory(history) {
 
 // Initialize billing page
 async function initBillingPage() {
-    if (!window.isAuthenticated()) {
+    // Verify authentication with backend (HttpOnly cookie)
+    const isAuth = window.isAuthenticated ? await window.isAuthenticated() : false;
+    if (!isAuth) {
         window.location.href = window.GalerlyConfig.LOGIN_PAGE;
         return;
     }

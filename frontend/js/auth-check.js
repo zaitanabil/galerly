@@ -1,6 +1,7 @@
 /**
  * Authentication Check and UI Update
- * This script checks if a user is logged in and updates the Sign In button to Logout
+ * This script verifies authentication with the backend (HttpOnly cookie)
+ * and updates UI accordingly (Sign In vs Logout button)
  * Handles both desktop header button and mobile menu
  * Shows/hides Dashboard links based on authentication
  */
@@ -18,16 +19,14 @@
         return 'photographer';
     }
     
-    function updateDashboardLinks() {
-        // Check user data for authentication (UI state)
-        const userData = localStorage.getItem('galerly_user_data');
+    function updateDashboardLinks(isAuthenticated) {
         const userRole = getUserRole();
         
         // Get all dashboard links (both desktop and mobile)
         const photographerDashboardLinks = document.querySelectorAll('a[href="dashboard"]');
         const clientDashboardLinks = document.querySelectorAll('a[href="client-dashboard"]');
         
-        if (userData) {
+        if (isAuthenticated) {
             // User is authenticated, show correct dashboard based on role
             if (userRole === 'client') {
                 // Show client dashboard links, hide photographer dashboard links
@@ -75,16 +74,24 @@
         }
     }
     
-    function updateAuthButtons() {
-        // Check user data for authentication (UI state)
-        const userData = localStorage.getItem('galerly_user_data');
+    async function updateAuthButtons() {
+        // Verify authentication with backend (HttpOnly cookie)
+        let isAuth = false;
+        try {
+            if (typeof window.isAuthenticated === 'function') {
+                isAuth = await window.isAuthenticated();
+            }
+        } catch (error) {
+            console.error('Auth check failed:', error);
+            isAuth = false;
+        }
         
         // Update dashboard link visibility
-        updateDashboardLinks();
+        updateDashboardLinks(isAuth);
         
-        // Update mobile menu button (existing behavior)
+        // Update mobile menu button
         const mobileSignInButton = document.querySelector('.item-15.subtitle-6 a[href="auth"]');
-        if (userData && mobileSignInButton) {
+        if (isAuth && mobileSignInButton) {
             const logoutButton = document.createElement('button');
             logoutButton.setAttribute('aria-label', 'Logout');
             logoutButton.style.cssText = mobileSignInButton.style.cssText;
@@ -98,11 +105,9 @@
             logoutButton.style.textAlign = 'left';
             logoutButton.textContent = 'Logout';
             logoutButton.onclick = function() {
-                // Call logout function from config.js
                 if (window.logout) {
                     window.logout();
                 } else {
-                    // Fallback if config.js not loaded
                     localStorage.removeItem('galerly_user_data');
                     window.location.href = '/';
                 }
@@ -111,10 +116,10 @@
             mobileSignInButton.parentNode.replaceChild(logoutButton, mobileSignInButton);
         }
         
-        // Update desktop header button (new behavior)
+        // Update desktop header button
         const desktopAuthButton = document.getElementById('desktop-auth-button');
         if (desktopAuthButton) {
-            if (userData) {
+            if (isAuth) {
                 // User is logged in, show Logout button
                 desktopAuthButton.setAttribute('aria-label', 'Logout');
                 desktopAuthButton.removeAttribute('href');
@@ -124,11 +129,9 @@
                 desktopAuthButton.querySelector('.subtitle-18').textContent = 'Logout';
                 desktopAuthButton.onclick = function(e) {
                     e.preventDefault();
-                    // Call logout function from config.js
                     if (window.logout) {
                         window.logout();
                     } else {
-                        // Fallback if config.js not loaded
                         localStorage.removeItem('galerly_user_data');
                         window.location.href = '/';
                     }
@@ -168,7 +171,6 @@
             }
             
             // Show desktop button only when both mobile menu and toggle are hidden
-            // Preserve other inline styles (background, color)
             if (shouldHideButton) {
                 desktopAuthButton.style.display = 'none';
             } else {

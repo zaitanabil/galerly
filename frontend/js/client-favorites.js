@@ -10,7 +10,9 @@ let favoritePhotos = new Set();
  * Initialize favorites - load user's favorites
  */
 async function initFavorites() {
-    if (!window.isAuthenticated || !window.isAuthenticated()) {
+    // Verify authentication with backend (HttpOnly cookie)
+    const isAuth = window.isAuthenticated ? await window.isAuthenticated() : false;
+    if (!isAuth) {
         return;
     }
     
@@ -28,7 +30,9 @@ async function initFavorites() {
  * Toggle favorite status for a photo
  */
 async function toggleFavorite(photoId, galleryId) {
-    if (!window.isAuthenticated || !window.isAuthenticated()) {
+    // Verify authentication with backend (HttpOnly cookie)
+    const isAuth = window.isAuthenticated ? await window.isAuthenticated() : false;
+    if (!isAuth) {
         showNotification('Please log in to favorite photos', 'warning');
         return;
     }
