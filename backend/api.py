@@ -109,24 +109,22 @@ from handlers.bulk_download_handler import (
 
 def handler(event, context):
     """Main Lambda handler with clean routing"""
-    
-    # Handle CORS preflight
-    if event.get('httpMethod') == 'OPTIONS':
-        return create_response(200, {'message': 'OK'})
-    
-    # Get path and method
-    raw_path = event.get('path', '/')
-    method = event.get('httpMethod', 'GET')
-    
-    # Strip the obfuscated base path if present (from API Gateway custom domain mapping)
-    path = raw_path.replace('/prod', '')
-    if path.startswith('/xb667e3fa92f9776468017a9758f31ba4'):
-        path = path.replace('/xb667e3fa92f9776468017a9758f31ba4', '', 1)
-    
-    # Log request (without sensitive data)
-    print(f"Request: {method} {path}")
-    
     try:
+        # Handle CORS preflight
+        if event.get('httpMethod') == 'OPTIONS':
+            return create_response(200, {'message': 'OK'})
+        
+        # Get path and method
+        raw_path = event.get('path', '/')
+        method = event.get('httpMethod', 'GET')
+        
+        # Strip the obfuscated base path if present (from API Gateway custom domain mapping)
+        path = raw_path.replace('/prod', '')
+        if path.startswith('/xb667e3fa92f9776468017a9758f31ba4'):
+            path = path.replace('/xb667e3fa92f9776468017a9758f31ba4', '', 1)
+        
+        # Log request (without sensitive data)
+        print(f"Request: {method} {path}")
         # Parse body (keep raw body for webhook signature verification)
         raw_body_str = event.get('body', '')
         body = {}
