@@ -139,10 +139,10 @@
                       <p> Loading gallery information... </p>
                     </div>
                     <div class="title-17 footer-7">
-                      <a aria-label="Copy Gallery Link" class="image-18 nav-6 container-0" href="#share"
-                        onclick="copyGalleryLink(event); return false;">
+                      <a aria-label="Share Gallery" class="image-18 nav-6 container-0" href="#share"
+                        onclick="shareGallery(); return false;">
                         <div class="title-18 main-6">
-                          <span> Copy Link <svg width="17" height="14" viewBox="0 0 17 14" fill="none"
+                          <span> Share <svg width="17" height="14" viewBox="0 0 17 14" fill="none"
                               color="var(--text-on-button-primary)">
                               <path
                                 d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
@@ -602,6 +602,17 @@
         updateFavoriteButtons();
       }
     };
+    
+    // Share gallery function
+    function shareGallery() {
+      if (window.currentGalleryId && typeof window.showGalleryShareModal === 'function') {
+        // Check if user is authenticated
+        const isAuthenticated = !!window.currentUser;
+        window.showGalleryShareModal(window.currentGalleryId, isAuthenticated);
+      } else {
+        console.error('Gallery ID not available or share modal function not loaded');
+      }
+    }
   </script>
   <script src="js/cookie-consent.js"></script>
   <script src="js/visitor-tracking.js"></script>
