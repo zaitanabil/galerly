@@ -212,6 +212,12 @@ function hidePublicAccessFeatures() {
     mobileMenus.forEach(menu => {
         if (menu) menu.style.display = 'none';
     });
+    
+    // Show CTA hero section for non-authenticated viewers
+    const ctaSection = document.getElementById('viewerCtaSection');
+    if (ctaSection) {
+        ctaSection.style.display = 'block';
+    }
 }
 /**
  * Apply gallery permissions (downloads, comments) based on settings
@@ -364,6 +370,9 @@ window.applyGalleryPermissions = applyGalleryPermissions;
  */
 async function loadGalleryData(galleryId) {
     try {
+        // Check authentication status
+        const isAuthenticated = await checkActualAuth();
+        
         // Fetch gallery details - USE CLIENT ENDPOINT
         const gallery = await apiRequest(`client/galleries/${galleryId}`);
         // Update page title
@@ -406,6 +415,25 @@ async function loadGalleryData(galleryId) {
         window.currentGalleryData = gallery;
         // Add feedback button to navigation
         addFeedbackButton(galleryId);
+        
+        // Show CTA section for non-authenticated viewers
+        console.log('🔍 Auth check result:', isAuthenticated);
+        if (!isAuthenticated) {
+            console.log('✅ User is NOT authenticated - showing CTA section');
+            setTimeout(() => {
+                const ctaSection = document.getElementById('viewerCtaSection');
+                console.log('📍 CTA Section element:', ctaSection);
+                if (ctaSection) {
+                    ctaSection.style.display = 'block';
+                    console.log('✅ CTA Section display set to block');
+                } else {
+                    console.error('❌ CTA Section element not found in DOM');
+                }
+            }, 100);
+        } else {
+            console.log('❌ User IS authenticated - hiding CTA section');
+        }
+        
         // Load and display photos
         await loadGalleryPhotos(galleryId, gallery.photos);
         // Apply gallery permissions (downloads, comments) - wait for DOM to be ready
@@ -445,6 +473,9 @@ async function loadGalleryData(galleryId) {
  */
 async function loadGalleryDataByToken(shareToken) {
     try {
+        // Check authentication status
+        const isAuthenticated = await checkActualAuth();
+        
         // Fetch gallery details using share token - this will get the gallery ID first
         // We need to use a public endpoint that accepts tokens
         const gallery = await apiRequest(`client/galleries/by-token/${shareToken}`);
@@ -495,6 +526,25 @@ async function loadGalleryDataByToken(shareToken) {
                 hidePublicAccessFeatures();
             }, 100);
         }
+        
+        // Show CTA section for non-authenticated viewers
+        console.log('🔍 Auth check result (token):', isAuthenticated);
+        if (!isAuthenticated) {
+            console.log('✅ User is NOT authenticated - showing CTA section (token access)');
+            setTimeout(() => {
+                const ctaSection = document.getElementById('viewerCtaSection');
+                console.log('📍 CTA Section element (token):', ctaSection);
+                if (ctaSection) {
+                    ctaSection.style.display = 'block';
+                    console.log('✅ CTA Section display set to block (token)');
+                } else {
+                    console.error('❌ CTA Section element not found in DOM (token)');
+                }
+            }, 100);
+        } else {
+            console.log('❌ User IS authenticated - hiding CTA section (token)');
+        }
+        
         // Load and display photos
         await loadGalleryPhotos(gallery.id, gallery.photos);
         // Apply gallery permissions (downloads, comments) - wait for DOM to be ready

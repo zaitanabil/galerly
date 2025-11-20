@@ -253,29 +253,48 @@
           </section>
         </div>
         
-        <!-- CTA Hero Section (Only visible for non-authenticated viewers) -->
-        <div class="header-13 subtitle-7" id="cta-hero-section" style="display: none;">
-          <section class="container-13 list-8 text-9 button-19">
+        <!-- CTA Hero Section (Visible only for non-authenticated viewers) -->
+        <div class="header-13 subtitle-7" id="viewerCtaSection" style="display: none;">
+          <section class="container-13 list-8 text-9 button-19" style="background: #1D1D1F; padding: 80px 0;">
             <div class="grid-13 item-8">
-              <div class="form-13 background-8">
-                <h2 class="textarea-13 nav-9">
-                  <span aria-label="SHARE ART, NOT FILES" class="title-14 header-7">
-                    <span class="subtitle-14 nav-7">SHARE ART, NOT FILES</span>
+              <div class="form-13 background-8" style="background: transparent; padding: 0;">
+                <h2 class="textarea-13 nav-9" style="color: #F5F5F7; max-width: 800px; margin: 0 auto 20px;">
+                  <span aria-label="Create Your Own Gallery" class="title-14 header-7">
+                    <span class="subtitle-14 nav-7" style="color: #F5F5F7;"> SHARE YOUR MOMENTS </span>
                   </span>
                 </h2>
-                <h3 id="cta-title" class="textarea-13 nav-9" style="margin-bottom: 16px;">Create Galleries Like This</h3>
-                <p id="cta-description" class="icon-13 main-9">Clean presentation. Full resolution. Control who downloads. Track every view. Your photography deserves more than file sharing.</p>
-                <a aria-label="Start Free" class="nav-6 container-0" href="auth" id="cta-button-primary">
-                  <div class="title-18 main-6">
-                    <span id="cta-button-text">Start Free</span>
-                    <span class="text-18 feature-7">
-                      <svg color="var(--text-on-button-primary)" fill="none" height="14" viewBox="0 0 17 14" width="17">
-                        <path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path>
-                        <path d="M1 7L16 7" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path>
-                      </svg>
-                    </span>
-                  </div>
-                </a>
+                <p class="icon-13 main-9" style="color: rgba(245, 245, 247, 0.8); max-width: 700px; margin: 0 auto 40px; font-size: 18px;"> 
+                  Are you a photographer looking to share your work beautifully? Or maybe you want to share photos from your family event, wedding, or vacation with loved ones? Create your own gallery in minutes. 
+                </p>
+                <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; align-items: center;">
+                  <a aria-label="Get Started - Create Gallery" class="image-18 nav-6 container-0" href="auth" style="background: var(--color-blue);">
+                    <div class="title-18 main-6">
+                      <span> Get Started </span>
+                      <span class="text-18 feature-7">
+                        <svg color="var(--text-on-button-primary)" fill="none" height="14" viewbox="0 0 17 14" width="17">
+                          <path
+                            d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
+                            stroke="var(--text-on-button-primary)" stroke-linecap="round"></path>
+                          <path d="M1 7L16 7" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path>
+                        </svg>
+                      </span>
+                    </div>
+                  </a>
+                  <a aria-label="Find Photographers" class="image-18 hero-7" href="photographers" style="background: rgba(255, 255, 255, 0.1); color: #F5F5F7;">
+                    <div class="title-18 main-6 container-0">
+                      <span>Find Photographers <span class="text-18 feature-7">
+                          <svg color="currentColor" fill="none" height="14" viewbox="0 0 17 14" width="17">
+                            <path
+                              d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
+                              stroke="currentColor" stroke-linecap="round"></path>
+                            <path d="M1 7L16 7" stroke="currentColor" stroke-linecap="round">
+                            </path>
+                          </svg>
+                        </span>
+                      </span>
+                    </div>
+                  </a>
+                </div>
               </div>
             </div>
           </section>
@@ -642,57 +661,6 @@
         console.error('Gallery ID not available or share modal function not loaded');
       }
     }
-    
-    // CTA Hero Section for non-authenticated viewers
-    (function initCTAHero() {
-      // Check if user is authenticated
-      const isAuthenticated = !!window.currentUser;
-      
-      if (!isAuthenticated) {
-        // Show CTA section for non-authenticated users
-        const ctaSection = document.getElementById('cta-hero-section');
-        if (ctaSection) {
-          ctaSection.style.display = 'block';
-          
-          // Detect user intent based on URL parameters or gallery context
-          const urlParams = new URLSearchParams(window.location.search);
-          const isPhotographer = urlParams.get('ref') === 'photographer' || 
-                                 localStorage.getItem('user_intent') === 'photographer';
-          
-          // Customize CTA content based on user type
-          const ctaTitle = document.getElementById('cta-title');
-          const ctaDescription = document.getElementById('cta-description');
-          const ctaButtonPrimary = document.getElementById('cta-button-primary');
-          const ctaButtonText = document.getElementById('cta-button-text');
-          
-          if (isPhotographer) {
-            // Content for photographers - Clear value proposition
-            if (ctaTitle) ctaTitle.textContent = 'Create Galleries Like This';
-            if (ctaDescription) ctaDescription.textContent = 'Clean presentation. Full resolution. Control who downloads. Track every view. Your photography deserves more than file sharing.';
-            if (ctaButtonText) ctaButtonText.textContent = 'Start Free';
-            if (ctaButtonPrimary) ctaButtonPrimary.href = 'auth?signup=photographer';
-          } else {
-            // Content for clients - Clear benefit of finding photographer
-            if (ctaTitle) ctaTitle.textContent = 'Need a Photographer?';
-            if (ctaDescription) ctaDescription.textContent = 'Browse portfolios. View real work. Connect directly. Wedding, portrait, event photographers ready to capture your story.';
-            if (ctaButtonText) ctaButtonText.textContent = 'Find Photographers';
-            if (ctaButtonPrimary) ctaButtonPrimary.href = 'photographers';
-          }
-          
-          // Add fade-in animation
-          setTimeout(() => {
-            ctaSection.style.opacity = '0';
-            ctaSection.style.transform = 'translateY(20px)';
-            ctaSection.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
-            
-            setTimeout(() => {
-              ctaSection.style.opacity = '1';
-              ctaSection.style.transform = 'translateY(0)';
-            }, 100);
-          }, 500);
-        }
-      }
-    })();
   </script>
   <script src="js/cookie-consent.js"></script>
   <script src="js/visitor-tracking.js"></script>
