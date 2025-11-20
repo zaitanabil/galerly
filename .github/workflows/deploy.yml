@@ -824,12 +824,12 @@ jobs:
           echo "✅ Layer published: Version $LAYER_VERSION"
           echo "LAYER_VERSION=$LAYER_VERSION" >> $GITHUB_OUTPUT
           
-          # Get Layer ARN and clean it thoroughly
+          # Get Layer ARN - take ONLY the first one and clean it
           LAYER_ARN=$(aws lambda list-layer-versions \
             --layer-name galerly-image-processing \
             --region ${{ env.AWS_REGION }} \
             --query 'LayerVersions[0].LayerVersionArn' \
-            --output text | xargs)
+            --output text | head -1 | xargs)
           
           # Validate ARN format before storing (simple validation)
           if [[ ! "$LAYER_ARN" == arn:aws:lambda:* ]] || [[ "$LAYER_ARN" == *$'\n'* ]]; then
@@ -841,6 +841,13 @@ jobs:
           # Verify ARN contains layer name
           if [[ ! "$LAYER_ARN" == *"galerly-image-processing"* ]]; then
             echo "❌ ERROR: Layer ARN does not contain expected layer name"
+            exit 1
+          fi
+          
+          # CRITICAL: Check for spaces (multiple ARNs would have spaces)
+          if [[ "$LAYER_ARN" == *" "* ]]; then
+            echo "❌ ERROR: Layer ARN contains spaces (multiple ARNs detected)"
+            echo "ARN: '$LAYER_ARN'"
             exit 1
           fi
           
