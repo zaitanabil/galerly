@@ -15,12 +15,7 @@ from utils.duplicate_detector import (
     calculate_file_hash,
     get_file_size
 )
-from utils.image_security import (
-    validate_image_data,
-    sanitize_image,
-    generate_thumbnail,
-    ImageSecurityError
-)
+# Image validation removed - no PIL dependency needed
 from utils.cdn_urls import get_photo_urls  # CloudFront CDN URL helper
 
 def handle_check_duplicates(gallery_id, user, event):
@@ -128,31 +123,7 @@ def handle_upload_photo(gallery_id, user, event):
             # Decode base64
             image_data = base64.b64decode(base64_data)
             
-            # ==========================================
-            # SECURITY: VALIDATE & SANITIZE IMAGE
-            # ==========================================
-            try:
-                # 1. Validate image (check magic bytes, format, dimensions, etc.)
-                validation_result = validate_image_data(image_data, filename_from_client)
-                print(f"✅ Image validation passed: {validation_result}")
-                
-                # 2. SANITIZATION DISABLED - Preserve original quality
-                # Original sanitization was compressing JPEG files (quality=98)
-                # This caused ~50% size reduction (1GB → 505MB)
-                # Photographers need TRUE original files without re-encoding
-                print(f"ℹ️  Sanitization disabled - preserving original file quality")
-                
-                # Skip sanitization - use original image data
-                # sanitized_data = sanitize_image(image_data, output_format='JPEG', quality=98)
-                # image_data = sanitized_data
-                
-            except ImageSecurityError as security_error:
-                print(f"🚨 SECURITY: Image rejected: {str(security_error)}")
-                return create_response(400, {
-                    'error': 'Image security validation failed',
-                    'detail': str(security_error)
-                })
-            # ==========================================
+            # Image validation removed - accept all files as-is
             
             # Note: No size limit - photographers need full quality
             # Storage limits are enforced at the subscription level

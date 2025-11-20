@@ -15,18 +15,38 @@ fi
 # Activate virtual environment
 source venv/bin/activate
 
-# Install/Update dependencies
-echo "📦 Installing dependencies (including rawpy for RAW files)..."
-pip install -r requirements.txt --upgrade
+# Install/Update ONLY lightweight dependencies (image libs come from Lambda layer)
+echo "📦 Installing lightweight dependencies..."
+echo "   Note: Pillow, rawpy, pillow-heif, numpy come from Lambda layer"
+pip install boto3>=1.28.0 stripe>=7.0.0 python-dotenv>=1.0.0 --upgrade
 
 # Create package directory
 echo "📁 Creating deployment package..."
 rm -rf package
 mkdir -p package
 
-# Copy dependencies to package
-echo "📚 Copying Python packages..."
-cp -r venv/lib/python*/site-packages/* package/
+# Copy ONLY lightweight dependencies (exclude image processing libs)
+echo "📚 Copying lightweight Python packages..."
+echo "   Including: boto3, stripe, python-dotenv and their dependencies"
+echo "   Excluding: Pillow, rawpy, pillow-heif, numpy (from Lambda layer)"
+
+# Copy all packages, then remove image processing ones
+cp -r venv/lib/python*/site-packages/* package/ 2>/dev/null || true
+
+# Remove image processing libraries (they come from Lambda layer)
+echo "   Removing image processing libs (from layer)..."
+# Remove directories
+find package -type d \( -name "PIL" -o -name "Pillow*" -o -name "rawpy*" -o -name "pillow_heif*" -o -name "numpy*" -o -name "imagecodecs*" \) -exec rm -rf {} + 2>/dev/null || true
+# Remove .dist-info directories
+find package -type d \( -name "Pillow*.dist-info" -o -name "rawpy*.dist-info" -o -name "pillow-heif*.dist-info" -o -name "numpy*.dist-info" -o -name "imagecodecs*.dist-info" \) -exec rm -rf {} + 2>/dev/null || true
+# Remove .so files (compiled extensions) for image processing libs
+find package -type f \( -name "*pillow*.so" -o -name "*rawpy*.so" -o -name "*numpy*.so" -o -name "*imagecodecs*.so" -o -name "_imaging*.so" -o -name "_pillow_heif*.so" \) -delete 2>/dev/null || true
+# Remove any remaining files with these names
+find package -type f -name "*PIL*" -delete 2>/dev/null || true
+find package -type f -name "*Pillow*" -delete 2>/dev/null || true
+find package -type f -name "*rawpy*" -delete 2>/dev/null || true
+find package -type f -name "*pillow_heif*" -delete 2>/dev/null || true
+find package -type f -name "*numpy*" -delete 2>/dev/null || true
 
 # Copy application code
 echo "📄 Copying application code..."
@@ -42,7 +62,8 @@ find . -type d -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
 find . -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
 find . -type f -name "*.pyc" -delete 2>/dev/null || true
 find . -type f -name "*.pyo" -delete 2>/dev/null || true
-find . -type f -name "*.so" -delete 2>/dev/null || true  # Remove compiled extensions (Lambda will use its own)
+# Note: Don't delete .so files - boto3 may need them
+# Image processing libs (Pillow, rawpy) come from Lambda layer, not this package
 
 # Create deployment zip
 echo "📦 Creating deployment package..."

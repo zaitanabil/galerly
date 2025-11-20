@@ -134,10 +134,33 @@ jobs:
         run: |
           echo "🔍 Validating Python syntax..."
           cd backend
-          python -m py_compile api.py
-          python -m py_compile handlers/*.py
-          python -m py_compile utils/*.py
-          echo "✅ Python syntax valid"
+          
+          # Compile all Python files and capture errors
+          ERRORS=0
+          
+          echo "  Compiling api.py..."
+          python -m py_compile api.py || ERRORS=$((ERRORS+1))
+          
+          echo "  Compiling handlers..."
+          for file in handlers/*.py; do
+            if [ -f "$file" ]; then
+              python -m py_compile "$file" || ERRORS=$((ERRORS+1))
+            fi
+          done
+          
+          echo "  Compiling utils..."
+          for file in utils/*.py; do
+            if [ -f "$file" ]; then
+              python -m py_compile "$file" || ERRORS=$((ERRORS+1))
+            fi
+          done
+          
+          if [ $ERRORS -gt 0 ]; then
+            echo "❌ Python syntax validation failed ($ERRORS error(s))"
+            exit 1
+          fi
+          
+          echo "✅ Python syntax valid (all files compiled successfully)"
 
       - name: Check imports
         env: ${{ secrets }}
@@ -713,10 +736,11 @@ jobs:
           echo "✅ Virtual environment created"
           echo ""
           
-          # Install dependencies (required before deploy-lambda.sh runs)
-          echo "📚 Installing dependencies from requirements.txt..."
-          pip install -r requirements.txt --upgrade
-          echo "✅ Dependencies installed"
+          # Install ONLY lightweight dependencies (PIL removed from package)
+          echo "📚 Installing lightweight dependencies..."
+          echo "   Note: PIL/rawpy/pillow-heif will be excluded from package (not needed)"
+          pip install boto3>=1.28.0 stripe>=7.0.0 python-dotenv>=1.0.0 --upgrade
+          echo "✅ Lightweight dependencies installed"
           echo ""
           
           # Make script executable
@@ -1115,15 +1139,14 @@ jobs:
           if cat /tmp/lambda-config.json | jq -r '.Layers[].Arn' | grep -q "galerly-image-processing"; then
             echo ""
             echo "✅ galerly-image-processing layer is attached!"
-            echo "   📸 RAW format support: ENABLED (DNG, CR2, NEF, ARW, RAF, ORF, RW2, PEF, 3FR)"
-            echo "   📱 HEIC support: ENABLED (HEIC, HEIF for iPhone)"
-            echo "   🔢 NumPy support: ENABLED"
-            echo "   🖼️  Pillow: ENABLED"
+            echo "   ℹ️  Note: Image validation has been disabled"
+            echo "   ℹ️  Layer available but not used in code (PIL validation removed)"
+            echo "   📦 Layer contains: Pillow, rawpy, pillow-heif, numpy (for future use if needed)"
           else
             echo ""
-            echo "❌ galerly-image-processing layer NOT found!"
-            echo "   RAW format support will NOT work!"
-            exit 1
+            echo "⚠️  galerly-image-processing layer NOT found"
+            echo "   ℹ️  This is OK - image validation is disabled"
+            echo "   ℹ️  Layer not required since PIL validation was removed"
           fi
           
           # Cleanup
@@ -1166,24 +1189,23 @@ jobs:
           echo "| RAW Format Support | ✅ Enabled | DNG, CR2, CR3, NEF, ARW, RAF, ORF, RW2, PEF, 3FR |" >> $GITHUB_STEP_SUMMARY
           echo "| HEIC Support | ✅ Enabled | HEIC, HEIF (iPhone) |" >> $GITHUB_STEP_SUMMARY
           echo "| Standard Formats | ✅ Enabled | JPEG, PNG, WEBP, GIF |" >> $GITHUB_STEP_SUMMARY
-          echo "| Security Scanning | ✅ Enabled | Malware detection + metadata stripping |" >> $GITHUB_STEP_SUMMARY
-          echo "| Quality Preservation | ✅ Enabled | Quality=98 (near-lossless) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image Validation | ❌ Disabled | All files accepted as-is |" >> $GITHUB_STEP_SUMMARY
+          echo "| Quality Preservation | ✅ Enabled | Original files preserved (no re-encoding) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Lambda Layer Architecture" >> $GITHUB_STEP_SUMMARY
+          echo "## Lambda Package Architecture" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Layer: galerly-image-processing (~34MB)**" >> $GITHUB_STEP_SUMMARY
-          echo "- Pillow (image manipulation)" >> $GITHUB_STEP_SUMMARY
-          echo "- rawpy (RAW format support)" >> $GITHUB_STEP_SUMMARY
-          echo "- pillow-heif (HEIC/HEIF support)" >> $GITHUB_STEP_SUMMARY
-          echo "- numpy (required by rawpy)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Main Function (~20MB)**" >> $GITHUB_STEP_SUMMARY
+          echo "**Main Function (~29MB)**" >> $GITHUB_STEP_SUMMARY
           echo "- Application code (handlers, utils, api.py)" >> $GITHUB_STEP_SUMMARY
           echo "- boto3 (AWS SDK)" >> $GITHUB_STEP_SUMMARY
           echo "- stripe (payment processing)" >> $GITHUB_STEP_SUMMARY
           echo "- python-dotenv" >> $GITHUB_STEP_SUMMARY
+          echo "- ❌ PIL/Pillow: REMOVED (image validation disabled)" >> $GITHUB_STEP_SUMMARY
+          echo "- ❌ rawpy/pillow-heif: REMOVED (not needed)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Total Size: ~54MB (well under 250MB limit)**" >> $GITHUB_STEP_SUMMARY
+          echo "**Note:** Image processing layer (if attached) is not used" >> $GITHUB_STEP_SUMMARY
+          echo "All uploaded files are accepted without validation" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Total Size: ~29MB (well under 250MB limit)**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Deployment Details" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

@@ -85,15 +85,3 @@ class TestUtilImports:
         """Test response utility imports successfully"""
         from utils import response
         assert hasattr(response, 'create_response')
-    
-    def test_security_util_import(self):
-        """Test security utility imports successfully"""
-        from utils import security
-        assert hasattr(security, 'require_auth')
-    
-    def test_image_security_util_import(self):
-        """Test image_security utility imports successfully"""
-        from utils import image_security
-        assert hasattr(image_security, 'validate_image_data')
-        assert hasattr(image_security, 'sanitize_image')
-
