@@ -326,8 +326,8 @@ function showNotification(message, type = 'success') {
         right: 24px;
         background: ${type === 'success' ? '#98FF98' : '#FF6F61'};
         color: ${type === 'success' ? '#1D1D1F' : '#FFFFFF'};
-        padding: 14px 20px;
-        border-radius: 12px;
+        padding: 14px 24px;
+        border-radius: 50px;
         box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
         z-index: 10000;
         font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
