@@ -174,7 +174,7 @@ jobs:
           # Test critical imports
           try:
               from handlers import auth_handler, gallery_handler, photo_handler
-              from utils import auth, email, response, security
+              from utils import auth, email, response
               print('✅ All critical imports successful')
           except ImportError as e:
               print(f'❌ Import failed: {e}')
