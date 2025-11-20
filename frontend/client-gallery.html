@@ -255,45 +255,27 @@
         
         <!-- CTA Hero Section (Only visible for non-authenticated viewers) -->
         <div class="header-13 subtitle-7" id="cta-hero-section" style="display: none;">
-          <section style="background: #1D1D1F; overflow: hidden; margin: 0 0 60px 0;">
-            <div class="form-18 feature-0" style="padding: 80px 20px;">
-              <div style="max-width: 1200px; margin: 0 auto;">
-                <!-- Section Header -->
-                <div style="text-align: center; margin-bottom: 48px;">
-                  <h2 class="link-13 image-7" style="margin-bottom: 24px;">
-                    <span>
-                      <span aria-label="SHARE ART NOT FILES" class="title-14 header-7">
-                        <span class="subtitle-14 nav-7" style="color: rgba(255, 255, 255, 0.5);">SHARE ART, NOT FILES</span>
-                      </span>
+          <section class="container-13 list-8 text-9 button-19">
+            <div class="grid-13 item-8">
+              <div class="form-13 background-8">
+                <h2 class="textarea-13 nav-9">
+                  <span aria-label="SHARE ART, NOT FILES" class="title-14 header-7">
+                    <span class="subtitle-14 nav-7">SHARE ART, NOT FILES</span>
+                  </span>
+                </h2>
+                <h3 id="cta-title" class="textarea-13 nav-9" style="margin-bottom: 16px;">Create Galleries Like This</h3>
+                <p id="cta-description" class="icon-13 main-9">Clean presentation. Full resolution. Control who downloads. Track every view. Your photography deserves more than file sharing.</p>
+                <a aria-label="Start Free" class="nav-6 container-0" href="auth" id="cta-button-primary">
+                  <div class="title-18 main-6">
+                    <span id="cta-button-text">Start Free</span>
+                    <span class="text-18 feature-7">
+                      <svg color="var(--text-on-button-primary)" fill="none" height="14" viewBox="0 0 17 14" width="17">
+                        <path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path>
+                        <path d="M1 7L16 7" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path>
+                      </svg>
                     </span>
-                  </h2>
-                  <h3 id="cta-title" style="font-size: clamp(36px, 5vw, 56px); line-height: 1.1; font-weight: 300; letter-spacing: -0.02em; margin-bottom: 20px; color: #FFFFFF; font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;">Create Galleries Like This</h3>
-                  <p id="cta-description" style="color: rgba(255, 255, 255, 0.7); font-size: clamp(15px, 2vw, 18px); line-height: 1.5; max-width: 680px; margin: 0 auto; font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;">Clean presentation. Full resolution. Control who downloads. Track every view. Your photography deserves more than file sharing.</p>
-                </div>
-                
-                <!-- CTA Buttons -->
-                <div style="display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap;">
-                  <a aria-label="Get Started" class="image-18 nav-6 container-0" href="auth" id="cta-button-primary" style="flex-shrink: 0;">
-                    <div class="title-18 main-6">
-                      <span id="cta-button-text">Start Free <svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="var(--text-on-button-primary)">
-                          <path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path>
-                          <path d="M1 7L16 7" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path>
-                        </svg>
-                      </span>
-                    </div>
-                  </a>
-                  <a aria-label="Find Photographers" class="image-18 hero-7" href="photographers" id="cta-button-secondary" style="flex-shrink: 0;">
-                    <div class="title-18 main-6 container-0">
-                      <span id="cta-button-secondary-text">Find Photographers <span class="text-18 feature-7">
-                          <svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="var(--text-on-button-tertiary)">
-                            <path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" stroke="var(--text-on-button-tertiary)" stroke-linecap="round"></path>
-                            <path d="M1 7L16 7" stroke="var(--text-on-button-tertiary)" stroke-linecap="round"></path>
-                          </svg>
-                        </span>
-                      </span>
-                    </div>
-                  </a>
-                </div>
+                  </div>
+                </a>
               </div>
             </div>
           </section>
@@ -682,33 +664,19 @@
           const ctaDescription = document.getElementById('cta-description');
           const ctaButtonPrimary = document.getElementById('cta-button-primary');
           const ctaButtonText = document.getElementById('cta-button-text');
-          const ctaButtonSecondary = document.getElementById('cta-button-secondary');
-          const ctaButtonSecondaryText = document.getElementById('cta-button-secondary-text');
           
           if (isPhotographer) {
             // Content for photographers - Clear value proposition
             if (ctaTitle) ctaTitle.textContent = 'Create Galleries Like This';
             if (ctaDescription) ctaDescription.textContent = 'Clean presentation. Full resolution. Control who downloads. Track every view. Your photography deserves more than file sharing.';
-            if (ctaButtonText) {
-              ctaButtonText.innerHTML = 'Start Free <svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="var(--text-on-button-primary)"><path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path><path d="M1 7L16 7" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path></svg>';
-            }
+            if (ctaButtonText) ctaButtonText.textContent = 'Start Free';
             if (ctaButtonPrimary) ctaButtonPrimary.href = 'auth?signup=photographer';
-            if (ctaButtonSecondaryText) {
-              ctaButtonSecondaryText.innerHTML = 'View Plans <span class="text-18 feature-7"><svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="var(--text-on-button-tertiary)"><path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" stroke="var(--text-on-button-tertiary)" stroke-linecap="round"></path><path d="M1 7L16 7" stroke="var(--text-on-button-tertiary)" stroke-linecap="round"></path></svg></span>';
-            }
-            if (ctaButtonSecondary) ctaButtonSecondary.href = 'pricing';
           } else {
             // Content for clients - Clear benefit of finding photographer
             if (ctaTitle) ctaTitle.textContent = 'Need a Photographer?';
             if (ctaDescription) ctaDescription.textContent = 'Browse portfolios. View real work. Connect directly. Wedding, portrait, event photographers ready to capture your story.';
-            if (ctaButtonText) {
-              ctaButtonText.innerHTML = 'Find Photographers <svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="var(--text-on-button-primary)"><path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path><path d="M1 7L16 7" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path></svg>';
-            }
+            if (ctaButtonText) ctaButtonText.textContent = 'Find Photographers';
             if (ctaButtonPrimary) ctaButtonPrimary.href = 'photographers';
-            if (ctaButtonSecondaryText) {
-              ctaButtonSecondaryText.innerHTML = 'Start Free <span class="text-18 feature-7"><svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="var(--text-on-button-tertiary)"><path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" stroke="var(--text-on-button-tertiary)" stroke-linecap="round"></path><path d="M1 7L16 7" stroke="var(--text-on-button-tertiary)" stroke-linecap="round"></path></svg></span>';
-            }
-            if (ctaButtonSecondary) ctaButtonSecondary.href = 'auth?signup=photographer';
           }
           
           // Add fade-in animation
