@@ -221,14 +221,15 @@ def handle_confirm_upload(gallery_id, user, event):
         gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
         galleries_table.put_item(Item=gallery)
         
-        # Regenerate gallery ZIP file (async - don't block upload)
+        # Regenerate gallery ZIP file (synchronous - wait for completion)
         try:
             from utils.zip_generator import generate_gallery_zip
-            # Run in background - Lambda will wait for non-daemon threads
-            import threading
-            thread = threading.Thread(target=generate_gallery_zip, args=(gallery_id,))
-            thread.start()
-            print(f"🔄 Started ZIP regeneration for gallery {gallery_id}")
+            print(f"🔄 Starting ZIP regeneration for gallery {gallery_id}...")
+            result = generate_gallery_zip(gallery_id)
+            if result.get('success'):
+                print(f"✅ ZIP regeneration completed: {result.get('photo_count')} photos, {result.get('zip_size_mb', 0):.2f}MB")
+            else:
+                print(f"⚠️  ZIP regeneration failed: {result.get('error', 'unknown')}")
         except Exception as zip_error:
             print(f"⚠️  Failed to regenerate ZIP: {str(zip_error)}")
             # Don't fail upload if ZIP generation fails
