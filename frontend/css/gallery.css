@@ -2739,3 +2739,8 @@ select.footer-4.hBIATM option {
     }
 }
 
+/* CTA Section - Hidden by default, shown only for non-authenticated viewers */
+#viewerCtaSection {
+    display: none;
+}
+
