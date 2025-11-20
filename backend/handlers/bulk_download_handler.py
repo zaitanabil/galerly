@@ -75,7 +75,7 @@ def handle_bulk_download(gallery_id, user, event):
                     'filename': filename,
                     'photo_count': result.get('photo_count', 0)
                 })
-                        else:
+            else:
                 return create_response(500, {'error': 'Failed to generate ZIP file'})
         
     except Exception as e:
@@ -158,7 +158,7 @@ def handle_bulk_download_by_token(event):
                     'filename': filename,
                     'photo_count': result.get('photo_count', 0)
                 })
-                        else:
+            else:
                 return create_response(500, {'error': 'Failed to generate ZIP file'})
         
     except Exception as e:
