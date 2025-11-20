@@ -558,7 +558,7 @@ async function downloadPhoto() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        
+            
             // Clean up blob URL after a short delay
         setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
         
@@ -609,4 +609,85 @@ async function downloadPhoto() {
         // Error already shown in inner catch
     }
 }
+
+/**
+ * Show/hide CTA section based on authentication status
+ * CTA section should only be visible for non-authenticated viewers
+ */
+async function updateCtaSectionVisibility() {
+    const ctaSection = document.getElementById('viewerCtaSection');
+    if (!ctaSection) return;
+
+    try {
+        // Check authentication status
+        let isAuthenticated = false;
+        if (typeof window.isAuthenticated === 'function') {
+            isAuthenticated = await window.isAuthenticated();
+        } else if (window.currentUser) {
+            // Fallback: check if currentUser exists
+            isAuthenticated = !!window.currentUser;
+        }
+
+        // Show CTA section only if user is NOT authenticated (viewer mode)
+        if (!isAuthenticated) {
+            ctaSection.style.display = '';
+        } else {
+            ctaSection.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error checking authentication for CTA section:', error);
+        // On error, show CTA section (safer to show than hide)
+        ctaSection.style.display = '';
+    }
+}
+
+// Initialize CTA section visibility when DOM is ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function() {
+        // Wait a bit for auth-check.js to initialize
+        setTimeout(updateCtaSectionVisibility, 100);
+    });
+} else {
+    // DOM already loaded, wait for auth-check.js
+    setTimeout(updateCtaSectionVisibility, 100);
+}
+
+// Also update when authentication state might change
+window.addEventListener('auth-state-changed', updateCtaSectionVisibility);
+
+// Handle favorite button click
+function handleFavoriteClick() {
+    const photos = window.galleryPhotos || [];
+    const photo = photos[currentPhotoIndex];
+    if (photo && window.currentGalleryId) {
+        toggleFavorite(photo.id, window.currentGalleryId);
+    }
+}
+
+// Override updateModalContent to update favorite button
+// This runs after DOM is ready to ensure updateModalContent is defined
+(function() {
+    const originalUpdateModalContent = updateModalContent;
+    updateModalContent = function () {
+        originalUpdateModalContent();
+        if (typeof updateFavoriteButtons === 'function') {
+            updateFavoriteButtons();
+        }
+    };
+})();
+
+// Share gallery function
+function shareGallery() {
+    if (window.currentGalleryId && typeof window.showGalleryShareModal === 'function') {
+        // Check if user is authenticated
+        const isAuthenticated = !!window.currentUser;
+        window.showGalleryShareModal(window.currentGalleryId, isAuthenticated);
+    } else {
+        console.error('Gallery ID not available or share modal function not loaded');
+    }
+}
+
+// Make functions globally available
+window.handleFavoriteClick = handleFavoriteClick;
+window.shareGallery = shareGallery;
 

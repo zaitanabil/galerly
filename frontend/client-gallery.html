@@ -7,7 +7,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#F5F5F7" />
   <title>View Photography Gallery - Client Gallery Access | Galerly</title>
-  <meta name="description" content="View your photography gallery. Browse photos, select favorites, comment, and download high-resolution images shared by your photographer." />
+  <meta name="description"
+    content="View your photography gallery. Browse photos, select favorites, comment, and download high-resolution images shared by your photographer." />
   <meta name="robots" content="noindex, nofollow" />
   <meta name="msapplication-TileColor" content="#F5F5F7" />
   <link rel="canonical" href="gallery" />
@@ -252,54 +253,33 @@
             </div>
           </section>
         </div>
-        
-        <!-- CTA Hero Section (Visible only for non-authenticated viewers) -->
-        <div class="header-13 subtitle-7" id="viewerCtaSection" style="display: none;">
-          <section class="container-13 list-8 text-9 button-19" style="background: #1D1D1F; padding: 80px 0;">
-            <div class="grid-13 item-8">
-              <div class="form-13 background-8" style="background: transparent; padding: 0;">
-                <h2 class="textarea-13 nav-9" style="color: #F5F5F7; max-width: 800px; margin: 0 auto 20px;">
-                  <span aria-label="Create Your Own Gallery" class="title-14 header-7">
-                    <span class="subtitle-14 nav-7" style="color: #F5F5F7;"> SHARE YOUR MOMENTS </span>
-                  </span>
+        <!-- CTA Hero Section (Only visible for non-authenticated viewers) -->
+        <div class="header-13 subtitle-7" id="viewerCtaSection">
+          <section class="container-13 list-8 text-9 button-19">
+            <div class="grid-13 item-8 link-6 image-0">
+              <div class="form-13 background-8">
+                <h2 class="textarea-13 nav-9">
+                  <span aria-label="Your moments belong here" class="title-14 header-7"><span
+                      class="subtitle-14 nav-7">Your moments belong here</span></span>
                 </h2>
-                <p class="icon-13 main-9" style="color: rgba(245, 245, 247, 0.8); max-width: 700px; margin: 0 auto 40px; font-size: 18px;"> 
-                  Are you a photographer looking to share your work beautifully? Or maybe you want to share photos from your family event, wedding, or vacation with loved ones? Create your own gallery in minutes. 
+                <p class="icon-13 main-9">
+                  One place for every photo. Easy to share. Simple to keep.
                 </p>
-                <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; align-items: center;">
-                  <a aria-label="Get Started - Create Gallery" class="image-18 nav-6 container-0" href="auth" style="background: var(--color-blue);">
-                    <div class="title-18 main-6">
-                      <span> Get Started </span>
-                      <span class="text-18 feature-7">
-                        <svg color="var(--text-on-button-primary)" fill="none" height="14" viewbox="0 0 17 14" width="17">
-                          <path
-                            d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
-                            stroke="var(--text-on-button-primary)" stroke-linecap="round"></path>
-                          <path d="M1 7L16 7" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path>
-                        </svg>
-                      </span>
-                    </div>
-                  </a>
-                  <a aria-label="Find Photographers" class="image-18 hero-7" href="photographers" style="background: rgba(255, 255, 255, 0.1); color: #F5F5F7;">
-                    <div class="title-18 main-6 container-0">
-                      <span>Find Photographers <span class="text-18 feature-7">
-                          <svg color="currentColor" fill="none" height="14" viewbox="0 0 17 14" width="17">
-                            <path
-                              d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
-                              stroke="currentColor" stroke-linecap="round"></path>
-                            <path d="M1 7L16 7" stroke="currentColor" stroke-linecap="round">
-                            </path>
-                          </svg>
-                        </span>
-                      </span>
-                    </div>
-                  </a>
-                </div>
+                <a aria-label="Create Your Gallery" target="_blank" class="image-18 nav-6 container-0" href="/auth">
+                  <div class="title-18 main-6">
+                    <span>Create Your Gallery</span><span class="text-18 feature-7"><svg width="17" height="14"
+                        viewBox="0 0 17 14" fill="none" color="var(--text-on-button-primary)">
+                        <path
+                          d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
+                          stroke="var(--text-on-button-primary)" stroke-linecap="round"></path>
+                        <path d="M1 7L16 7" stroke="var(--text-on-button-primary)" stroke-linecap="round"></path>
+                      </svg></span>
+                  </div>
+                </a>
               </div>
             </div>
           </section>
         </div>
-        
         <!-- Footer -->
         <footer class="card-10 input-4 animation-9 grid-0">
           <div class="logo-14 textarea-4 "></div>
@@ -633,35 +613,6 @@
   <script src="js/gallery-expiration.js"></script>
   <!-- Page-specific JavaScript -->
   <script src="js/client-gallery.js"></script>
-  <script>
-    // Handle favorite button click
-    function handleFavoriteClick() {
-      const photos = window.galleryPhotos || [];
-      const photo = photos[currentPhotoIndex];
-      if (photo && window.currentGalleryId) {
-        toggleFavorite(photo.id, window.currentGalleryId);
-      }
-    }
-    // Override updateModalContent to update favorite button
-    const originalUpdateModalContent = updateModalContent;
-    updateModalContent = function () {
-      originalUpdateModalContent();
-      if (typeof updateFavoriteButtons === 'function') {
-        updateFavoriteButtons();
-      }
-    };
-    
-    // Share gallery function
-    function shareGallery() {
-      if (window.currentGalleryId && typeof window.showGalleryShareModal === 'function') {
-        // Check if user is authenticated
-        const isAuthenticated = !!window.currentUser;
-        window.showGalleryShareModal(window.currentGalleryId, isAuthenticated);
-      } else {
-        console.error('Gallery ID not available or share modal function not loaded');
-      }
-    }
-  </script>
   <script src="js/cookie-consent.js"></script>
   <script src="js/visitor-tracking.js"></script>
 </body>
