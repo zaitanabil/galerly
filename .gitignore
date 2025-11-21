@@ -31,10 +31,11 @@ backend/*.zip
 backend/package/
 backend/.env
 backend/python/
-backend/image-transform/venv/
-backend/image-transform/*.zip
-backend/image-transform/layer-package/
-backend/image-transform/package/
+backend/image-processing/venv/
+backend/image-processing/*.zip
+backend/image-processing/layer/
+backend/image-processing/layer.zip
+backend/image-processing/function.zip
 
 # Logs
 *.log
