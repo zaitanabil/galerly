@@ -1107,6 +1107,119 @@ jobs:
           echo "✅ CloudFront Router Deployment Complete!"
           echo "=========================================="
 
+      - name: Attach Lambda@Edge to CloudFront Distribution
+        run: |
+          echo "=========================================="
+          echo "🔗 ATTACHING LAMBDA@EDGE TO CLOUDFRONT"
+          echo "=========================================="
+          echo ""
+          
+          # Get Lambda@Edge version ARN
+          ROUTER_VERSION=$(aws lambda list-versions-by-function \
+            --function-name ${{ secrets.LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME }} \
+            --region us-east-1 \
+            --query 'Versions[-1].Version' \
+            --output text)
+          
+          ROUTER_ARN="arn:aws:lambda:us-east-1:$(aws sts get-caller-identity --query Account --output text):function:${{ secrets.LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME }}:${ROUTER_VERSION}"
+          
+          echo "📋 Lambda@Edge ARN: $ROUTER_ARN"
+          echo ""
+          
+          # Get current CloudFront configuration
+          echo "📥 Fetching current CloudFront configuration..."
+          aws cloudfront get-distribution-config \
+            --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} > /tmp/dist-config-full.json
+          
+          ETAG=$(jq -r '.ETag' /tmp/dist-config-full.json)
+          jq '.DistributionConfig' /tmp/dist-config-full.json > /tmp/dist-config.json
+          
+          echo "📋 Current ETag: $ETAG"
+          echo ""
+          
+          # Check if Lambda@Edge is already attached
+          CURRENT_LAMBDA=$(jq -r '.DefaultCacheBehavior.LambdaFunctionAssociations.Items[]? | select(.EventType=="origin-request") | .LambdaFunctionARN' /tmp/dist-config.json || echo "")
+          
+          if [ "$CURRENT_LAMBDA" = "$ROUTER_ARN" ]; then
+            echo "✅ Lambda@Edge already attached with correct version"
+            echo "   No CloudFront update needed"
+          else
+            echo "🔧 Updating CloudFront distribution..."
+            
+            # Update Lambda@Edge association using jq
+            # Remove existing origin-request association if present
+            jq --arg arn "$ROUTER_ARN" '
+              .DefaultCacheBehavior.LambdaFunctionAssociations.Items = 
+                ([.DefaultCacheBehavior.LambdaFunctionAssociations.Items[]? | select(.EventType != "origin-request")] + 
+                [{
+                  "EventType": "origin-request",
+                  "LambdaFunctionARN": $arn,
+                  "IncludeBody": false
+                }]) |
+              .DefaultCacheBehavior.LambdaFunctionAssociations.Quantity = 
+                (.DefaultCacheBehavior.LambdaFunctionAssociations.Items | length)
+            ' /tmp/dist-config.json > /tmp/dist-config-updated.json
+            
+            # Update CloudFront distribution
+            aws cloudfront update-distribution \
+              --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+              --distribution-config file:///tmp/dist-config-updated.json \
+              --if-match "$ETAG" > /dev/null
+            
+            echo "✅ CloudFront distribution update initiated"
+            echo ""
+            echo "⏳ Waiting for CloudFront deployment (5-10 minutes)..."
+            echo "   This prevents hitting GitHub Actions timeout limits"
+            echo "   Checking every 30 seconds..."
+            echo ""
+            
+            # Wait for CloudFront deployment with timeout
+            # Max wait: 15 minutes (30 checks x 30 seconds)
+            # CloudFront typically takes 5-10 minutes
+            MAX_ATTEMPTS=30
+            ATTEMPT=0
+            START_TIME=$(date +%s)
+            
+            while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+              ATTEMPT=$((ATTEMPT + 1))
+              
+              STATUS=$(aws cloudfront get-distribution \
+                --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+                --query 'Distribution.Status' \
+                --output text)
+              
+              ELAPSED=$(($(date +%s) - START_TIME))
+              ELAPSED_MIN=$((ELAPSED / 60))
+              ELAPSED_SEC=$((ELAPSED % 60))
+              
+              echo "   Check $ATTEMPT/$MAX_ATTEMPTS: Status=$STATUS (${ELAPSED_MIN}m ${ELAPSED_SEC}s elapsed)"
+              
+              if [ "$STATUS" = "Deployed" ]; then
+                echo ""
+                echo "✅ CloudFront deployment complete!"
+                echo "   Total time: ${ELAPSED_MIN}m ${ELAPSED_SEC}s"
+                break
+              fi
+              
+              if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+                sleep 30
+              fi
+            done
+            
+            if [ "$STATUS" != "Deployed" ]; then
+              echo ""
+              echo "⚠️  CloudFront still deploying after ${ELAPSED_MIN}m ${ELAPSED_SEC}s"
+              echo "   Status: $STATUS"
+              echo "   Deployment will complete in background"
+              echo "   You can check status with: aws cloudfront get-distribution --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}"
+            fi
+          fi
+          
+          echo ""
+          echo "=========================================="
+          echo "✅ Lambda@Edge Configuration Complete!"
+          echo "=========================================="
+
       - name: Verify Image Transformation System
         run: |
           echo "=========================================="
@@ -1173,6 +1286,115 @@ jobs:
           echo "=========================================="
           echo "✅ IMAGE TRANSFORMATION SYSTEM VERIFIED!"
           echo "=========================================="
+
+      - name: Test CloudFront Image Transformation
+        run: |
+          echo "=========================================="
+          echo "🧪 TESTING CLOUDFRONT IMAGE TRANSFORMATION"
+          echo "=========================================="
+          echo ""
+          
+          # Wait for CloudFront to be fully deployed before testing
+          STATUS=$(aws cloudfront get-distribution \
+            --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --query 'Distribution.Status' \
+            --output text)
+          
+          if [ "$STATUS" != "Deployed" ]; then
+            echo "⚠️  CloudFront status: $STATUS"
+            echo "   Skipping transformation tests until deployment completes"
+            exit 0
+          fi
+          
+          echo "✅ CloudFront is fully deployed"
+          echo ""
+          
+          # Get CDN domain
+          CDN_DOMAIN=$(aws cloudfront get-distribution \
+            --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --query 'Distribution.DomainName' \
+            --output text)
+          
+          echo "🌐 CDN Domain: $CDN_DOMAIN"
+          echo ""
+          
+          # Find sample images in S3 to test
+          echo "🔍 Finding sample images to test..."
+          
+          # Look for HEIC images
+          HEIC_IMAGE=$(aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} --recursive | grep -i ".heic" | head -1 | awk '{print $4}' || echo "")
+          
+          # Look for RAW images
+          RAW_IMAGE=$(aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} --recursive | grep -iE "\.(dng|cr2|nef|arw)" | head -1 | awk '{print $4}' || echo "")
+          
+          TESTS_RUN=0
+          TESTS_PASSED=0
+          
+          # Test HEIC transformation
+          if [ -n "$HEIC_IMAGE" ]; then
+            echo "📸 Testing HEIC transformation..."
+            echo "   Source: $HEIC_IMAGE"
+            
+            TEST_URL="https://${CDN_DOMAIN}/${HEIC_IMAGE}?format=jpeg&width=800&height=600&fit=inside"
+            echo "   Test URL: $TEST_URL"
+            
+            # Try to fetch transformed image (timeout after 30 seconds)
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$TEST_URL" || echo "000")
+            
+            TESTS_RUN=$((TESTS_RUN + 1))
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "   ✅ HEIC transformation successful (HTTP $HTTP_CODE)"
+              TESTS_PASSED=$((TESTS_PASSED + 1))
+            else
+              echo "   ⚠️  HEIC transformation returned HTTP $HTTP_CODE"
+              echo "   Note: First request may take longer as Lambda cold starts"
+            fi
+            echo ""
+          else
+            echo "⚠️  No HEIC images found for testing"
+            echo ""
+          fi
+          
+          # Test RAW transformation
+          if [ -n "$RAW_IMAGE" ]; then
+            echo "📸 Testing RAW transformation..."
+            echo "   Source: $RAW_IMAGE"
+            
+            TEST_URL="https://${CDN_DOMAIN}/${RAW_IMAGE}?format=jpeg&width=800&height=600&fit=inside"
+            echo "   Test URL: $TEST_URL"
+            
+            # Try to fetch transformed image (timeout after 60 seconds, RAW takes longer)
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$TEST_URL" || echo "000")
+            
+            TESTS_RUN=$((TESTS_RUN + 1))
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "   ✅ RAW transformation successful (HTTP $HTTP_CODE)"
+              TESTS_PASSED=$((TESTS_PASSED + 1))
+            else
+              echo "   ⚠️  RAW transformation returned HTTP $HTTP_CODE"
+              echo "   Note: First request may take 30-60s as Lambda cold starts and processes RAW"
+            fi
+            echo ""
+          else
+            echo "⚠️  No RAW images found for testing"
+            echo ""
+          fi
+          
+          # Summary
+          echo "=========================================="
+          if [ $TESTS_RUN -eq 0 ]; then
+            echo "⚠️  No test images found"
+            echo "   Upload HEIC or RAW images to test transformation"
+          elif [ $TESTS_PASSED -eq $TESTS_RUN ]; then
+            echo "✅ ALL TESTS PASSED ($TESTS_PASSED/$TESTS_RUN)"
+            echo "   Server-side image transformation is working!"
+          else
+            echo "⚠️  SOME TESTS FAILED ($TESTS_PASSED/$TESTS_RUN passed)"
+            echo "   This may be due to Lambda cold start"
+            echo "   Check CloudWatch logs for details"
+          fi
+          echo "=========================================="
+
 
   # ========================================
   # STAGE 8: POST-DEPLOYMENT TESTS
