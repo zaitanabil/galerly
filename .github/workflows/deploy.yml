@@ -379,18 +379,18 @@ jobs:
               --index-document index.html \
               --error-document 404.html
 
-            cat > /tmp/bucket-policy.json << EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [{
-    "Sid": "PublicReadGetObject",
-    "Effect": "Allow",
-    "Principal": "*",
-    "Action": "s3:GetObject",
-    "Resource": "arn:aws:s3:::${{ secrets.S3_BUCKET }}/*"
-  }]
-}
-EOF
+            cat > /tmp/bucket-policy.json << 'EOFPOLICY'
+          {
+            "Version": "2012-10-17",
+            "Statement": [{
+              "Sid": "PublicReadGetObject",
+              "Effect": "Allow",
+              "Principal": "*",
+              "Action": "s3:GetObject",
+              "Resource": "arn:aws:s3:::${{ secrets.S3_BUCKET }}/*"
+            }]
+          }
+          EOFPOLICY
             aws s3api put-bucket-policy \
               --bucket ${{ secrets.S3_BUCKET }} \
               --policy file:///tmp/bucket-policy.json
@@ -407,17 +407,17 @@ EOF
           fi
 
           # Configure CORS for photos bucket
-          cat > /tmp/photos-cors.json << EOF
-{
-  "CORSRules": [{
-    "AllowedOrigins": ["${{ secrets.FRONTEND_URL }}", "http://localhost:3000"],
-    "AllowedMethods": ["GET", "HEAD", "POST", "PUT"],
-    "AllowedHeaders": ["*"],
-    "ExposeHeaders": ["ETag", "Content-Length", "Content-Type"],
-    "MaxAgeSeconds": 3600
-  }]
-}
-EOF
+          cat > /tmp/photos-cors.json << 'EOFCORS'
+          {
+            "CORSRules": [{
+              "AllowedOrigins": ["${{ secrets.FRONTEND_URL }}", "http://localhost:3000"],
+              "AllowedMethods": ["GET", "HEAD", "POST", "PUT"],
+              "AllowedHeaders": ["*"],
+              "ExposeHeaders": ["ETag", "Content-Length", "Content-Type"],
+              "MaxAgeSeconds": 3600
+            }]
+          }
+          EOFCORS
           aws s3api put-bucket-cors \
             --bucket ${{ secrets.S3_PHOTOS_BUCKET }} \
             --cors-configuration file:///tmp/photos-cors.json
@@ -499,19 +499,19 @@ EOF
 
       - name: Update S3 CORS
         run: |
-          cat > /tmp/s3-cors-config.json << EOF
-{
-  "CORSRules": [
-    {
-      "AllowedOrigins": ["${{ secrets.FRONTEND_URL }}", "http://localhost:3000"],
-      "AllowedMethods": ["GET", "HEAD", "POST", "PUT"],
-      "AllowedHeaders": ["*"],
-      "ExposeHeaders": ["ETag", "Content-Length", "Content-Type"],
-      "MaxAgeSeconds": 3600
-    }
-  ]
-}
-EOF
+          cat > /tmp/s3-cors-config.json << 'EOFS3CORS'
+          {
+            "CORSRules": [
+              {
+                "AllowedOrigins": ["${{ secrets.FRONTEND_URL }}", "http://localhost:3000"],
+                "AllowedMethods": ["GET", "HEAD", "POST", "PUT"],
+                "AllowedHeaders": ["*"],
+                "ExposeHeaders": ["ETag", "Content-Length", "Content-Type"],
+                "MaxAgeSeconds": 3600
+              }
+            ]
+          }
+          EOFS3CORS
 
           aws s3api put-bucket-cors \
             --bucket "${{ secrets.S3_PHOTOS_BUCKET }}" \
