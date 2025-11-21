@@ -182,11 +182,45 @@ if aws lambda get-function --function-name $FUNCTION_NAME --region $REGION 2>/de
         printf "\n"
         echo "⚠️  Warning: Update did not complete within ${MAX_WAIT}s"
         echo "   State: $STATE, LastUpdateStatus: $LAST_UPDATE_STATUS"
-        echo "   Attempting to publish version anyway..."
+        echo "   Continuing anyway..."
     fi
     
+    # Lambda@Edge cannot have environment variables
+    # Remove any existing environment variables
+    echo "🧹 Removing environment variables (Lambda@Edge requirement)..."
+    aws lambda update-function-configuration \
+        --function-name $FUNCTION_NAME \
+        --environment "Variables={}" \
+        --region $REGION \
+        --no-cli-pager > /dev/null
+    
+    # Wait for environment removal to complete
+    printf "⏳ Waiting for configuration update"
+    WAITED=0
+    while [ $WAITED -lt $MAX_WAIT ]; do
+        STATE=$(aws lambda get-function \
+            --function-name $FUNCTION_NAME \
+            --region $REGION \
+            --query 'Configuration.State' \
+            --output text)
+        
+        LAST_UPDATE_STATUS=$(aws lambda get-function \
+            --function-name $FUNCTION_NAME \
+            --region $REGION \
+            --query 'Configuration.LastUpdateStatus' \
+            --output text)
+        
+        if [ "$STATE" = "Active" ] && [ "$LAST_UPDATE_STATUS" = "Successful" ]; then
+            printf "\n"
+            break
+        fi
+        
+        printf "."
+        sleep 2
+        WAITED=$((WAITED + 2))
+    done
+    
     # Publish new version
-    # Lambda@Edge does not support environment variables
     # ARN is already injected into code during build
     VERSION=$(aws lambda publish-version \
         --function-name $FUNCTION_NAME \
