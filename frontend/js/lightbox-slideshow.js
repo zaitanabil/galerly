@@ -369,8 +369,8 @@ function loadSlideshowPhoto(index) {
     
     if (!img || !photo) return;
     
-    // Use MEDIUM-RES for slideshow (500KB-1MB, fast loading)
-    // Full-res (9MB) is too slow for slideshow
+    // Use pre-generated medium-res rendition for slideshow
+    // Original file used only for downloads
     const mediumUrl = photo.medium_url || photo.url;
     
     // Check if image is already cached for instant display

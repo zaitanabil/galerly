@@ -307,18 +307,14 @@ function renderGalleryPhotos(photos, startIndex, count) {
         const photoEl = document.createElement('div');
         photoEl.className = 'gallery-photo';
         photoEl.onclick = () => openPhotoModal(i);
-        // Use thumbnail_url if available (has CloudFront transformations), otherwise fallback to url
-        // For RAW images, thumbnail_url should have ?format=jpeg parameters
+        
+        // Backend provides pre-generated rendition URLs
+        // Use thumbnail_url for grid, fallback to url if not yet processed
         const thumbnailUrl = getImageUrl(photo.thumbnail_url || photo.url);
         const fullUrl = getImageUrl(photo.url);
         
         const isFavorite = photo.is_favorite === true;
         const isApproved = photo.status === 'approved';
-        
-        // Check if this is a format that needs enhancement (HEIC, TIFF, RAW)
-        // These formats should be handled by image-format-handler.js to prevent premature onerror
-        const filename = photo.filename || '';
-        const needsEnhancement = /\.(heic|heif|tif|tiff|dng|cr2|cr3|nef|arw|raf|orf|rw2|pef|3fr)$/i.test(filename);
         
         // For formats that need enhancement, use data-src and let enhancement handler load it
         // For standard formats, set src immediately with blur effect

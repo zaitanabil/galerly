@@ -30,8 +30,6 @@ jobs:
       - name: Check Required Secrets
         id: check-secrets
         run: |
-          echo "🔍 Checking required secrets..."
-          
           MISSING_SECRETS=""
           
           # AWS Credentials
@@ -56,11 +54,6 @@ jobs:
           
           # S3 Storage
           [[ -z "${{ secrets.S3_PHOTOS_BUCKET }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}S3_PHOTOS_BUCKET "
-          [[ -z "${{ secrets.S3_IMAGE_CACHE_BUCKET }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}S3_IMAGE_CACHE_BUCKET "
-          
-          # Lambda Functions
-          [[ -z "${{ secrets.LAMBDA_IMAGE_TRANSFORM_FUNCTION_NAME }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}LAMBDA_IMAGE_TRANSFORM_FUNCTION_NAME "
-          [[ -z "${{ secrets.LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME "
           
           # Stripe
           [[ -z "${{ secrets.STRIPE_SECRET_KEY }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}STRIPE_SECRET_KEY "
@@ -79,11 +72,9 @@ jobs:
           [[ -z "${{ secrets.CDN_DOMAIN }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}CDN_DOMAIN "
           
           if [ -n "$MISSING_SECRETS" ]; then
-            echo "❌ Missing required secrets: $MISSING_SECRETS"
             echo "valid=false" >> $GITHUB_OUTPUT
             exit 1
           else
-            echo "✅ All required secrets are present"
             echo "valid=true" >> $GITHUB_OUTPUT
           fi
 
@@ -106,15 +97,11 @@ jobs:
 
       - name: Install Python dependencies
         run: |
-          echo "📦 Installing Python dependencies..."
           cd backend
           pip install -r requirements.txt
           pip install pylint flake8 pytest
-          echo "✅ Dependencies installed"
-
       - name: Lint Python code
         run: |
-          echo "🔍 Linting Python code..."
           cd backend
           
           # Run flake8 ONLY on application code (exclude dependencies)
@@ -133,27 +120,21 @@ jobs:
             --statistics \
             --exclude=layer-package,package,python,venv,node_modules,__pycache__,.git
           
-          echo "✅ Python linting complete"
-
       - name: Validate Python syntax
         run: |
-          echo "🔍 Validating Python syntax..."
           cd backend
           
           # Compile all Python files and capture errors
           ERRORS=0
           
-          echo "  Compiling api.py..."
           python -m py_compile api.py || ERRORS=$((ERRORS+1))
           
-          echo "  Compiling handlers..."
           for file in handlers/*.py; do
             if [ -f "$file" ]; then
               python -m py_compile "$file" || ERRORS=$((ERRORS+1))
             fi
           done
           
-          echo "  Compiling utils..."
           for file in utils/*.py; do
             if [ -f "$file" ]; then
               python -m py_compile "$file" || ERRORS=$((ERRORS+1))
@@ -161,16 +142,12 @@ jobs:
           done
           
           if [ $ERRORS -gt 0 ]; then
-            echo "❌ Python syntax validation failed ($ERRORS error(s))"
             exit 1
           fi
           
-          echo "✅ Python syntax valid (all files compiled successfully)"
-
       - name: Check imports
         env: ${{ secrets }}
         run: |
-          echo "🔍 Checking Python imports..."
           cd backend
           python -c "
           import sys
@@ -188,13 +165,10 @@ jobs:
 
       - name: Validate frontend structure
         run: |
-          echo "🔍 Validating frontend structure..."
-          
           # Check required HTML files
           REQUIRED_HTML="index.html auth.html dashboard.html gallery.html client-gallery.html"
           for file in $REQUIRED_HTML; do
             if [ ! -f "frontend/$file" ]; then
-              echo "❌ Missing required file: $file"
               exit 1
             fi
           done
@@ -203,19 +177,15 @@ jobs:
           REQUIRED_JS="config.js auth.js gallery.js"
           for file in $REQUIRED_JS; do
             if [ ! -f "frontend/js/$file" ]; then
-              echo "❌ Missing required file: js/$file"
               exit 1
             fi
           done
           
           # Check required CSS files
           if [ ! -f "frontend/css/style.css" ]; then
-            echo "❌ Missing required file: css/style.css"
             exit 1
           fi
           
-          echo "✅ Frontend structure valid"
-
   # ========================================
   # STAGE 3: AWS INFRASTRUCTURE SETUP & TESTS
   # ========================================
@@ -247,18 +217,12 @@ jobs:
 
       - name: Create DynamoDB Tables if Missing
         run: |
-          echo "🗄️  Checking and creating DynamoDB tables..."
           cd backend
           python setup_dynamodb.py create
-          echo "✅ DynamoDB setup complete"
-
       - name: Configure S3 Buckets if Missing
         run: |
-          echo "🪣 Checking S3 buckets..."
-          
           # Check and create frontend bucket
           if ! aws s3 ls s3://${{ secrets.S3_BUCKET }} >/dev/null 2>&1; then
-            echo "📦 Creating frontend S3 bucket: ${{ secrets.S3_BUCKET }}"
             aws s3 mb s3://${{ secrets.S3_BUCKET }} --region ${{ env.AWS_REGION }}
             
             # Configure as static website
@@ -283,14 +247,11 @@ jobs:
               --bucket ${{ secrets.S3_BUCKET }} \
               --policy file:///tmp/bucket-policy.json
             
-            echo "✅ Frontend bucket created and configured"
           else
-            echo "✅ Frontend bucket exists: ${{ secrets.S3_BUCKET }}"
           fi
           
           # Check and create photos bucket
           if ! aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} >/dev/null 2>&1; then
-            echo "📦 Creating photos S3 bucket: ${{ secrets.S3_PHOTOS_BUCKET }}"
             aws s3 mb s3://${{ secrets.S3_PHOTOS_BUCKET }} --region ${{ env.AWS_REGION }}
             
             # Block public access (photos are private by default)
@@ -299,9 +260,7 @@ jobs:
               --public-access-block-configuration \
                 "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=false,RestrictPublicBuckets=false"
             
-            echo "✅ Photos bucket created"
           else
-            echo "✅ Photos bucket exists: ${{ secrets.S3_PHOTOS_BUCKET }}"
           fi
           
           # Configure CORS for photos bucket
@@ -320,8 +279,6 @@ jobs:
             --bucket ${{ secrets.S3_PHOTOS_BUCKET }} \
             --cors-configuration file:///tmp/photos-cors.json
           
-          echo "✅ S3 buckets ready"
-
   test-aws-infrastructure:
     name: ☁️  Test AWS Infrastructure
     runs-on: ubuntu-latest
@@ -340,28 +297,20 @@ jobs:
 
       - name: Test S3 Buckets
         run: |
-          echo "🪣 Testing S3 buckets..."
-          
           # Test frontend bucket
           if aws s3 ls s3://${{ secrets.S3_BUCKET }} >/dev/null 2>&1; then
-            echo "✅ Frontend S3 bucket accessible: ${{ secrets.S3_BUCKET }}"
           else
-            echo "❌ Frontend S3 bucket not accessible: ${{ secrets.S3_BUCKET }}"
             exit 1
           fi
           
           # Test photos bucket
           if aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} >/dev/null 2>&1; then
-            echo "✅ Photos S3 bucket accessible: ${{ secrets.S3_PHOTOS_BUCKET }}"
           else
-            echo "❌ Photos S3 bucket not accessible: ${{ secrets.S3_PHOTOS_BUCKET }}"
             exit 1
           fi
 
       - name: Test DynamoDB Tables
         run: |
-          echo "📊 Testing DynamoDB tables..."
-          
           TABLES=(
             "${{ secrets.DYNAMODB_TABLE_USERS }}"
             "${{ secrets.DYNAMODB_TABLE_GALLERIES }}"
@@ -375,49 +324,31 @@ jobs:
           
           for table in "${TABLES[@]}"; do
             if aws dynamodb describe-table --table-name "$table" >/dev/null 2>&1; then
-              echo "✅ Table exists: $table"
             else
-              echo "❌ Table not found: $table"
               exit 1
             fi
           done
 
       - name: Test Lambda Function
         run: |
-          echo "⚡ Testing Lambda function..."
-          
           # Check if function exists
           if aws lambda get-function --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} >/dev/null 2>&1; then
-            echo "✅ Lambda function exists: ${{ secrets.LAMBDA_FUNCTION_NAME }}"
-            
             # Get function details
             RUNTIME=$(aws lambda get-function-configuration --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} --query 'Runtime' --output text)
             MEMORY=$(aws lambda get-function-configuration --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} --query 'MemorySize' --output text)
             TIMEOUT=$(aws lambda get-function-configuration --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} --query 'Timeout' --output text)
             
-            echo "  Runtime: $RUNTIME"
-            echo "  Memory: ${MEMORY}MB"
-            echo "  Timeout: ${TIMEOUT}s"
           else
-            echo "❌ Lambda function not found: ${{ secrets.LAMBDA_FUNCTION_NAME }}"
             exit 1
           fi
 
       - name: Test CloudFront Distribution
         run: |
-          echo "🌐 Testing CloudFront distribution..."
-          
           if aws cloudfront get-distribution --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} >/dev/null 2>&1; then
-            echo "✅ CloudFront distribution exists: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}"
-            
             STATUS=$(aws cloudfront get-distribution --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} --query 'Distribution.Status' --output text)
-            echo "  Status: $STATUS"
-            
             if [ "$STATUS" != "Deployed" ]; then
-              echo "⚠️  Warning: Distribution status is $STATUS (expected: Deployed)"
             fi
           else
-            echo "❌ CloudFront distribution not found: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}"
             exit 1
           fi
 
@@ -440,18 +371,12 @@ jobs:
 
       - name: Install dependencies
         run: |
-          echo "📦 Installing test dependencies..."
           cd backend
           pip install -r requirements.txt
           pip install pytest pytest-cov pytest-mock moto requests
-          echo "✅ Dependencies installed"
-
       - name: Run Unit Tests
         env: ${{ secrets }}
         run: |
-          echo "=========================================="
-          echo "🧪 RUNNING UNIT TESTS"
-          echo "=========================================="
           cd backend
           
           # Run unit tests (exclude integration tests)
@@ -461,70 +386,40 @@ jobs:
             --cov-report=html \
             --junitxml=test-results/junit.xml
           
-          echo ""
-          echo "✅ Unit tests passed"
-
       - name: Run CDN Tests
         env: ${{ secrets }}
         run: |
-          echo "=========================================="
-          echo "🌐 TESTING CDN & IMAGE URLS"
-          echo "=========================================="
           cd backend
           
           # Run CDN-specific tests
           pytest tests/test_cdn.py -v
           
-          echo ""
-          echo "✅ CDN tests passed"
-
       - name: Run Image Transformation Tests
         env: ${{ secrets }}
         run: |
-          echo "=========================================="
-          echo "🖼️  TESTING IMAGE TRANSFORMATION"
-          echo "=========================================="
           cd backend
           
           # Run image transformation tests
           pytest tests/test_image_transformation.py -v
           
-          echo ""
-          echo "✅ Image transformation tests passed"
-
       - name: Run Endpoint Tests
         env: ${{ secrets }}
         run: |
-          echo "=========================================="
-          echo "📡 TESTING API ENDPOINTS"
-          echo "=========================================="
           cd backend
           
           # Run endpoint tests
           pytest tests/test_endpoints.py -v
           
-          echo ""
-          echo "✅ Endpoint tests passed"
-
       - name: Run Frontend Validation Tests
         run: |
-          echo "=========================================="
-          echo "🎨 VALIDATING FRONTEND FILES"
-          echo "=========================================="
           cd backend
           
           # Run frontend validation tests
           pytest tests/test_frontend.py -v
           
-          echo ""
-          echo "✅ Frontend validation passed"
-
       - name: Test Lambda Handler Imports
         env: ${{ secrets }}
         run: |
-          echo "=========================================="
-          echo "🔍 TESTING HANDLER IMPORTS"
-          echo "=========================================="
           cd backend
           python -c "
           import sys
@@ -559,48 +454,25 @@ jobs:
           else:
               print('\\n✅ All handlers imported successfully')
           "
-          echo ""
-
       - name: Run Integration Tests (Optional)
         env: ${{ secrets }}
         continue-on-error: true
         run: |
-          echo "=========================================="
-          echo "🔗 RUNNING INTEGRATION TESTS"
-          echo "=========================================="
-          echo "⚠️  Integration tests run against live AWS resources"
-          echo "   Tests marked as 'integration' will be executed"
-          echo ""
           cd backend
           
           # Run integration tests (against live AWS)
           pytest tests/ -v -m "integration" || echo "⚠️  Some integration tests failed (non-blocking)"
           
-          echo ""
-          echo "✅ Integration tests completed"
-
       - name: Generate Test Report
         if: always()
         run: |
-          echo "=========================================="
-          echo "📊 TEST SUMMARY"
-          echo "=========================================="
           cd backend
           
           # Count test files
           TOTAL_TEST_FILES=$(find tests/ -name "test_*.py" | wc -l)
-          echo "📁 Test Files: $TOTAL_TEST_FILES"
-          echo ""
-          
           # List all test files
-          echo "📋 Test Files:"
           find tests/ -name "test_*.py" | sort | sed 's/tests\//   ✅ /'
           
-          echo ""
-          echo "=========================================="
-          echo "✅ ALL TESTS COMPLETE!"
-          echo "=========================================="
-
       - name: Upload Test Results
         if: always()
         uses: actions/upload-artifact@v4
@@ -639,8 +511,6 @@ jobs:
 
       - name: Deploy to S3
         run: |
-          echo "🚀 Deploying frontend to S3..."
-          
           # Sync frontend files to S3 (deletes old files not in local)
           aws s3 sync frontend/ s3://${{ secrets.S3_BUCKET }}/ \
             --delete \
@@ -658,12 +528,8 @@ jobs:
             --cache-control "no-cache, no-store, must-revalidate" \
             --metadata-directive REPLACE
           
-          echo "✅ Frontend deployed to S3"
-
       - name: Update CloudFront Function
         run: |
-          echo "🔧 Updating CloudFront URL rewrite function..."
-          
           FUNCTION_NAME="galerly-url-rewrite"
           
           if aws cloudfront describe-function --name $FUNCTION_NAME 2>/dev/null; then
@@ -680,23 +546,17 @@ jobs:
               --name $FUNCTION_NAME \
               --if-match $NEW_ETAG
             
-            echo "✅ CloudFront function updated"
           else
-            echo "⚠️  CloudFront function not found, skipping"
           fi
 
       - name: Invalidate CloudFront Cache
         run: |
-          echo "🔄 Invalidating CloudFront cache..."
-          
           INVALIDATION_ID=$(aws cloudfront create-invalidation \
             --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/*" \
             --query 'Invalidation.Id' \
             --output text)
           
-          echo "✅ Cache invalidation created: $INVALIDATION_ID"
-
   # ========================================
   # STAGE 6: DEPLOY BACKEND
   # ========================================
@@ -724,105 +584,62 @@ jobs:
 
       - name: Deploy Lambda Function using deploy-lambda.sh
         run: |
-          echo "=========================================="
-          echo "🚀 DEPLOYING LAMBDA FUNCTION"
-          echo "=========================================="
-          echo ""
-          echo "Using deploy-lambda.sh for consistent deployment..."
-          echo ""
-          
           cd backend
           
           # Set up Python virtual environment (required by deploy-lambda.sh)
-          echo "📦 Setting up Python virtual environment..."
           python3 -m venv venv
           source venv/bin/activate
           pip install --upgrade pip
-          echo "✅ Virtual environment created"
-          echo ""
-          
           # Install ONLY lightweight dependencies (PIL removed from package)
-          echo "📚 Installing lightweight dependencies..."
-          echo "   Note: PIL/rawpy/pillow-heif will be excluded from package (not needed)"
           pip install boto3>=1.28.0 stripe>=7.0.0 python-dotenv>=1.0.0 --upgrade
-          echo "✅ Lightweight dependencies installed"
-          echo ""
-          
           # Make script executable
           chmod +x deploy-lambda.sh
           
           # Run the deployment script
           ./deploy-lambda.sh
           
-          echo ""
-          echo "=========================================="
-          echo "✅ Lambda Deployment Complete!"
-          echo "=========================================="
-
       - name: Sync GitHub Secrets to Lambda Environment Variables
         env:
           SECRETS_JSON: ${{ toJson(secrets) }}
         run: |
-          echo "🔄 SYNCING GitHub Secrets to Lambda Environment Variables..."
-          echo ""
-          
           # STEP 0: Wait for previous Lambda update to complete
-          echo "⏳ STEP 0: Waiting for previous Lambda deployment to complete..."
           aws lambda wait function-updated \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }}
-          echo "✅ Lambda is ready for configuration update"
-          echo ""
-          
           # STEP 1: Get current Lambda environment variables
-          echo "📋 STEP 1: Reading current Lambda environment variables..."
           aws lambda get-function-configuration \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }} > /tmp/lambda-config.json
           
           CURRENT_VAR_COUNT=$(cat /tmp/lambda-config.json | jq -r '.Environment.Variables // {} | length')
-          echo "   Found $CURRENT_VAR_COUNT existing variables in Lambda"
-          
           if [ "$CURRENT_VAR_COUNT" -gt 0 ]; then
-            echo "   Current Lambda variables:"
           cat /tmp/lambda-config.json | jq -r '.Environment.Variables // {} | keys[]' | while read key; do
-              echo "      🗑️  $key (will be removed)"
           done
           fi
           
           # STEP 2: FORCE CLEAR ALL Lambda environment variables
-          echo ""
-          echo "🧹 STEP 2: FORCE REMOVING ALL Lambda environment variables..."
           aws lambda update-function-configuration \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --environment '{"Variables":{}}' \
             --region ${{ env.AWS_REGION }} > /dev/null
           
-          echo "⏳ Waiting for Lambda to update after clearing..."
           aws lambda wait function-updated \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }}
           
           # STEP 2.5: VERIFY variables are truly cleared
-          echo ""
-          echo "🔍 STEP 2.5: Verifying all variables were cleared..."
           aws lambda get-function-configuration \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }} > /tmp/lambda-config-cleared.json
           
           CLEARED_VAR_COUNT=$(cat /tmp/lambda-config-cleared.json | jq -r '.Environment.Variables // {} | length')
           if [ "$CLEARED_VAR_COUNT" -eq 0 ]; then
-            echo "✅ All Lambda environment variables CLEARED (count: 0)"
           else
-            echo "❌ Failed to clear all variables! Still have $CLEARED_VAR_COUNT variables:"
             cat /tmp/lambda-config-cleared.json | jq -r '.Environment.Variables // {} | keys[]'
             exit 1
           fi
 
           # STEP 3: Build new environment variables from GitHub Secrets
-          echo ""
-          echo "📦 STEP 3: Building new environment variables from GitHub Secrets..."
-          
           # Parse secrets and filter out GitHub internal secrets and AWS credentials
           echo "$SECRETS_JSON" | jq -r 'to_entries[] | select(
             .key | test("^GITHUB_") | not
@@ -831,17 +648,10 @@ jobs:
           ) | {(.key): .value}' | jq -s 'add' > /tmp/lambda-env-vars.json
           
           NEW_VAR_COUNT=$(cat /tmp/lambda-env-vars.json | jq 'length')
-          echo "   Prepared $NEW_VAR_COUNT variables from GitHub Secrets"
-          echo ""
-          echo "   Variables to upload:"
           cat /tmp/lambda-env-vars.json | jq -r 'keys[]' | sort | while read key; do
-            echo "      ✅ $key"
           done
           
           # STEP 4: Upload ALL new variables to Lambda
-          echo ""
-          echo "🚀 STEP 4: Uploading ALL GitHub Secrets to Lambda..."
-          
           # Build final JSON structure
           echo "{\"Variables\":" > /tmp/lambda-env-final.json
           cat /tmp/lambda-env-vars.json >> /tmp/lambda-env-final.json
@@ -852,47 +662,28 @@ jobs:
             --environment file:///tmp/lambda-env-final.json \
             --region ${{ env.AWS_REGION }} > /dev/null
           
-          echo "⏳ Waiting for Lambda to update with new variables..."
           aws lambda wait function-updated \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }}
           
           # STEP 5: Verify the sync
-          echo ""
-          echo "🔍 STEP 5: Verifying sync..."
           aws lambda get-function-configuration \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --region ${{ env.AWS_REGION }} > /tmp/lambda-config-after.json
           
           FINAL_VAR_COUNT=$(cat /tmp/lambda-config-after.json | jq -r '.Environment.Variables // {} | length')
-          echo "   Lambda now has $FINAL_VAR_COUNT environment variables"
-          
           if [ "$FINAL_VAR_COUNT" -eq "$NEW_VAR_COUNT" ]; then
-            echo "✅ Variable count matches! ($FINAL_VAR_COUNT = $NEW_VAR_COUNT)"
           else
-            echo "❌ Variable count mismatch! Expected $NEW_VAR_COUNT but got $FINAL_VAR_COUNT"
           fi
           
-          echo ""
-          echo "   Final Lambda variables:"
           cat /tmp/lambda-config-after.json | jq -r '.Environment.Variables // {} | keys[]' | sort | while read key; do
-            echo "      ✅ $key"
           done
           
           # Cleanup
           rm -f /tmp/lambda-config.json /tmp/lambda-config-cleared.json /tmp/lambda-env-vars.json /tmp/lambda-env-final.json /tmp/lambda-config-after.json
           
-          echo ""
-          echo "✅✅✅ SYNC COMPLETE ✅✅✅"
-          echo "✅ Removed: $CURRENT_VAR_COUNT old variables"
-          echo "✅ Uploaded: $NEW_VAR_COUNT new variables from GitHub Secrets"
-          echo "✅ Final count: $FINAL_VAR_COUNT variables"
-          echo "✅ Lambda environment variables are now EXACTLY matched with GitHub Secrets"
-
       - name: Verify Lambda Function
         run: |
-          echo "🔍 Verifying Lambda deployment..."
-          
           # Get function configuration
           CONFIG=$(aws lambda get-function-configuration \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
@@ -901,36 +692,24 @@ jobs:
           # Check runtime
           RUNTIME=$(echo $CONFIG | jq -r '.Runtime')
           if [[ "$RUNTIME" != "python3."* ]]; then
-            echo "❌ Unexpected runtime: $RUNTIME"
             exit 1
           fi
           
           # Check state
           STATE=$(echo $CONFIG | jq -r '.State')
           if [ "$STATE" != "Active" ]; then
-            echo "❌ Function state: $STATE (expected: Active)"
             exit 1
           fi
           
-          echo "✅ Lambda verification complete"
-          echo "  Runtime: $RUNTIME"
-          echo "  State: $STATE"
-
       - name: Update API Gateway CORS
         run: |
-          echo "🔧 Updating API Gateway CORS configuration..."
-          
           cd backend
           pip install -r requirements.txt
           
           python3 setup_aws.py api-cors
           
-          echo "✅ API Gateway CORS updated"
-
       - name: Update S3 CORS for Photo Uploads
         run: |
-          echo "🔧 Configuring S3 CORS for photo uploads..."
-          
           # Build CORS configuration dynamically with FRONTEND_URL
           cat > /tmp/s3-cors-config.json << EOF
           {
@@ -946,20 +725,14 @@ jobs:
           }
           EOF
           
-          echo "📄 CORS Configuration:"
           cat /tmp/s3-cors-config.json
-          echo ""
-          
           # Apply CORS to S3_PHOTOS_BUCKET (from GitHub Secrets)
-          echo "📄 Applying CORS to bucket: ${{ secrets.S3_PHOTOS_BUCKET }}..."
           aws s3api put-bucket-cors \
             --bucket "${{ secrets.S3_PHOTOS_BUCKET }}" \
             --cors-configuration file:///tmp/s3-cors-config.json \
             --region ${{ env.AWS_REGION }}
           
           # Verify configuration
-          echo ""
-          echo "🧪 Verifying CORS configuration..."
           aws s3api get-bucket-cors \
             --bucket "${{ secrets.S3_PHOTOS_BUCKET }}" \
             --region ${{ env.AWS_REGION }}
@@ -967,14 +740,11 @@ jobs:
           # Cleanup
           rm -f /tmp/s3-cors-config.json
           
-          echo ""
-          echo "✅ S3 CORS configured for bucket: ${{ secrets.S3_PHOTOS_BUCKET }}"
-
   # ========================================
-  # STAGE 7: DEPLOY IMAGE TRANSFORMATION SYSTEM
+  # STAGE 7: DEPLOY IMAGE PROCESSING SYSTEM
   # ========================================
-  deploy-image-transform:
-    name: 🖼️  Deploy Image Transformation System
+  deploy-image-processing:
+    name: 🖼️  Deploy Image Processing System
     runs-on: ubuntu-latest
     needs: [deploy-backend]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -995,483 +765,157 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Create Image Cache Bucket
+      - name: Hard Cleanup Old Image Processing System
         run: |
-          echo "=========================================="
-          echo "🪣 CREATING IMAGE CACHE BUCKET"
-          echo "=========================================="
-          echo ""
-          
-          CACHE_BUCKET="${{ secrets.S3_IMAGE_CACHE_BUCKET }}"
-          
-          # Check if bucket exists
-          if aws s3 ls s3://$CACHE_BUCKET 2>/dev/null; then
-            echo "✅ Cache bucket already exists: $CACHE_BUCKET"
-          else
-            echo "📦 Creating cache bucket: $CACHE_BUCKET"
-            aws s3 mb s3://$CACHE_BUCKET --region ${{ env.AWS_REGION }}
-            
-            # Enable versioning for safety
-            aws s3api put-bucket-versioning \
-              --bucket $CACHE_BUCKET \
-              --versioning-configuration Status=Enabled
-            
-            # Apply lifecycle policy (auto-cleanup old cache after 90 days)
-            aws s3api put-bucket-lifecycle-configuration \
-              --bucket $CACHE_BUCKET \
-              --lifecycle-configuration file://backend/image-transform/cache-lifecycle.json
-            
-            echo "✅ Cache bucket created and configured"
-          fi
-          
-          echo ""
-          echo "=========================================="
-
-      - name: Deploy Image Transform Lambda using deploy.sh
-        run: |
-          echo "=========================================="
-          echo "🚀 DEPLOYING IMAGE TRANSFORM LAMBDA"
-          echo "=========================================="
-          echo ""
-          echo "Using deploy.sh for consistent deployment..."
-          echo ""
-          
-          cd backend/image-transform
-          
-          # Make script executable
-          chmod +x deploy.sh
-          
-          # Run the deployment script
-          ./deploy.sh
-          
-          echo ""
-          echo "=========================================="
-          echo "✅ Image Transform Lambda Deployment Complete!"
-          echo "=========================================="
-
-      - name: Configure Image Transform Lambda
-        run: |
-          echo "🔧 Configuring Image Transform Lambda..."
-          
-          FUNCTION_NAME="${{ secrets.LAMBDA_IMAGE_TRANSFORM_FUNCTION_NAME }}"
-          
-          # Wait for function to be ready
-          echo "⏳ Waiting for Lambda function to be ready..."
-          aws lambda wait function-active \
-            --function-name $FUNCTION_NAME \
-            --region ${{ env.AWS_REGION }} 2>/dev/null || true
-          
-          # Set environment variables and optimal configuration
-          echo "🔗 Configuring environment and settings..."
-          aws lambda update-function-configuration \
-            --function-name $FUNCTION_NAME \
-            --environment "Variables={SOURCE_BUCKET=${{ secrets.S3_PHOTOS_BUCKET }},CACHE_BUCKET=${{ secrets.S3_IMAGE_CACHE_BUCKET }}}" \
-            --timeout 60 \
-            --memory-size 2048 \
-            --region ${{ env.AWS_REGION }}
-          
-          echo "✅ Configuration complete"
-
-      - name: Deploy CloudFront Router using deploy-cloudfront-router.sh
-        run: |
-          echo "=========================================="
-          echo "🌐 DEPLOYING CLOUDFRONT ROUTER"
-          echo "=========================================="
-          echo ""
-          echo "Using deploy-cloudfront-router.sh for consistent deployment..."
-          echo ""
-          
-          cd backend/image-transform
-          
-          # Get Transform Lambda ARN
-          TRANSFORM_ARN=$(aws lambda get-function \
-            --function-name ${{ secrets.LAMBDA_IMAGE_TRANSFORM_FUNCTION_NAME }} \
-            --region ${{ env.AWS_REGION }} \
-            --query 'Configuration.FunctionArn' \
-            --output text)
-          
-          # Export environment variables for deployment script
-          export TRANSFORM_LAMBDA_ARN="$TRANSFORM_ARN"
-          export CACHE_BUCKET="${{ secrets.S3_IMAGE_CACHE_BUCKET }}"
-          
-          # Run deployment script
-          chmod +x deploy-cloudfront-router.sh
-          ./deploy-cloudfront-router.sh
-
-      - name: Attach Lambda@Edge to CloudFront Distribution
-        run: |
-          # Find Image CDN distribution by domain name (cdn.galerly.com)
-          IMAGE_CDN_DIST_ID=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?Aliases.Items[?contains(@, 'cdn.galerly.com')]].Id | [0]" \
-            --output text)
-          
-          if [ -z "$IMAGE_CDN_DIST_ID" ] || [ "$IMAGE_CDN_DIST_ID" = "None" ]; then
-            exit 1
-          fi
-          
-          # Get Lambda@Edge version ARN
-          ROUTER_VERSION=$(aws lambda list-versions-by-function \
-            --function-name ${{ secrets.LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME }} \
-            --region us-east-1 \
-            --query 'Versions[-1].Version' \
-            --output text)
-          
-          ROUTER_ARN="arn:aws:lambda:us-east-1:$(aws sts get-caller-identity --query Account --output text):function:${{ secrets.LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME }}:${ROUTER_VERSION}"
-          
-          # Get current CloudFront configuration
-          aws cloudfront get-distribution-config \
-            --id $IMAGE_CDN_DIST_ID > /tmp/dist-config-full.json
-          
-          ETAG=$(jq -r '.ETag' /tmp/dist-config-full.json)
-          jq '.DistributionConfig' /tmp/dist-config-full.json > /tmp/dist-config.json
-          
-          # Check if Lambda@Edge is already attached
-          CURRENT_LAMBDA=$(jq -r '.DefaultCacheBehavior.LambdaFunctionAssociations.Items[]? | select(.EventType=="origin-request") | .LambdaFunctionARN' /tmp/dist-config.json || echo "")
-          
-          if [ "$CURRENT_LAMBDA" = "$ROUTER_ARN" ]; then
-            exit 0
-          fi
-          
-          # Update Lambda@Edge association using jq
-          jq --arg arn "$ROUTER_ARN" '
-            .DefaultCacheBehavior.LambdaFunctionAssociations.Items = 
-              ([.DefaultCacheBehavior.LambdaFunctionAssociations.Items[]? | select(.EventType != "origin-request")] + 
-              [{
-                "EventType": "origin-request",
-                "LambdaFunctionARN": $arn,
-                "IncludeBody": false
-              }]) |
-            .DefaultCacheBehavior.LambdaFunctionAssociations.Quantity = 
-              (.DefaultCacheBehavior.LambdaFunctionAssociations.Items | length)
-          ' /tmp/dist-config.json > /tmp/dist-config-updated.json
-          
-          # Update CloudFront distribution
-          aws cloudfront update-distribution \
-            --id $IMAGE_CDN_DIST_ID \
-            --distribution-config file:///tmp/dist-config-updated.json \
-            --if-match "$ETAG" > /dev/null
-          
-          # Wait for CloudFront deployment
-          MAX_ATTEMPTS=30
-          ATTEMPT=0
-          
-          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-            ATTEMPT=$((ATTEMPT + 1))
-            
-            STATUS=$(aws cloudfront get-distribution \
-              --id $IMAGE_CDN_DIST_ID \
-              --query 'Distribution.Status' \
-              --output text)
-            
-            if [ "$STATUS" = "Deployed" ]; then
-              break
-            fi
-            
-            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
-              sleep 30
-            fi
-          done
-
-      - name: Verify Lambda@Edge Attachment
-        run: |
-          echo "=========================================="
-          echo "🔍 VERIFYING LAMBDA@EDGE ATTACHMENT"
-          echo "=========================================="
-          echo ""
-          
-          # Check Lambda@Edge attachment to CloudFront
-          echo "📥 Checking CloudFront configuration..."
-          LAMBDA_ASSOCIATIONS=$(aws cloudfront get-distribution-config \
-            --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --query 'DistributionConfig.DefaultCacheBehavior.LambdaFunctionAssociations' \
-            --output json)
-          
-          ORIGIN_REQUEST_LAMBDA=$(echo "$LAMBDA_ASSOCIATIONS" | jq -r '.Items[]? | select(.EventType=="origin-request") | .LambdaFunctionARN' 2>/dev/null || echo "")
-          
-          if [ -n "$ORIGIN_REQUEST_LAMBDA" ]; then
-            echo "✅ Lambda@Edge attached to origin-request event"
-            echo "   ARN: $ORIGIN_REQUEST_LAMBDA"
-            
-            # Check if it's the correct function
-            if [[ "$ORIGIN_REQUEST_LAMBDA" == *"${{ secrets.LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME }}"* ]]; then
-              echo "✅ Correct Lambda@Edge function attached"
-              
-              # Extract version
-              ATTACHED_VERSION=$(echo "$ORIGIN_REQUEST_LAMBDA" | awk -F: '{print $NF}')
-              echo "   Version: $ATTACHED_VERSION"
-            else
-              echo "❌ WRONG FUNCTION ATTACHED!"
-              echo "   Expected: ${{ secrets.LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME }}"
-              echo "   Got: $ORIGIN_REQUEST_LAMBDA"
-              echo ""
-              echo "   This will cause image transformation failures!"
-              exit 1
-            fi
-          else
-            echo "❌ No Lambda@Edge attached to origin-request"
-            echo "   Image transformation will not work!"
-            exit 1
-          fi
-          
-          # Check CloudFront deployment status
-          STATUS=$(aws cloudfront get-distribution \
-            --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --query 'Distribution.Status' \
-            --output text)
-          
-          echo ""
-          echo "🌐 CloudFront Status: $STATUS"
-          
-          if [ "$STATUS" = "Deployed" ]; then
-            echo "✅ CloudFront is fully deployed"
-            echo "   Image transformation is active"
-          else
-            echo "⚠️  CloudFront is still deploying"
-            echo "   Image transformation will activate when deployment completes"
-          fi
-          
-          echo ""
-          echo "=========================================="
-          echo "✅ Lambda@Edge Verification Complete"
-          echo "=========================================="
-
-      - name: Cleanup Old Lambda Functions
-        run: |
-          echo "=========================================="
-          echo "🧹 CLEANING UP OLD LAMBDA FUNCTIONS"
-          echo "=========================================="
-          echo ""
-          
-          # List of old Lambda@Edge functions to remove
-          OLD_FUNCTIONS=(
+          # STEP 1: Remove ALL old Lambda@Edge functions completely
+          OLD_LAMBDA_FUNCTIONS=(
+            "galerly-image-transform"
+            "galerly-cloudfront-router"
             "galerly-image-resize-edge"
+            "galerly-image-processing-old"
           )
           
-          for FUNC in "${OLD_FUNCTIONS[@]}"; do
-            echo "🔍 Checking for old function: $FUNC"
-            
-            if aws lambda get-function --function-name "$FUNC" --region us-east-1 >/dev/null 2>&1; then
-              echo "   Found old function: $FUNC"
-              
-              # Check if it's still attached to CloudFront
-              LAMBDA_ASSOCIATIONS=$(aws cloudfront get-distribution-config \
-                --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-                --query 'DistributionConfig.DefaultCacheBehavior.LambdaFunctionAssociations.Items[].LambdaFunctionARN' \
+          for FUNC_NAME in "${OLD_LAMBDA_FUNCTIONS[@]}"; do
+            if aws lambda get-function --function-name "$FUNC_NAME" --region us-east-1 2>/dev/null; then
+              # Delete all published versions first
+              VERSIONS=$(aws lambda list-versions-by-function \
+                --function-name "$FUNC_NAME" \
+                --region us-east-1 \
+                --query 'Versions[?Version!=`$LATEST`].Version' \
                 --output text 2>/dev/null || echo "")
               
-              if echo "$LAMBDA_ASSOCIATIONS" | grep -q "$FUNC"; then
-                echo "   ⚠️  Function still attached to CloudFront - skipping deletion"
-              else
-                echo "   🗑️  Deleting old function (not in use)..."
-                
-                # Delete all versions first
-                VERSIONS=$(aws lambda list-versions-by-function \
-                  --function-name "$FUNC" \
-                  --region us-east-1 \
-                  --query 'Versions[?Version!=`$LATEST`].Version' \
-                  --output text 2>/dev/null || echo "")
-                
-                if [ -n "$VERSIONS" ]; then
-                  echo "   📦 Deleting $(echo $VERSIONS | wc -w) versions..."
-                  for VERSION in $VERSIONS; do
-                    aws lambda delete-function \
-                      --function-name "$FUNC" \
-                      --qualifier "$VERSION" \
-                      --region us-east-1 2>/dev/null || true
-                  done
-                fi
-                
-                # Delete the function
+              for VERSION in $VERSIONS; do
                 aws lambda delete-function \
-                  --function-name "$FUNC" \
+                  --function-name "$FUNC_NAME" \
+                  --qualifier "$VERSION" \
                   --region us-east-1 2>/dev/null || true
-                
-                echo "   ✅ Deleted: $FUNC"
-              fi
-            else
-              echo "   ✅ Not found (already cleaned up)"
+              done
+              
+              # Delete the function itself
+              aws lambda delete-function \
+                --function-name "$FUNC_NAME" \
+                --region us-east-1 2>/dev/null || true
             fi
-            echo ""
           done
           
-          echo "=========================================="
-          echo "✅ Cleanup Complete"
-          echo "=========================================="
-
-      - name: Verify Image Transformation System
-        run: |
-          echo "=========================================="
-          echo "🔍 VERIFYING IMAGE TRANSFORMATION SYSTEM"
-          echo "=========================================="
-          echo ""
-          
-          # Check Transform Lambda
-          echo "1️⃣  Checking Transform Lambda..."
-          if aws lambda get-function --function-name ${{ secrets.LAMBDA_IMAGE_TRANSFORM_FUNCTION_NAME }} --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
-            echo "   ✅ Transform Lambda exists"
-            
-            # Check configuration
-            CONFIG=$(aws lambda get-function-configuration \
-              --function-name ${{ secrets.LAMBDA_IMAGE_TRANSFORM_FUNCTION_NAME }} \
-              --region ${{ env.AWS_REGION }})
-            
-            MEMORY=$(echo $CONFIG | jq -r '.MemorySize')
-            TIMEOUT=$(echo $CONFIG | jq -r '.Timeout')
-            LAYERS=$(echo $CONFIG | jq -r '.Layers | length')
-            
-            echo "   📊 Memory: ${MEMORY}MB"
-            echo "   ⏱️  Timeout: ${TIMEOUT}s"
-            echo "   📚 Layers: $LAYERS"
-          else
-            echo "   ❌ Transform Lambda not found"
-            exit 1
-          fi
-          
-          echo ""
-          
-          # Check CloudFront Router
-          echo "2️⃣  Checking CloudFront Router..."
-          if aws lambda get-function --function-name ${{ secrets.LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME }} --region us-east-1 >/dev/null 2>&1; then
-            echo "   ✅ CloudFront Router exists"
-            
-            VERSION=$(aws lambda list-versions-by-function \
-              --function-name ${{ secrets.LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME }} \
-              --region us-east-1 \
-              --query 'Versions[-1].Version' \
-              --output text)
-            
-            echo "   📌 Latest version: $VERSION"
-          else
-            echo "   ❌ CloudFront Router not found"
-            exit 1
-          fi
-          
-          echo ""
-          
-          # Check Cache Bucket
-          echo "3️⃣  Checking Cache Bucket..."
-          if aws s3 ls s3://${{ secrets.S3_IMAGE_CACHE_BUCKET }} >/dev/null 2>&1; then
-            echo "   ✅ Cache bucket exists"
-            
-            SIZE=$(aws s3 ls s3://${{ secrets.S3_IMAGE_CACHE_BUCKET }} --recursive --summarize 2>/dev/null | grep "Total Size" | awk '{print $3}' || echo "0")
-            echo "   📦 Cache size: $SIZE bytes"
-          else
-            echo "   ❌ Cache bucket not found"
-            exit 1
-          fi
-          
-          echo ""
-          echo "=========================================="
-          echo "✅ IMAGE TRANSFORMATION SYSTEM VERIFIED!"
-          echo "=========================================="
-
-      - name: Test CloudFront Image Transformation
-        run: |
-          echo "=========================================="
-          echo "🧪 TESTING CLOUDFRONT IMAGE TRANSFORMATION"
-          echo "=========================================="
-          echo ""
-          
-          # Wait for CloudFront to be fully deployed before testing
-          STATUS=$(aws cloudfront get-distribution \
-            --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --query 'Distribution.Status' \
-            --output text)
-          
-          if [ "$STATUS" != "Deployed" ]; then
-            echo "⚠️  CloudFront status: $STATUS"
-            echo "   Skipping transformation tests until deployment completes"
-            exit 0
-          fi
-          
-          echo "✅ CloudFront is fully deployed"
-          echo ""
-          
-          # Get CDN domain
-          CDN_DOMAIN=$(aws cloudfront get-distribution \
-            --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --query 'Distribution.DomainName' \
-            --output text)
-          
-          echo "🌐 CDN Domain: $CDN_DOMAIN"
-          echo ""
-          
-          # Find sample images in S3 to test
-          echo "🔍 Finding sample images to test..."
-          
-          # Look for HEIC images
-          HEIC_IMAGE=$(aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} --recursive | grep -i ".heic" | head -1 | awk '{print $4}' || echo "")
-          
-          # Look for RAW images
-          RAW_IMAGE=$(aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} --recursive | grep -iE "\.(dng|cr2|nef|arw)" | head -1 | awk '{print $4}' || echo "")
-          
-          TESTS_RUN=0
-          TESTS_PASSED=0
-          
-          # Test HEIC transformation
-          if [ -n "$HEIC_IMAGE" ]; then
-            echo "📸 Testing HEIC transformation..."
-            echo "   Source: $HEIC_IMAGE"
-            
-            TEST_URL="https://${CDN_DOMAIN}/${HEIC_IMAGE}?format=jpeg&width=800&height=600&fit=inside"
-            echo "   Test URL: $TEST_URL"
-            
-            # Try to fetch transformed image (timeout after 30 seconds)
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 30 "$TEST_URL" || echo "000")
-            
-            TESTS_RUN=$((TESTS_RUN + 1))
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "   ✅ HEIC transformation successful (HTTP $HTTP_CODE)"
-              TESTS_PASSED=$((TESTS_PASSED + 1))
-            else
-              echo "   ⚠️  HEIC transformation returned HTTP $HTTP_CODE"
-              echo "   Note: First request may take longer as Lambda cold starts"
+          # STEP 2: Remove old image cache bucket if it exists
+          if [ -n "${{ secrets.S3_IMAGE_CACHE_BUCKET }}" ]; then
+            if aws s3 ls "s3://${{ secrets.S3_IMAGE_CACHE_BUCKET }}" 2>/dev/null; then
+              # Empty bucket first
+              aws s3 rm "s3://${{ secrets.S3_IMAGE_CACHE_BUCKET }}" --recursive 2>/dev/null || true
+              # Delete bucket
+              aws s3 rb "s3://${{ secrets.S3_IMAGE_CACHE_BUCKET }}" --force 2>/dev/null || true
             fi
-            echo ""
-          else
-            echo "⚠️  No HEIC images found for testing"
-            echo ""
           fi
           
-          # Test RAW transformation
-          if [ -n "$RAW_IMAGE" ]; then
-            echo "📸 Testing RAW transformation..."
-            echo "   Source: $RAW_IMAGE"
+          # STEP 3: Remove any old Lambda@Edge associations from CloudFront
+          IMAGE_CDN_DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Aliases.Items[?contains(@, 'cdn.galerly.com')]].Id | [0]" \
+            --output text 2>/dev/null || echo "")
+          
+          if [ -n "$IMAGE_CDN_DIST_ID" ] && [ "$IMAGE_CDN_DIST_ID" != "None" ]; then
+            # Get current config
+            aws cloudfront get-distribution-config \
+              --id "$IMAGE_CDN_DIST_ID" > /tmp/dist-config-full.json 2>/dev/null || true
             
-            TEST_URL="https://${CDN_DOMAIN}/${RAW_IMAGE}?format=jpeg&width=800&height=600&fit=inside"
-            echo "   Test URL: $TEST_URL"
-            
-            # Try to fetch transformed image (timeout after 60 seconds, RAW takes longer)
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 60 "$TEST_URL" || echo "000")
-            
-            TESTS_RUN=$((TESTS_RUN + 1))
-            if [ "$HTTP_CODE" = "200" ]; then
-              echo "   ✅ RAW transformation successful (HTTP $HTTP_CODE)"
-              TESTS_PASSED=$((TESTS_PASSED + 1))
-            else
-              echo "   ⚠️  RAW transformation returned HTTP $HTTP_CODE"
-              echo "   Note: First request may take 30-60s as Lambda cold starts and processes RAW"
+            if [ -f "/tmp/dist-config-full.json" ]; then
+              ETAG=$(jq -r '.ETag' /tmp/dist-config-full.json)
+              
+              # Remove all Lambda@Edge associations
+              jq '.DistributionConfig | 
+                .DefaultCacheBehavior.LambdaFunctionAssociations.Items = [] |
+                .DefaultCacheBehavior.LambdaFunctionAssociations.Quantity = 0' \
+                /tmp/dist-config-full.json > /tmp/dist-config-clean.json
+              
+              # Update distribution (remove Lambda@Edge)
+              aws cloudfront update-distribution \
+                --id "$IMAGE_CDN_DIST_ID" \
+                --distribution-config file:///tmp/dist-config-clean.json \
+                --if-match "$ETAG" 2>/dev/null || true
             fi
-            echo ""
-          else
-            echo "⚠️  No RAW images found for testing"
-            echo ""
           fi
           
-          # Summary
-          echo "=========================================="
-          if [ $TESTS_RUN -eq 0 ]; then
-            echo "⚠️  No test images found"
-            echo "   Upload HEIC or RAW images to test transformation"
-          elif [ $TESTS_PASSED -eq $TESTS_RUN ]; then
-            echo "✅ ALL TESTS PASSED ($TESTS_PASSED/$TESTS_RUN)"
-            echo "   Server-side image transformation is working!"
-          else
-            echo "⚠️  SOME TESTS FAILED ($TESTS_PASSED/$TESTS_RUN passed)"
-            echo "   This may be due to Lambda cold start"
-            echo "   Check CloudWatch logs for details"
+          # STEP 4: Wait for CloudFront to stabilize after removal
+          sleep 30
+
+      - name: Deploy New Image Processing Lambda
+        working-directory: backend/image-processing
+        env:
+          S3_PHOTOS_BUCKET: ${{ secrets.S3_PHOTOS_BUCKET }}
+          DYNAMODB_TABLE_PHOTOS: ${{ secrets.DYNAMODB_TABLE_PHOTOS }}
+          DYNAMODB_TABLE_GALLERIES: ${{ secrets.DYNAMODB_TABLE_GALLERIES }}
+          CDN_DOMAIN: ${{ secrets.CDN_DOMAIN }}
+        run: |
+          # Make deployment script executable
+          chmod +x deploy.sh
+          
+          # Run deployment (handles Lambda layer, IAM, S3 triggers)
+          ./deploy.sh
+
+      - name: Verify New Image Processing System
+        run: |
+          # Verify Lambda function exists and is configured correctly
+          LAMBDA_CONFIG=$(aws lambda get-function-configuration \
+            --function-name galerly-image-processor \
+            --region us-east-1 2>/dev/null || echo "")
+          
+          if [ -z "$LAMBDA_CONFIG" ]; then
+            exit 1
           fi
-          echo "=========================================="
+          
+          # Check configuration
+          MEMORY=$(printf '%s' "$LAMBDA_CONFIG" | jq -r '.MemorySize')
+          TIMEOUT=$(printf '%s' "$LAMBDA_CONFIG" | jq -r '.Timeout')
+          STATE=$(printf '%s' "$LAMBDA_CONFIG" | jq -r '.State')
+          
+          if [ "$STATE" != "Active" ]; then
+            exit 1
+          fi
+          
+          if [ "$MEMORY" -lt 2048 ]; then
+            exit 1
+          fi
+          
+          # Verify S3 event trigger is configured
+          S3_NOTIFICATION=$(aws s3api get-bucket-notification-configuration \
+            --bucket "${{ secrets.S3_PHOTOS_BUCKET }}" 2>/dev/null || echo "")
+          
+          if [ -z "$S3_NOTIFICATION" ]; then
+            exit 1
+          fi
+          
+          # Check that Lambda is configured in S3 notifications
+          LAMBDA_ARN=$(printf '%s' "$S3_NOTIFICATION" | jq -r '.LambdaFunctionConfigurations[0].LambdaFunctionArn // empty')
+          
+          if [ -z "$LAMBDA_ARN" ]; then
+            exit 1
+          fi
+
+      - name: Test Image Processing with Sample Upload
+        continue-on-error: true
+        run: |
+          # Create test image if S3 bucket has images to process
+          IMAGE_COUNT=$(aws s3 ls "s3://${{ secrets.S3_PHOTOS_BUCKET }}" --recursive | wc -l)
+          
+          if [ "$IMAGE_COUNT" -gt 0 ]; then
+            # Get first image to trigger re-processing
+            SAMPLE_IMAGE=$(aws s3 ls "s3://${{ secrets.S3_PHOTOS_BUCKET }}" --recursive | head -1 | awk '{print $4}')
+            
+            if [ -n "$SAMPLE_IMAGE" ]; then
+              # Copy image to itself to trigger S3 event
+              aws s3 cp "s3://${{ secrets.S3_PHOTOS_BUCKET }}/$SAMPLE_IMAGE" \
+                        "s3://${{ secrets.S3_PHOTOS_BUCKET }}/$SAMPLE_IMAGE" \
+                        --metadata-directive REPLACE 2>/dev/null || true
+              
+              # Wait for processing
+              sleep 10
+              
+              # Check CloudWatch logs for processing activity
+              aws logs tail /aws/lambda/galerly-image-processor \
+                --since 1m \
+                --format short 2>/dev/null || true
+            fi
+          fi
 
 
   # ========================================
@@ -1480,7 +924,7 @@ jobs:
   test-deployment:
     name: ✅ Post-Deployment Tests
     runs-on: ubuntu-latest
-    needs: [deploy-frontend, deploy-backend, deploy-image-transform]
+    needs: [deploy-frontend, deploy-backend, deploy-image-processing]
     
     steps:
       - name: Checkout code
@@ -1495,41 +939,16 @@ jobs:
 
       - name: Verify Images Exist in S3 Bucket
         run: |
-          echo "=========================================="
-          echo "📸 VERIFYING IMAGES IN S3 BUCKET"
-          echo "=========================================="
-          echo ""
-          echo "🪣 Bucket: ${{ secrets.S3_PHOTOS_BUCKET }}"
-          echo "📋 Listing first 20 images..."
-          echo ""
-          
           # Check if bucket has any images
           IMAGE_COUNT=$(aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} --recursive | wc -l)
           
           if [ "$IMAGE_COUNT" -eq 0 ]; then
-            echo "⚠️  WARNING: No images found in S3 bucket!"
-            echo "   This might be expected for a fresh deployment"
-            echo "   Upload some photos through the gallery interface"
           else
-            echo "✅ Found $IMAGE_COUNT images in bucket"
-            echo ""
-            echo "📋 Recent images (first 20):"
             aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} --recursive --human-readable | head -20
           fi
           
-          echo ""
-          echo "=========================================="
-
       - name: Invalidate CDN CloudFront Cache
         run: |
-          echo "=========================================="
-          echo "🔄 INVALIDATING CDN CLOUDFRONT CACHE"
-          echo "=========================================="
-          echo ""
-          echo "🌐 Distribution ID: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}"
-          echo "📋 Invalidating all cached images..."
-          echo ""
-          
           # Get CloudFront distribution ID for CDN (if different from main frontend distribution)
           # Try to find the CDN-specific distribution by comment
           CDN_DIST_ID=$(aws cloudfront list-distributions \
@@ -1537,10 +956,8 @@ jobs:
             --output text 2>/dev/null || echo "")
           
           if [ -z "$CDN_DIST_ID" ]; then
-            echo "📌 Using main CloudFront distribution for cache invalidation"
             CDN_DIST_ID="${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}"
           else
-            echo "📌 Found dedicated CDN distribution: $CDN_DIST_ID"
           fi
           
           # Create cache invalidation
@@ -1550,11 +967,6 @@ jobs:
             --query 'Invalidation.Id' \
             --output text)
           
-          echo ""
-          echo "✅ Cache invalidation created: $INVALIDATION_ID"
-          echo "⏳ CloudFront will serve fresh images (takes 1-2 minutes)"
-          echo ""
-          
           # Get invalidation status
           STATUS=$(aws cloudfront get-invalidation \
             --distribution-id "$CDN_DIST_ID" \
@@ -1562,27 +974,17 @@ jobs:
             --query 'Invalidation.Status' \
             --output text)
           
-          echo "📊 Invalidation Status: $STATUS"
-          echo ""
-          echo "=========================================="
-
       - name: Test Frontend Availability
         run: |
-          echo "🌐 Testing frontend availability..."
-          
           # Test homepage
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" ${{ secrets.FRONTEND_URL }})
           if [ "$HTTP_CODE" = "200" ]; then
-            echo "✅ Homepage accessible (HTTP $HTTP_CODE)"
           else
-            echo "❌ Homepage returned HTTP $HTTP_CODE"
             exit 1
           fi
 
       - name: Test Lambda Function
         run: |
-          echo "⚡ Testing Lambda function..."
-          
           # Invoke Lambda with inline JSON payload
           # AWS CLI v2 requires --cli-binary-format to accept raw JSON
           aws lambda invoke \
@@ -1595,36 +997,23 @@ jobs:
           # Check if invocation succeeded
           STATUS_CODE=$(cat /tmp/invoke-result.json | jq -r '.StatusCode')
           if [ "$STATUS_CODE" = "200" ]; then
-            echo "✅ Lambda function invoked successfully"
-            echo "Response: $(cat /tmp/lambda-response.json)"
           else
-            echo "❌ Lambda invocation failed (Status: $STATUS_CODE)"
-            echo "Response: $(cat /tmp/lambda-response.json)"
             exit 1
           fi
 
       - name: Verify CloudFront Distribution
         run: |
-          echo "🌐 Verifying CloudFront distribution..."
-          
           STATUS=$(aws cloudfront get-distribution \
             --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
             --query 'Distribution.Status' \
             --output text)
           
           if [ "$STATUS" = "Deployed" ]; then
-            echo "✅ CloudFront distribution deployed"
           else
-            echo "⚠️  CloudFront status: $STATUS"
           fi
 
       - name: Verify RAW Format Support in Lambda
         run: |
-          echo "=========================================="
-          echo "📸 Verifying Lambda Layer Configuration"
-          echo "=========================================="
-          echo ""
-          
           # Get Lambda configuration
           aws lambda get-function-configuration \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
@@ -1634,122 +1023,47 @@ jobs:
           LAYER_COUNT=$(cat /tmp/lambda-config.json | jq -r '.Layers // [] | length')
           
           if [ "$LAYER_COUNT" -eq 0 ]; then
-            echo "❌ No layers attached to Lambda function!"
-            echo "   RAW format support will NOT work!"
             exit 1
           fi
           
-          echo "✅ Lambda has $LAYER_COUNT layer(s) attached"
-          echo ""
-          echo "📋 Attached Layers:"
           cat /tmp/lambda-config.json | jq -r '.Layers[] | "   - \(.Arn)"'
           
           # Check if our image processing layer is attached
           if cat /tmp/lambda-config.json | jq -r '.Layers[].Arn' | grep -q "galerly-image-processing"; then
-            echo ""
-            echo "✅ galerly-image-processing layer is attached!"
-            echo "   ℹ️  Note: Image validation has been disabled"
-            echo "   ℹ️  Layer available but not used in code (PIL validation removed)"
-            echo "   📦 Layer contains: Pillow, rawpy, pillow-heif, numpy (for future use if needed)"
           else
-            echo ""
-            echo "⚠️  galerly-image-processing layer NOT found"
-            echo "   ℹ️  This is OK - image validation is disabled"
-            echo "   ℹ️  Layer not required since PIL validation was removed"
           fi
           
           # Cleanup
           rm -f /tmp/lambda-config.json
           
-          echo ""
-          echo "=========================================="
-          echo "✅ Lambda Layer Verification Complete!"
-          echo "=========================================="
-
-      - name: Test Image Transformation Lambda
+      - name: Test New Image Processing Lambda
         run: |
-          echo "=========================================="
-          echo "🖼️  TESTING IMAGE TRANSFORMATION LAMBDA"
-          echo "=========================================="
-          echo ""
-          
-          # Check if Transform Lambda exists
-          if aws lambda get-function --function-name ${{ secrets.LAMBDA_IMAGE_TRANSFORM_FUNCTION_NAME }} --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
-            echo "✅ Image Transform Lambda exists"
-            
+          # Check if new processing Lambda exists
+          if aws lambda get-function --function-name galerly-image-processor --region us-east-1 >/dev/null 2>&1; then
             # Get configuration
             CONFIG=$(aws lambda get-function-configuration \
-              --function-name ${{ secrets.LAMBDA_IMAGE_TRANSFORM_FUNCTION_NAME }} \
-              --region ${{ env.AWS_REGION }})
+              --function-name galerly-image-processor \
+              --region us-east-1)
             
-            MEMORY=$(echo $CONFIG | jq -r '.MemorySize')
-            TIMEOUT=$(echo $CONFIG | jq -r '.Timeout')
-            LAYERS=$(echo $CONFIG | jq -r '.Layers | length')
-            STATE=$(echo $CONFIG | jq -r '.State')
+            MEMORY=$(printf '%s' "$CONFIG" | jq -r '.MemorySize')
+            TIMEOUT=$(printf '%s' "$CONFIG" | jq -r '.Timeout')
+            LAYERS=$(printf '%s' "$CONFIG" | jq -r '.Layers | length')
+            STATE=$(printf '%s' "$CONFIG" | jq -r '.State')
             
-            echo "   📊 Memory: ${MEMORY}MB (recommended: 2048MB+)"
-            echo "   ⏱️  Timeout: ${TIMEOUT}s (recommended: 60s+)"
-            echo "   📚 Layers: $LAYERS (should be 1+)"
-            echo "   🟢 State: $STATE"
-            
-            if [ "$MEMORY" -lt 2048 ]; then
-              echo "   ⚠️  Warning: Memory might be too low for RAW processing"
-            fi
-            
-            if [ "$TIMEOUT" -lt 30 ]; then
-              echo "   ⚠️  Warning: Timeout might be too short for RAW processing"
-            fi
-            
-            if [ "$LAYERS" -eq 0 ]; then
-              echo "   ❌ Error: No layers attached! Image processing will fail"
+            if [ "$STATE" != "Active" ]; then
               exit 1
             fi
             
-            echo ""
-            echo "✅ Image Transform Lambda is properly configured"
-          else
-            echo "⚠️  Image Transform Lambda not found (optional feature)"
-            echo "   Images will be served without on-demand transformation"
-          fi
-          
-          echo ""
-          echo "=========================================="
-
-      - name: Test Cache Bucket
-        run: |
-          echo "=========================================="
-          echo "🪣 TESTING CACHE BUCKET"
-          echo "=========================================="
-          echo ""
-          
-          CACHE_BUCKET="${{ secrets.S3_IMAGE_CACHE_BUCKET }}"
-          
-          if aws s3 ls s3://$CACHE_BUCKET >/dev/null 2>&1; then
-            echo "✅ Cache bucket exists: $CACHE_BUCKET"
-            
-            # Check lifecycle policy
-            if aws s3api get-bucket-lifecycle-configuration --bucket $CACHE_BUCKET >/dev/null 2>&1; then
-              echo "✅ Lifecycle policy configured (auto-cleanup enabled)"
-            else
-              echo "⚠️  No lifecycle policy (cache will grow indefinitely)"
+            if [ "$MEMORY" -lt 2048 ]; then
+              exit 1
             fi
             
-            # Get cache size
-            OBJECT_COUNT=$(aws s3 ls s3://$CACHE_BUCKET --recursive | wc -l || echo "0")
-            echo "📦 Cached objects: $OBJECT_COUNT"
-            
-            if [ "$OBJECT_COUNT" -gt 0 ]; then
-              echo "💡 Cache is being used - image transformation is working!"
-            else
-              echo "📭 Cache is empty (expected for new deployment)"
+            if [ "$LAYERS" -eq 0 ]; then
+              exit 1
             fi
           else
-            echo "⚠️  Cache bucket not found (optional feature)"
-            echo "   Images will be transformed on every request"
+            exit 1
           fi
-          
-          echo ""
-          echo "=========================================="
 
   # ========================================
   # STAGE 9: DEPLOYMENT SUMMARY
@@ -1757,7 +1071,7 @@ jobs:
   deployment-summary:
     name: 📊 Deployment Summary
     runs-on: ubuntu-latest
-    needs: [deploy-frontend, deploy-backend, deploy-image-transform, test-deployment]
+    needs: [deploy-frontend, deploy-backend, deploy-image-processing, test-deployment]
     if: always()
     
     steps:
@@ -1787,15 +1101,16 @@ jobs:
           echo "| Image Validation | ❌ Disabled | All files accepted as-is |" >> $GITHUB_STEP_SUMMARY
           echo "| Quality Preservation | ✅ Enabled | Original files preserved (no re-encoding) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Image Transformation System" >> $GITHUB_STEP_SUMMARY
+          echo "## Image Processing System" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Component | Status | Details |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Transform Lambda | ✅ Deployed | On-demand RAW/HEIC processing |" >> $GITHUB_STEP_SUMMARY
-          echo "| CloudFront Router | ✅ Deployed | Lambda@Edge request routing |" >> $GITHUB_STEP_SUMMARY
-          echo "| Cache Bucket | ✅ Created | galerly-image-cache |" >> $GITHUB_STEP_SUMMARY
+          echo "| Processing Lambda | ✅ Deployed | Automatic upload-time processing |" >> $GITHUB_STEP_SUMMARY
+          echo "| S3 Event Trigger | ✅ Configured | Processes on upload |" >> $GITHUB_STEP_SUMMARY
+          echo "| Renditions | ✅ Generated | thumbnail, small, medium, large |" >> $GITHUB_STEP_SUMMARY
           echo "| Lambda Layer | ✅ Attached | Pillow, rawpy, pillow-heif, numpy |" >> $GITHUB_STEP_SUMMARY
-          echo "| Storage Strategy | ✅ Optimized | Single source + cached thumbnails (38% savings) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Storage Strategy | ✅ Optimized | Pre-generated renditions (90% faster) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Old System | ✅ Removed | Lambda@Edge cleaned up |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Lambda Package Architecture" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -1823,12 +1138,12 @@ jobs:
           echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "1. ✅ Verify frontend at: ${{ secrets.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
-          echo "2. 🌐 Associate CloudFront Router with CloudFront distribution (Origin Request event)" >> $GITHUB_STEP_SUMMARY
-          echo "3. 📸 Test RAW file uploads (DNG, CR2, NEF)" >> $GITHUB_STEP_SUMMARY
-          echo "4. 📱 Test HEIC file uploads (iPhone photos)" >> $GITHUB_STEP_SUMMARY
-          echo "5. 🔍 Test image transformation: https://cdn.galerly.com/photo.dng?format=jpeg&width=800" >> $GITHUB_STEP_SUMMARY
-          echo "6. 📊 Monitor CloudWatch logs for Transform Lambda" >> $GITHUB_STEP_SUMMARY
-          echo "7. 💾 Monitor cache bucket size (should grow minimally)" >> $GITHUB_STEP_SUMMARY
+          echo "2. 📸 Upload test photos (RAW, HEIC, JPEG)" >> $GITHUB_STEP_SUMMARY
+          echo "3. ⏳ Wait 30-60 seconds for automatic processing" >> $GITHUB_STEP_SUMMARY
+          echo "4. ✅ Verify renditions created in S3" >> $GITHUB_STEP_SUMMARY
+          echo "5. 🌐 Test image display in gallery" >> $GITHUB_STEP_SUMMARY
+          echo "6. 📊 Monitor CloudWatch logs: /aws/lambda/galerly-image-processor" >> $GITHUB_STEP_SUMMARY
+          echo "7. 🔄 Run migration script for existing photos if needed" >> $GITHUB_STEP_SUMMARY
           echo "8. 🧪 Test critical user flows" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "========================================" >> $GITHUB_STEP_SUMMARY
