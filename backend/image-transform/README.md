@@ -11,6 +11,27 @@ High-performance image transformation system with cache-first architecture.
 - ✅ **Fast Delivery** - CloudFront edge caching
 - ✅ **Cost Efficient** - Transform once, cache forever
 
+## ☁️ CloudFront Distributions
+
+Galerly uses TWO CloudFront distributions:
+
+### 1. Frontend Distribution (EEUAF5M39R2Z5)
+- **Domain**: galerly.com, www.galerly.com
+- **Origin**: galerly-frontend-app S3 bucket
+- **Purpose**: Serves frontend HTML/CSS/JS files
+- **Lambda@Edge**: None
+
+### 2. Image CDN Distribution (E3P0EU1X4VGR58) ⭐
+- **Domain**: cdn.galerly.com
+- **Origin**: galerly-images-storage S3 bucket
+- **Purpose**: Serves and transforms images
+- **Lambda@Edge**: galerly-cloudfront-router (origin-request event)
+- **Used by**: Image transformation system
+
+**Important**: The image transformation system uses the **Image CDN Distribution** (E3P0EU1X4VGR58).
+
+GitHub secret `CLOUDFRONT_DISTRIBUTION_ID` must be set to `E3P0EU1X4VGR58`.
+
 ## 🏗️ Architecture
 
 ```

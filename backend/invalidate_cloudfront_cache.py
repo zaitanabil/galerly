@@ -21,8 +21,14 @@ cloudfront = boto3.client(
     aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY')
 )
 
-# CloudFront Distribution ID for galerly.com frontend
-DISTRIBUTION_ID = 'EEUAF5M39R2Z5'
+# CloudFront Distribution IDs
+# Frontend distribution (galerly.com, www.galerly.com)
+FRONTEND_DISTRIBUTION_ID = 'EEUAF5M39R2Z5'
+# Image CDN distribution (cdn.galerly.com) - used for image transformations
+IMAGE_CDN_DISTRIBUTION_ID = 'E3P0EU1X4VGR58'
+
+# Use frontend distribution for cache invalidation
+DISTRIBUTION_ID = FRONTEND_DISTRIBUTION_ID
 
 def invalidate_cache(paths):
     """
