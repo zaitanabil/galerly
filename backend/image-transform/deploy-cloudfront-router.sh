@@ -78,6 +78,41 @@ if aws lambda get-function --function-name $FUNCTION_NAME --region $REGION 2>/de
         --zip-file fileb://cloudfront-router.zip \
         --region $REGION
     
+    # Wait for function update to complete
+    # Function enters "Pending" during update and must return to "Active"
+    printf "⏳ Waiting for function update to complete"
+    MAX_WAIT=90
+    WAITED=0
+    while [ $WAITED -lt $MAX_WAIT ]; do
+        STATE=$(aws lambda get-function \
+            --function-name $FUNCTION_NAME \
+            --region $REGION \
+            --query 'Configuration.State' \
+            --output text)
+        
+        LAST_UPDATE_STATUS=$(aws lambda get-function \
+            --function-name $FUNCTION_NAME \
+            --region $REGION \
+            --query 'Configuration.LastUpdateStatus' \
+            --output text)
+        
+        if [ "$STATE" = "Active" ] && [ "$LAST_UPDATE_STATUS" = "Successful" ]; then
+            printf "\n"
+            break
+        fi
+        
+        printf "."
+        sleep 2
+        WAITED=$((WAITED + 2))
+    done
+    
+    if [ "$STATE" != "Active" ] || [ "$LAST_UPDATE_STATUS" != "Successful" ]; then
+        printf "\n"
+        echo "⚠️  Warning: Update did not complete within ${MAX_WAIT}s"
+        echo "   State: $STATE, LastUpdateStatus: $LAST_UPDATE_STATUS"
+        echo "   Attempting to publish version anyway..."
+    fi
+    
     # Publish new version
     VERSION=$(aws lambda publish-version \
         --function-name $FUNCTION_NAME \
@@ -97,6 +132,34 @@ else
         --timeout 5 \
         --memory-size 128 \
         --region $REGION
+    
+    # Wait for function to become active
+    # Lambda functions start in "Pending" state and must reach "Active" before publishing
+    printf "⏳ Waiting for Lambda function to become active"
+    MAX_WAIT=60
+    WAITED=0
+    while [ $WAITED -lt $MAX_WAIT ]; do
+        STATE=$(aws lambda get-function \
+            --function-name $FUNCTION_NAME \
+            --region $REGION \
+            --query 'Configuration.State' \
+            --output text)
+        
+        if [ "$STATE" = "Active" ]; then
+            printf "\n"
+            break
+        fi
+        
+        printf "."
+        sleep 2
+        WAITED=$((WAITED + 2))
+    done
+    
+    if [ "$STATE" != "Active" ]; then
+        printf "\n"
+        echo "⚠️  Warning: Function did not become active within ${MAX_WAIT}s (current state: $STATE)"
+        echo "   Attempting to publish version anyway..."
+    fi
     
     # Publish version
     VERSION=$(aws lambda publish-version \
