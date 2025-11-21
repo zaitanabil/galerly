@@ -4,15 +4,25 @@ Routes image transformation requests to the image-transform Lambda
 
 Deploy this to Lambda@Edge for CloudFront Origin Request events
 Size limit: 1MB (no heavy dependencies)
+
+Configuration:
+- Set TRANSFORM_LAMBDA_ARN environment variable during deployment
+- Attach to CloudFront as Origin Request trigger
+- Ensure Lambda@Edge role has lambda:InvokeFunction permission
 """
 import json
 import boto3
-import base64
+import os
 
-lambda_client = boto3.client('lambda')
+lambda_client = boto3.client('lambda', region_name='us-east-1')
 
-# Image transform Lambda ARN
-TRANSFORM_LAMBDA_ARN = 'arn:aws:lambda:us-east-1:ACCOUNT_ID:function:galerly-image-transform'
+# Image transform Lambda ARN from environment variable
+# Lambda@Edge must invoke Lambda in us-east-1
+# Set via: aws lambda update-function-configuration --environment Variables={TRANSFORM_LAMBDA_ARN=...}
+TRANSFORM_LAMBDA_ARN = os.environ.get('TRANSFORM_LAMBDA_ARN')
+
+if not TRANSFORM_LAMBDA_ARN:
+    raise ValueError('TRANSFORM_LAMBDA_ARN environment variable is required')
 
 def lambda_handler(event, context):
     """

@@ -54,16 +54,76 @@ EOF
         --role-name lambda-edge-role \
         --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
     
+    # Create inline policy for Lambda invocation
+    # Lambda@Edge needs to invoke the image-transform Lambda
+    cat > /tmp/lambda-invoke-policy.json << EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "lambda:InvokeFunction"
+      ],
+      "Resource": "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:galerly-image-transform"
+    }
+  ]
+}
+EOF
+    
+    aws iam put-role-policy \
+        --role-name lambda-edge-role \
+        --policy-name LambdaInvokePolicy \
+        --policy-document file:///tmp/lambda-invoke-policy.json
+    
+    echo "✅ IAM policies attached (CloudWatch Logs + Lambda Invoke)"
+    
     # Wait for role to be ready
     echo "⏳ Waiting for IAM role to propagate..."
     sleep 10
     
     echo "✅ IAM role created"
     echo ""
+else
+    # Role exists - verify it has Lambda invoke permission
+    echo "✅ IAM role exists"
+    
+    # Update inline policy to ensure correct permissions
+    cat > /tmp/lambda-invoke-policy.json << EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "lambda:InvokeFunction"
+      ],
+      "Resource": "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:galerly-image-transform"
+    }
+  ]
+}
+EOF
+    
+    aws iam put-role-policy \
+        --role-name lambda-edge-role \
+        --policy-name LambdaInvokePolicy \
+        --policy-document file:///tmp/lambda-invoke-policy.json \
+        2>/dev/null || true
+    
+    echo "✅ Lambda invoke permission verified"
+    echo ""
 fi
 
 # Create deployment package
 echo "📦 Creating Lambda@Edge package..."
+
+# Get the image transform Lambda ARN
+TRANSFORM_LAMBDA_ARN="arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:galerly-image-transform"
+echo "📋 Transform Lambda ARN: $TRANSFORM_LAMBDA_ARN"
+echo ""
+
+# Create deployment package from source
+# No modifications to source file - ARN set via environment variable
 rm -f cloudfront-router.zip
 zip cloudfront-router.zip cloudfront-router.py
 
@@ -110,8 +170,42 @@ if aws lambda get-function --function-name $FUNCTION_NAME --region $REGION 2>/de
         printf "\n"
         echo "⚠️  Warning: Update did not complete within ${MAX_WAIT}s"
         echo "   State: $STATE, LastUpdateStatus: $LAST_UPDATE_STATUS"
-        echo "   Attempting to publish version anyway..."
+        echo "   Attempting to update configuration anyway..."
     fi
+    
+    # Update environment variables
+    echo "🔧 Updating environment variables..."
+    aws lambda update-function-configuration \
+        --function-name $FUNCTION_NAME \
+        --environment "Variables={TRANSFORM_LAMBDA_ARN=${TRANSFORM_LAMBDA_ARN}}" \
+        --region $REGION \
+        --no-cli-pager
+    
+    # Wait for configuration update
+    printf "⏳ Waiting for configuration update"
+    WAITED=0
+    while [ $WAITED -lt $MAX_WAIT ]; do
+        STATE=$(aws lambda get-function \
+            --function-name $FUNCTION_NAME \
+            --region $REGION \
+            --query 'Configuration.State' \
+            --output text)
+        
+        LAST_UPDATE_STATUS=$(aws lambda get-function \
+            --function-name $FUNCTION_NAME \
+            --region $REGION \
+            --query 'Configuration.LastUpdateStatus' \
+            --output text)
+        
+        if [ "$STATE" = "Active" ] && [ "$LAST_UPDATE_STATUS" = "Successful" ]; then
+            printf "\n"
+            break
+        fi
+        
+        printf "."
+        sleep 2
+        WAITED=$((WAITED + 2))
+    done
     
     # Publish new version
     VERSION=$(aws lambda publish-version \
@@ -158,8 +252,42 @@ else
     if [ "$STATE" != "Active" ]; then
         printf "\n"
         echo "⚠️  Warning: Function did not become active within ${MAX_WAIT}s (current state: $STATE)"
-        echo "   Attempting to publish version anyway..."
+        echo "   Attempting to configure environment anyway..."
     fi
+    
+    # Set environment variables
+    echo "🔧 Configuring environment variables..."
+    aws lambda update-function-configuration \
+        --function-name $FUNCTION_NAME \
+        --environment "Variables={TRANSFORM_LAMBDA_ARN=${TRANSFORM_LAMBDA_ARN}}" \
+        --region $REGION \
+        --no-cli-pager
+    
+    # Wait for configuration update
+    printf "⏳ Waiting for configuration update"
+    WAITED=0
+    while [ $WAITED -lt $MAX_WAIT ]; do
+        STATE=$(aws lambda get-function \
+            --function-name $FUNCTION_NAME \
+            --region $REGION \
+            --query 'Configuration.State' \
+            --output text)
+        
+        LAST_UPDATE_STATUS=$(aws lambda get-function \
+            --function-name $FUNCTION_NAME \
+            --region $REGION \
+            --query 'Configuration.LastUpdateStatus' \
+            --output text)
+        
+        if [ "$STATE" = "Active" ] && [ "$LAST_UPDATE_STATUS" = "Successful" ]; then
+            printf "\n"
+            break
+        fi
+        
+        printf "."
+        sleep 2
+        WAITED=$((WAITED + 2))
+    done
     
     # Publish version
     VERSION=$(aws lambda publish-version \
@@ -179,13 +307,33 @@ FUNCTION_ARN=$(aws lambda get-function \
     --output text)
 
 echo ""
-echo "✅ Lambda@Edge deployed!"
+echo "✅ Lambda@Edge deployed successfully!"
 echo ""
-echo "📋 Next steps:"
-echo "   1. Update cloudfront-router.py with your transform Lambda ARN"
-echo "   2. Associate with CloudFront distribution:"
-echo "      - Event type: Origin Request"
-echo "      - ARN: ${FUNCTION_ARN}:${VERSION}"
-echo "   3. Test transformation requests"
+echo "📋 Function Details:"
+echo "   Function ARN: ${FUNCTION_ARN}:${VERSION}"
+echo "   Transform Lambda: $TRANSFORM_LAMBDA_ARN"
+echo ""
+echo "🔧 CloudFront Configuration:"
+echo "   To enable image transformation, attach this Lambda@Edge to your CloudFront distribution:"
+echo ""
+echo "   1. Open CloudFront console"
+echo "   2. Select distribution (cdn.galerly.com)"
+echo "   3. Go to: Behaviors → Edit default behavior"
+echo "   4. Scroll to: Function associations → Lambda@Edge"
+echo "   5. Add association:"
+echo "      Event Type: Origin Request"
+echo "      ARN: ${FUNCTION_ARN}:${VERSION}"
+echo "   6. Save and deploy (takes 5-10 minutes)"
+echo ""
+echo "   Or via AWS CLI:"
+echo "   aws cloudfront get-distribution-config --id YOUR_DISTRIBUTION_ID > dist-config.json"
+echo "   # Edit dist-config.json to add Lambda@Edge association"
+echo "   aws cloudfront update-distribution --id YOUR_DISTRIBUTION_ID --if-match ETAG --distribution-config file://dist-config.json"
+echo ""
+echo "✅ After CloudFront deployment completes:"
+echo "   - HEIC images will be converted to JPEG server-side"
+echo "   - RAW images (DNG, CR2, NEF) will be converted to JPEG server-side"
+echo "   - Image transformations (?format=jpeg&width=800) will work"
+echo "   - Client-side HEIC conversion will no longer be needed"
 echo ""
 
