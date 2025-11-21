@@ -7,54 +7,46 @@ __pycache__/
 venv/
 env/
 ENV/
+.venv
 *.egg-info/
-.pytest_cache/
-.coverage
+dist/
+build/
 
 # IDEs
-marketing/
-.cursor/
+.DS_Store
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS
-.DS_Store
-Thumbs.db
-
-# Backend
-backend/venv/
-backend/env/
-backend/*.zip
-backend/package/
-backend/.env
-backend/python/
-backend/image-processing/venv/
-backend/image-processing/*.zip
-backend/image-processing/layer/
-backend/image-processing/layer.zip
-backend/image-processing/function.zip
-
-# Logs
-*.log
-
-# Environment variables
+# Environment
 .env
 .env.local
-.env.production
-.env.development
-
-# AWS
 *.pem
 *.key
 
-# Node modules (if any)
+# AWS
+.aws-sam/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+*.cover
+
+# Logs
+*.log
+logs/
+
+# Node
 node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-# Build artifacts
-dist/
-build/
-
-tasks.txt
+# Temporary
+tmp/
+temp/
+*.tmp
+*.bak

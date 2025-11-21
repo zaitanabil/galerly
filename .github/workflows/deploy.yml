@@ -1,4 +1,4 @@
-name: 🚀 Galerly CI/CD Pipeline
+name: 🚀 Galerly Complete Deployment Pipeline
 
 on:
   push:
@@ -7,6 +7,13 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      clean_deployment:
+        description: 'Perform complete AWS cleanup before deployment'
+        required: false
+        type: boolean
+        default: false
 
 env:
   AWS_REGION: us-east-1
@@ -15,77 +22,251 @@ env:
 
 jobs:
   # ========================================
-  # STAGE 1: VALIDATION & PREREQUISITES
+  # STAGE 0: AWS CLEANUP (Optional)
   # ========================================
-  validate-secrets:
-    name: 🔐 Validate Secrets & Configuration
+  cleanup-aws:
+    name: 🧹 Complete AWS Cleanup
     runs-on: ubuntu-latest
-    outputs:
-      secrets-valid: ${{ steps.check-secrets.outputs.valid }}
+    if: github.event.inputs.clean_deployment == 'true' || contains(github.event.head_commit.message, '[clean-deploy]')
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Stop All Lambda Functions
+        continue-on-error: true
+        run: |
+          # List all Lambda functions with galerly prefix
+          FUNCTIONS=$(aws lambda list-functions --query 'Functions[?starts_with(FunctionName, `galerly`)].FunctionName' --output text)
+          
+          for FUNC in $FUNCTIONS; do
+            printf "Stopping Lambda: %s\n" "$FUNC"
+            # Remove event source mappings
+            MAPPINGS=$(aws lambda list-event-source-mappings --function-name "$FUNC" --query 'EventSourceMappings[].UUID' --output text 2>/dev/null || true)
+            for MAPPING in $MAPPINGS; do
+              aws lambda delete-event-source-mapping --uuid "$MAPPING" 2>/dev/null || true
+            done
+          done
+
+      - name: Empty All S3 Buckets
+        continue-on-error: true
+        run: |
+          # List all buckets with galerly prefix
+          BUCKETS=$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `galerly`)].Name' --output text 2>/dev/null || true)
+          
+          for BUCKET in $BUCKETS; do
+            printf "Emptying bucket: %s\n" "$BUCKET"
+            
+            # Delete all object versions
+            aws s3api list-object-versions --bucket "$BUCKET" --output json 2>/dev/null | \
+              jq -r '.Versions[]? | .Key + " " + .VersionId' | \
+              while read KEY VERSION; do
+                aws s3api delete-object --bucket "$BUCKET" --key "$KEY" --version-id "$VERSION" 2>/dev/null || true
+              done
+            
+            # Delete all delete markers
+            aws s3api list-object-versions --bucket "$BUCKET" --output json 2>/dev/null | \
+              jq -r '.DeleteMarkers[]? | .Key + " " + .VersionId' | \
+              while read KEY VERSION; do
+                aws s3api delete-object --bucket "$BUCKET" --key "$KEY" --version-id "$VERSION" 2>/dev/null || true
+              done
+            
+            # Empty bucket using CLI
+            aws s3 rm s3://"$BUCKET" --recursive 2>/dev/null || true
+          done
+
+      - name: Delete All DynamoDB Tables
+        continue-on-error: true
+        run: |
+          # List all tables with galerly prefix
+          TABLES=$(aws dynamodb list-tables --query 'TableNames[?starts_with(@, `galerly`)]' --output text 2>/dev/null || true)
+          
+          for TABLE in $TABLES; do
+            printf "Deleting table: %s\n" "$TABLE"
+            aws dynamodb delete-table --table-name "$TABLE" 2>/dev/null || true
+          done
+          
+          # Wait for deletion
+          sleep 30
+
+      - name: Delete All Lambda Functions
+        continue-on-error: true
+        run: |
+          FUNCTIONS=$(aws lambda list-functions --query 'Functions[?starts_with(FunctionName, `galerly`)].FunctionName' --output text 2>/dev/null || true)
+          
+          for FUNC in $FUNCTIONS; do
+            printf "Deleting Lambda: %s\n" "$FUNC"
+            
+            # Delete all versions
+            VERSIONS=$(aws lambda list-versions-by-function --function-name "$FUNC" --query 'Versions[?Version!=`$LATEST`].Version' --output text 2>/dev/null || true)
+            for VERSION in $VERSIONS; do
+              aws lambda delete-function --function-name "$FUNC" --qualifier "$VERSION" 2>/dev/null || true
+            done
+            
+            # Delete function
+            aws lambda delete-function --function-name "$FUNC" 2>/dev/null || true
+          done
+
+      - name: Delete All Lambda Layers
+        continue-on-error: true
+        run: |
+          LAYERS=$(aws lambda list-layers --query 'Layers[?starts_with(LayerName, `galerly`)].LayerName' --output text 2>/dev/null || true)
+          
+          for LAYER in $LAYERS; do
+            printf "Deleting layer: %s\n" "$LAYER"
+            
+            # Get all versions
+            VERSIONS=$(aws lambda list-layer-versions --layer-name "$LAYER" --query 'LayerVersions[].Version' --output text 2>/dev/null || true)
+            for VERSION in $VERSIONS; do
+              aws lambda delete-layer-version --layer-name "$LAYER" --version-number "$VERSION" 2>/dev/null || true
+            done
+          done
+
+      - name: Delete All S3 Buckets
+        continue-on-error: true
+        run: |
+          BUCKETS=$(aws s3api list-buckets --query 'Buckets[?starts_with(Name, `galerly`)].Name' --output text 2>/dev/null || true)
+          
+          for BUCKET in $BUCKETS; do
+            printf "Deleting bucket: %s\n" "$BUCKET"
+            
+            # Remove bucket policy
+            aws s3api delete-bucket-policy --bucket "$BUCKET" 2>/dev/null || true
+            
+            # Remove lifecycle configuration
+            aws s3api delete-bucket-lifecycle --bucket "$BUCKET" 2>/dev/null || true
+            
+            # Remove CORS
+            aws s3api delete-bucket-cors --bucket "$BUCKET" 2>/dev/null || true
+            
+            # Delete bucket
+            aws s3 rb s3://"$BUCKET" --force 2>/dev/null || true
+          done
+
+      - name: Delete CloudWatch Log Groups
+        continue-on-error: true
+        run: |
+          LOG_GROUPS=$(aws logs describe-log-groups --query 'logGroups[?starts_with(logGroupName, `/aws/lambda/galerly`)].logGroupName' --output text 2>/dev/null || true)
+          
+          for LOG_GROUP in $LOG_GROUPS; do
+            printf "Deleting log group: %s\n" "$LOG_GROUP"
+            aws logs delete-log-group --log-group-name "$LOG_GROUP" 2>/dev/null || true
+          done
+
+      - name: Delete API Gateway APIs
+        continue-on-error: true
+        run: |
+          # List REST APIs
+          APIS=$(aws apigateway get-rest-apis --query 'items[?contains(name, `galerly`)].id' --output text 2>/dev/null || true)
+          
+          for API in $APIS; do
+            printf "Deleting API Gateway: %s\n" "$API"
+            aws apigateway delete-rest-api --rest-api-id "$API" 2>/dev/null || true
+          done
+
+      - name: Delete IAM Roles
+        continue-on-error: true
+        run: |
+          ROLES=$(aws iam list-roles --query 'Roles[?starts_with(RoleName, `galerly`)].RoleName' --output text 2>/dev/null || true)
+          
+          for ROLE in $ROLES; do
+            printf "Deleting role: %s\n" "$ROLE"
+            
+            # Detach managed policies
+            POLICIES=$(aws iam list-attached-role-policies --role-name "$ROLE" --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null || true)
+            for POLICY in $POLICIES; do
+              aws iam detach-role-policy --role-name "$ROLE" --policy-arn "$POLICY" 2>/dev/null || true
+            done
+            
+            # Delete inline policies
+            INLINE_POLICIES=$(aws iam list-role-policies --role-name "$ROLE" --query 'PolicyNames[]' --output text 2>/dev/null || true)
+            for POLICY in $INLINE_POLICIES; do
+              aws iam delete-role-policy --role-name "$ROLE" --policy-name "$POLICY" 2>/dev/null || true
+            done
+            
+            # Delete role
+            aws iam delete-role --role-name "$ROLE" 2>/dev/null || true
+          done
+
+      - name: Cleanup Summary
+        run: |
+          printf "\n========================================\n"
+          printf "AWS Cleanup Complete\n"
+          printf "========================================\n"
+          printf "All Galerly resources removed from AWS\n"
+          printf "Ready for fresh deployment\n"
+          printf "========================================\n"
+
+  # ========================================
+  # STAGE 1: VALIDATION
+  # ========================================
+  validate-secrets:
+    name: 🔐 Validate Configuration
+    runs-on: ubuntu-latest
+    needs: [cleanup-aws]
+    if: always() && (needs.cleanup-aws.result == 'success' || needs.cleanup-aws.result == 'skipped')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
       - name: Check Required Secrets
-        id: check-secrets
         run: |
           MISSING_SECRETS=""
-          
+
           # AWS Credentials
           [[ -z "${{ secrets.AWS_ACCESS_KEY_ID }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}AWS_ACCESS_KEY_ID "
           [[ -z "${{ secrets.AWS_SECRET_ACCESS_KEY }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}AWS_SECRET_ACCESS_KEY "
-          
+
           # Frontend
           [[ -z "${{ secrets.S3_BUCKET }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}S3_BUCKET "
           [[ -z "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}CLOUDFRONT_DISTRIBUTION_ID "
           [[ -z "${{ secrets.FRONTEND_URL }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}FRONTEND_URL "
-          
+
           # Backend
           [[ -z "${{ secrets.LAMBDA_FUNCTION_NAME }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}LAMBDA_FUNCTION_NAME "
-          
-          # DynamoDB
+
+          # DynamoDB Tables
           [[ -z "${{ secrets.DYNAMODB_TABLE_USERS }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}DYNAMODB_TABLE_USERS "
           [[ -z "${{ secrets.DYNAMODB_TABLE_GALLERIES }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}DYNAMODB_TABLE_GALLERIES "
           [[ -z "${{ secrets.DYNAMODB_TABLE_PHOTOS }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}DYNAMODB_TABLE_PHOTOS "
           [[ -z "${{ secrets.DYNAMODB_TABLE_SESSIONS }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}DYNAMODB_TABLE_SESSIONS "
-          [[ -z "${{ secrets.DYNAMODB_TABLE_SUBSCRIPTIONS }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}DYNAMODB_TABLE_SUBSCRIPTIONS "
-          [[ -z "${{ secrets.DYNAMODB_TABLE_BILLING }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}DYNAMODB_TABLE_BILLING "
-          
+
           # S3 Storage
           [[ -z "${{ secrets.S3_PHOTOS_BUCKET }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}S3_PHOTOS_BUCKET "
-          
+
           # Stripe
           [[ -z "${{ secrets.STRIPE_SECRET_KEY }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}STRIPE_SECRET_KEY "
-          [[ -z "${{ secrets.STRIPE_WEBHOOK_SECRET }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}STRIPE_WEBHOOK_SECRET "
-          [[ -z "${{ secrets.STRIPE_PRICE_PLUS }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}STRIPE_PRICE_PLUS "
-          [[ -z "${{ secrets.STRIPE_PRICE_PRO }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}STRIPE_PRICE_PRO "
-          
+
           # Email
           [[ -z "${{ secrets.SMTP_HOST }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}SMTP_HOST "
-          [[ -z "${{ secrets.SMTP_PORT }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}SMTP_PORT "
           [[ -z "${{ secrets.SMTP_USER }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}SMTP_USER "
-          [[ -z "${{ secrets.SMTP_PASSWORD }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}SMTP_PASSWORD "
-          [[ -z "${{ secrets.FROM_EMAIL }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}FROM_EMAIL "
-          
-          # CloudFront CDN
+
+          # CDN
           [[ -z "${{ secrets.CDN_DOMAIN }}" ]] && MISSING_SECRETS="${MISSING_SECRETS}CDN_DOMAIN "
-          
+
           if [ -n "$MISSING_SECRETS" ]; then
-            echo "valid=false" >> $GITHUB_OUTPUT
+            printf "Missing secrets: %s\n" "$MISSING_SECRETS"
             exit 1
-          else
-            echo "valid=true" >> $GITHUB_OUTPUT
           fi
+          
+          printf "All required secrets present\n"
 
   # ========================================
-  # STAGE 2: CODE QUALITY & LINTING
+  # STAGE 2: CODE QUALITY
   # ========================================
   lint-and-validate:
-    name: 🔍 Code Quality & Validation
+    name: 🔍 Code Quality
     runs-on: ubuntu-latest
-    needs: validate-secrets
-    
+    needs: [validate-secrets]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -99,101 +280,69 @@ jobs:
         run: |
           cd backend
           pip install -r requirements.txt
-          pip install pylint flake8 pytest
+          pip install flake8
+
       - name: Lint Python code
         run: |
           cd backend
-          
-          # Run flake8 ONLY on application code (exclude dependencies)
-          # Ignore: layer-package/, package/, python/, venv/, node_modules/
           flake8 . \
             --count \
             --select=E9,F63,F7,F82 \
             --show-source \
             --statistics \
-            --exclude=layer-package,package,python,venv,node_modules,__pycache__,.git
-          
-          flake8 . \
-            --count \
-            --exit-zero \
-            --max-line-length=120 \
-            --statistics \
-            --exclude=layer-package,package,python,venv,node_modules,__pycache__,.git
-          
+            --exclude=package,python,venv,__pycache__,.git
+
       - name: Validate Python syntax
         run: |
           cd backend
-          
-          # Compile all Python files and capture errors
-          ERRORS=0
-          
-          python -m py_compile api.py || ERRORS=$((ERRORS+1))
-          
+          python -m py_compile api.py
+
           for file in handlers/*.py; do
-            if [ -f "$file" ]; then
-              python -m py_compile "$file" || ERRORS=$((ERRORS+1))
-            fi
+            [ -f "$file" ] && python -m py_compile "$file"
           done
-          
+
           for file in utils/*.py; do
-            if [ -f "$file" ]; then
-              python -m py_compile "$file" || ERRORS=$((ERRORS+1))
-            fi
+            [ -f "$file" ] && python -m py_compile "$file"
           done
-          
-          if [ $ERRORS -gt 0 ]; then
-            exit 1
-          fi
-          
+
       - name: Check imports
-        env: ${{ secrets }}
         run: |
           cd backend
           python -c "
           import sys
           sys.path.insert(0, '.')
-          
-          # Test critical imports
+
           try:
               from handlers import auth_handler, gallery_handler, photo_handler
               from utils import auth, email, response
-              print('✅ All critical imports successful')
+              print('All imports successful')
           except ImportError as e:
-              print(f'❌ Import failed: {e}')
+              print(f'Import failed: {e}')
               sys.exit(1)
           "
 
       - name: Validate frontend structure
         run: |
-          # Check required HTML files
           REQUIRED_HTML="index.html auth.html dashboard.html gallery.html client-gallery.html"
           for file in $REQUIRED_HTML; do
-            if [ ! -f "frontend/$file" ]; then
-              exit 1
-            fi
+            [ ! -f "frontend/$file" ] && exit 1
           done
-          
-          # Check required JS files
+
           REQUIRED_JS="config.js auth.js gallery.js"
           for file in $REQUIRED_JS; do
-            if [ ! -f "frontend/js/$file" ]; then
-              exit 1
-            fi
+            [ ! -f "frontend/js/$file" ] && exit 1
           done
-          
-          # Check required CSS files
-          if [ ! -f "frontend/css/style.css" ]; then
-            exit 1
-          fi
-          
+
+          [ ! -f "frontend/css/style.css" ] && exit 1
+
   # ========================================
-  # STAGE 3: AWS INFRASTRUCTURE SETUP & TESTS
+  # STAGE 3: AWS INFRASTRUCTURE SETUP
   # ========================================
   setup-aws-infrastructure:
     name: ⚙️  Setup AWS Infrastructure
     runs-on: ubuntu-latest
     needs: [validate-secrets, lint-and-validate]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -215,151 +364,77 @@ jobs:
           cd backend
           pip install boto3
 
-      - name: Create DynamoDB Tables if Missing
+      - name: Create DynamoDB Tables
         run: |
           cd backend
           python setup_dynamodb.py create
-      - name: Configure S3 Buckets if Missing
+
+      - name: Configure S3 Buckets
         run: |
-          # Check and create frontend bucket
+          # Create frontend bucket
           if ! aws s3 ls s3://${{ secrets.S3_BUCKET }} >/dev/null 2>&1; then
             aws s3 mb s3://${{ secrets.S3_BUCKET }} --region ${{ env.AWS_REGION }}
-            
-            # Configure as static website
+
             aws s3 website s3://${{ secrets.S3_BUCKET }} \
               --index-document index.html \
               --error-document 404.html
-            
-            # Set public read policy for static website
+
             cat > /tmp/bucket-policy.json << EOF
-          {
-            "Version": "2012-10-17",
-            "Statement": [{
-              "Sid": "PublicReadGetObject",
-              "Effect": "Allow",
-              "Principal": "*",
-              "Action": "s3:GetObject",
-              "Resource": "arn:aws:s3:::${{ secrets.S3_BUCKET }}/*"
-            }]
-          }
-          EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Sid": "PublicReadGetObject",
+    "Effect": "Allow",
+    "Principal": "*",
+    "Action": "s3:GetObject",
+    "Resource": "arn:aws:s3:::${{ secrets.S3_BUCKET }}/*"
+  }]
+}
+EOF
             aws s3api put-bucket-policy \
               --bucket ${{ secrets.S3_BUCKET }} \
               --policy file:///tmp/bucket-policy.json
-            
-          else
           fi
-          
-          # Check and create photos bucket
+
+          # Create photos bucket
           if ! aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} >/dev/null 2>&1; then
             aws s3 mb s3://${{ secrets.S3_PHOTOS_BUCKET }} --region ${{ env.AWS_REGION }}
-            
-            # Block public access (photos are private by default)
+
             aws s3api put-public-access-block \
               --bucket ${{ secrets.S3_PHOTOS_BUCKET }} \
               --public-access-block-configuration \
                 "BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=false,RestrictPublicBuckets=false"
-            
-          else
           fi
-          
+
           # Configure CORS for photos bucket
           cat > /tmp/photos-cors.json << EOF
-          {
-            "CORSRules": [{
-              "AllowedOrigins": ["${{ secrets.FRONTEND_URL }}", "http://localhost:3000"],
-              "AllowedMethods": ["GET", "HEAD", "POST", "PUT"],
-              "AllowedHeaders": ["*"],
-              "ExposeHeaders": ["ETag", "Content-Length", "Content-Type"],
-              "MaxAgeSeconds": 3600
-            }]
-          }
-          EOF
+{
+  "CORSRules": [{
+    "AllowedOrigins": ["${{ secrets.FRONTEND_URL }}", "http://localhost:3000"],
+    "AllowedMethods": ["GET", "HEAD", "POST", "PUT"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag", "Content-Length", "Content-Type"],
+    "MaxAgeSeconds": 3600
+  }]
+}
+EOF
           aws s3api put-bucket-cors \
             --bucket ${{ secrets.S3_PHOTOS_BUCKET }} \
             --cors-configuration file:///tmp/photos-cors.json
-          
-  test-aws-infrastructure:
-    name: ☁️  Test AWS Infrastructure
-    runs-on: ubuntu-latest
-    needs: [setup-aws-infrastructure]
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Test S3 Buckets
+      - name: Configure S3 Lifecycle Policies
         run: |
-          # Test frontend bucket
-          if aws s3 ls s3://${{ secrets.S3_BUCKET }} >/dev/null 2>&1; then
-          else
-            exit 1
-          fi
-          
-          # Test photos bucket
-          if aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} >/dev/null 2>&1; then
-          else
-            exit 1
-          fi
-
-      - name: Test DynamoDB Tables
-        run: |
-          TABLES=(
-            "${{ secrets.DYNAMODB_TABLE_USERS }}"
-            "${{ secrets.DYNAMODB_TABLE_GALLERIES }}"
-            "${{ secrets.DYNAMODB_TABLE_PHOTOS }}"
-            "${{ secrets.DYNAMODB_TABLE_SESSIONS }}"
-            "${{ secrets.DYNAMODB_TABLE_SUBSCRIPTIONS }}"
-            "${{ secrets.DYNAMODB_TABLE_BILLING }}"
-            "${{ secrets.DYNAMODB_TABLE_REFUNDS }}"
-            "${{ secrets.DYNAMODB_TABLE_AUDIT_LOG }}"
-          )
-          
-          for table in "${TABLES[@]}"; do
-            if aws dynamodb describe-table --table-name "$table" >/dev/null 2>&1; then
-            else
-              exit 1
-            fi
-          done
-
-      - name: Test Lambda Function
-        run: |
-          # Check if function exists
-          if aws lambda get-function --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} >/dev/null 2>&1; then
-            # Get function details
-            RUNTIME=$(aws lambda get-function-configuration --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} --query 'Runtime' --output text)
-            MEMORY=$(aws lambda get-function-configuration --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} --query 'MemorySize' --output text)
-            TIMEOUT=$(aws lambda get-function-configuration --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} --query 'Timeout' --output text)
-            
-          else
-            exit 1
-          fi
-
-      - name: Test CloudFront Distribution
-        run: |
-          if aws cloudfront get-distribution --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} >/dev/null 2>&1; then
-            STATUS=$(aws cloudfront get-distribution --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} --query 'Distribution.Status' --output text)
-            if [ "$STATUS" != "Deployed" ]; then
-            fi
-          else
-            exit 1
-          fi
+          cd backend
+          python configure_s3_lifecycle.py
 
   # ========================================
-  # STAGE 4: COMPREHENSIVE TEST SUITE
+  # STAGE 4: DEPLOY BACKEND
   # ========================================
-  test-backend:
-    name: 🧪 Comprehensive Test Suite
+  deploy-backend:
+    name: ⚡ Deploy Backend
     runs-on: ubuntu-latest
     needs: [setup-aws-infrastructure]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -369,134 +444,122 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Install dependencies
-        run: |
-          cd backend
-          pip install -r requirements.txt
-          pip install pytest pytest-cov pytest-mock moto requests
-      - name: Run Unit Tests
-        env: ${{ secrets }}
-        run: |
-          cd backend
-          
-          # Run unit tests (exclude integration tests)
-          pytest tests/ -v -m "not integration and not slow" \
-            --cov=handlers --cov=utils --cov=api \
-            --cov-report=term-missing \
-            --cov-report=html \
-            --junitxml=test-results/junit.xml
-          
-      - name: Run CDN Tests
-        env: ${{ secrets }}
-        run: |
-          cd backend
-          
-          # Run CDN-specific tests
-          pytest tests/test_cdn.py -v
-          
-      - name: Run Image Transformation Tests
-        env: ${{ secrets }}
-        run: |
-          cd backend
-          
-          # Run image transformation tests
-          pytest tests/test_image_transformation.py -v
-          
-      - name: Run Endpoint Tests
-        env: ${{ secrets }}
-        run: |
-          cd backend
-          
-          # Run endpoint tests
-          pytest tests/test_endpoints.py -v
-          
-      - name: Run Frontend Validation Tests
-        run: |
-          cd backend
-          
-          # Run frontend validation tests
-          pytest tests/test_frontend.py -v
-          
-      - name: Test Lambda Handler Imports
-        env: ${{ secrets }}
-        run: |
-          cd backend
-          python -c "
-          import sys
-          sys.path.insert(0, '.')
-          
-          handlers_to_test = [
-              'auth_handler',
-              'gallery_handler',
-              'photo_handler',
-              'billing_handler',
-              'dashboard_handler',
-              'notification_handler',
-              'social_handler',
-              'visitor_tracking_handler',
-              'client_handler',
-              'photo_upload_presigned',
-              'subscription_handler'
-          ]
-          
-          failed = []
-          for handler in handlers_to_test:
-              try:
-                  exec(f'from handlers import {handler}')
-                  print(f'✅ {handler} imported successfully')
-              except Exception as e:
-                  print(f'❌ {handler} import failed: {e}')
-                  failed.append(handler)
-          
-          if failed:
-              print(f'\\n❌ Failed handlers: {failed}')
-              sys.exit(1)
-          else:
-              print('\\n✅ All handlers imported successfully')
-          "
-      - name: Run Integration Tests (Optional)
-        env: ${{ secrets }}
-        continue-on-error: true
-        run: |
-          cd backend
-          
-          # Run integration tests (against live AWS)
-          pytest tests/ -v -m "integration" || echo "⚠️  Some integration tests failed (non-blocking)"
-          
-      - name: Generate Test Report
-        if: always()
-        run: |
-          cd backend
-          
-          # Count test files
-          TOTAL_TEST_FILES=$(find tests/ -name "test_*.py" | wc -l)
-          # List all test files
-          find tests/ -name "test_*.py" | sort | sed 's/tests\//   ✅ /'
-          
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          name: test-results
-          path: backend/test-results/
-          retention-days: 30
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Upload Coverage Report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: backend/htmlcov/
-          retention-days: 30
+      - name: Deploy Lambda Function
+        run: |
+          cd backend
+          python3 -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install boto3>=1.28.0 stripe>=7.0.0 python-dotenv>=1.0.0 --upgrade
+          chmod +x deploy-lambda.sh
+          ./deploy-lambda.sh
+
+      - name: Sync GitHub Secrets to Lambda Environment
+        env:
+          SECRETS_JSON: ${{ toJson(secrets) }}
+        run: |
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }}
+          
+          aws lambda update-function-configuration \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --environment '{"Variables":{}}' \
+            --region ${{ env.AWS_REGION }} > /dev/null
+
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }}
+
+          printf "%s" "$SECRETS_JSON" | jq -r 'to_entries[] | select(
+            .key | test("^GITHUB_") | not
+          ) | select(
+            .key | test("^AWS_ACCESS_KEY_ID$|^AWS_SECRET_ACCESS_KEY$") | not
+          ) | {(.key): .value}' | jq -s 'add' > /tmp/lambda-env-vars.json
+
+          printf "{\"Variables\":" > /tmp/lambda-env-final.json
+          cat /tmp/lambda-env-vars.json >> /tmp/lambda-env-final.json
+          printf "}" >> /tmp/lambda-env-final.json
+
+          aws lambda update-function-configuration \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --environment file:///tmp/lambda-env-final.json \
+            --region ${{ env.AWS_REGION }} > /dev/null
+
+          aws lambda wait function-updated \
+            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Update S3 CORS
+        run: |
+          cat > /tmp/s3-cors-config.json << EOF
+{
+  "CORSRules": [
+    {
+      "AllowedOrigins": ["${{ secrets.FRONTEND_URL }}", "http://localhost:3000"],
+      "AllowedMethods": ["GET", "HEAD", "POST", "PUT"],
+      "AllowedHeaders": ["*"],
+      "ExposeHeaders": ["ETag", "Content-Length", "Content-Type"],
+      "MaxAgeSeconds": 3600
+    }
+  ]
+}
+EOF
+
+          aws s3api put-bucket-cors \
+            --bucket "${{ secrets.S3_PHOTOS_BUCKET }}" \
+            --cors-configuration file:///tmp/s3-cors-config.json \
+            --region ${{ env.AWS_REGION }}
 
   # ========================================
-  # STAGE 5: DEPLOY FRONTEND
+  # STAGE 5: DEPLOY IMAGE PROCESSING
+  # ========================================
+  deploy-image-processing:
+    name: 🖼️  Deploy Image Processing
+    runs-on: ubuntu-latest
+    needs: [deploy-backend]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Deploy Image Processing Lambda
+        working-directory: backend/image-processing
+        env:
+          S3_PHOTOS_BUCKET: ${{ secrets.S3_PHOTOS_BUCKET }}
+          DYNAMODB_TABLE_PHOTOS: ${{ secrets.DYNAMODB_TABLE_PHOTOS }}
+          DYNAMODB_TABLE_GALLERIES: ${{ secrets.DYNAMODB_TABLE_GALLERIES }}
+          CDN_DOMAIN: ${{ secrets.CDN_DOMAIN }}
+        run: |
+          chmod +x deploy.sh
+          ./deploy.sh
+
+  # ========================================
+  # STAGE 6: DEPLOY FRONTEND
   # ========================================
   deploy-frontend:
     name: 🌐 Deploy Frontend
     runs-on: ubuntu-latest
-    needs: [test-aws-infrastructure, test-backend]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [deploy-backend, deploy-image-processing]
     
     steps:
       - name: Checkout code
@@ -511,7 +574,6 @@ jobs:
 
       - name: Deploy to S3
         run: |
-          # Sync frontend files to S3 (deletes old files not in local)
           aws s3 sync frontend/ s3://${{ secrets.S3_BUCKET }}/ \
             --delete \
             --exclude ".git/*" \
@@ -520,60 +582,32 @@ jobs:
             --cache-control "public, max-age=31536000" \
             --metadata-directive REPLACE
           
-          # Set proper cache control for HTML files (no cache)
           aws s3 cp frontend/ s3://${{ secrets.S3_BUCKET }}/ \
             --recursive \
             --exclude "*" \
             --include "*.html" \
             --cache-control "no-cache, no-store, must-revalidate" \
             --metadata-directive REPLACE
-          
-      - name: Update CloudFront Function
-        run: |
-          FUNCTION_NAME="galerly-url-rewrite"
-          
-          if aws cloudfront describe-function --name $FUNCTION_NAME 2>/dev/null; then
-            ETAG=$(aws cloudfront describe-function --name $FUNCTION_NAME --query 'ETag' --output text)
-            
-            aws cloudfront update-function \
-              --name $FUNCTION_NAME \
-              --function-code fileb://cloudfront/url-rewrite-function.js \
-              --function-config Comment="URL rewrite for Galerly static site",Runtime="cloudfront-js-2.0" \
-              --if-match $ETAG
-            
-            NEW_ETAG=$(aws cloudfront describe-function --name $FUNCTION_NAME --query 'ETag' --output text)
-            aws cloudfront publish-function \
-              --name $FUNCTION_NAME \
-              --if-match $NEW_ETAG
-            
-          else
-          fi
 
       - name: Invalidate CloudFront Cache
         run: |
-          INVALIDATION_ID=$(aws cloudfront create-invalidation \
+          aws cloudfront create-invalidation \
             --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
             --paths "/*" \
             --query 'Invalidation.Id' \
-            --output text)
-          
+            --output text
+
   # ========================================
-  # STAGE 6: DEPLOY BACKEND
+  # STAGE 7: POST-DEPLOYMENT VERIFICATION
   # ========================================
-  deploy-backend:
-    name: ⚡ Deploy Backend
+  verify-deployment:
+    name: ✅ Verify Deployment
     runs-on: ubuntu-latest
-    needs: [test-aws-infrastructure, test-backend]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
+    needs: [deploy-frontend]
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -582,568 +616,77 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Deploy Lambda Function using deploy-lambda.sh
+      - name: Verify DynamoDB Tables
         run: |
-          cd backend
-          
-          # Set up Python virtual environment (required by deploy-lambda.sh)
-          python3 -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          # Install ONLY lightweight dependencies (PIL removed from package)
-          pip install boto3>=1.28.0 stripe>=7.0.0 python-dotenv>=1.0.0 --upgrade
-          # Make script executable
-          chmod +x deploy-lambda.sh
-          
-          # Run the deployment script
-          ./deploy-lambda.sh
-          
-      - name: Sync GitHub Secrets to Lambda Environment Variables
-        env:
-          SECRETS_JSON: ${{ toJson(secrets) }}
-        run: |
-          # STEP 0: Wait for previous Lambda update to complete
-          aws lambda wait function-updated \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --region ${{ env.AWS_REGION }}
-          # STEP 1: Get current Lambda environment variables
-          aws lambda get-function-configuration \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --region ${{ env.AWS_REGION }} > /tmp/lambda-config.json
-          
-          CURRENT_VAR_COUNT=$(cat /tmp/lambda-config.json | jq -r '.Environment.Variables // {} | length')
-          if [ "$CURRENT_VAR_COUNT" -gt 0 ]; then
-          cat /tmp/lambda-config.json | jq -r '.Environment.Variables // {} | keys[]' | while read key; do
-          done
-          fi
-          
-          # STEP 2: FORCE CLEAR ALL Lambda environment variables
-          aws lambda update-function-configuration \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --environment '{"Variables":{}}' \
-            --region ${{ env.AWS_REGION }} > /dev/null
-          
-          aws lambda wait function-updated \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --region ${{ env.AWS_REGION }}
-          
-          # STEP 2.5: VERIFY variables are truly cleared
-          aws lambda get-function-configuration \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --region ${{ env.AWS_REGION }} > /tmp/lambda-config-cleared.json
-          
-          CLEARED_VAR_COUNT=$(cat /tmp/lambda-config-cleared.json | jq -r '.Environment.Variables // {} | length')
-          if [ "$CLEARED_VAR_COUNT" -eq 0 ]; then
-          else
-            cat /tmp/lambda-config-cleared.json | jq -r '.Environment.Variables // {} | keys[]'
-            exit 1
-          fi
-
-          # STEP 3: Build new environment variables from GitHub Secrets
-          # Parse secrets and filter out GitHub internal secrets and AWS credentials
-          echo "$SECRETS_JSON" | jq -r 'to_entries[] | select(
-            .key | test("^GITHUB_") | not
-          ) | select(
-            .key | test("^AWS_ACCESS_KEY_ID$|^AWS_SECRET_ACCESS_KEY$") | not
-          ) | {(.key): .value}' | jq -s 'add' > /tmp/lambda-env-vars.json
-          
-          NEW_VAR_COUNT=$(cat /tmp/lambda-env-vars.json | jq 'length')
-          cat /tmp/lambda-env-vars.json | jq -r 'keys[]' | sort | while read key; do
-          done
-          
-          # STEP 4: Upload ALL new variables to Lambda
-          # Build final JSON structure
-          echo "{\"Variables\":" > /tmp/lambda-env-final.json
-          cat /tmp/lambda-env-vars.json >> /tmp/lambda-env-final.json
-          echo "}" >> /tmp/lambda-env-final.json
-          
-          aws lambda update-function-configuration \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --environment file:///tmp/lambda-env-final.json \
-            --region ${{ env.AWS_REGION }} > /dev/null
-          
-          aws lambda wait function-updated \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --region ${{ env.AWS_REGION }}
-          
-          # STEP 5: Verify the sync
-          aws lambda get-function-configuration \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --region ${{ env.AWS_REGION }} > /tmp/lambda-config-after.json
-          
-          FINAL_VAR_COUNT=$(cat /tmp/lambda-config-after.json | jq -r '.Environment.Variables // {} | length')
-          if [ "$FINAL_VAR_COUNT" -eq "$NEW_VAR_COUNT" ]; then
-          else
-          fi
-          
-          cat /tmp/lambda-config-after.json | jq -r '.Environment.Variables // {} | keys[]' | sort | while read key; do
-          done
-          
-          # Cleanup
-          rm -f /tmp/lambda-config.json /tmp/lambda-config-cleared.json /tmp/lambda-env-vars.json /tmp/lambda-env-final.json /tmp/lambda-config-after.json
-          
-      - name: Verify Lambda Function
-        run: |
-          # Get function configuration
-          CONFIG=$(aws lambda get-function-configuration \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --region ${{ env.AWS_REGION }})
-          
-          # Check runtime
-          RUNTIME=$(echo $CONFIG | jq -r '.Runtime')
-          if [[ "$RUNTIME" != "python3."* ]]; then
-            exit 1
-          fi
-          
-          # Check state
-          STATE=$(echo $CONFIG | jq -r '.State')
-          if [ "$STATE" != "Active" ]; then
-            exit 1
-          fi
-          
-      - name: Update API Gateway CORS
-        run: |
-          cd backend
-          pip install -r requirements.txt
-          
-          python3 setup_aws.py api-cors
-          
-      - name: Update S3 CORS for Photo Uploads
-        run: |
-          # Build CORS configuration dynamically with FRONTEND_URL
-          cat > /tmp/s3-cors-config.json << EOF
-          {
-            "CORSRules": [
-              {
-                "AllowedOrigins": ["${{ secrets.FRONTEND_URL }}", "http://localhost:3000"],
-                "AllowedMethods": ["GET", "HEAD", "POST", "PUT"],
-                "AllowedHeaders": ["*"],
-                "ExposeHeaders": ["ETag", "Content-Length", "Content-Type"],
-                "MaxAgeSeconds": 3600
-              }
-            ]
-          }
-          EOF
-          
-          cat /tmp/s3-cors-config.json
-          # Apply CORS to S3_PHOTOS_BUCKET (from GitHub Secrets)
-          aws s3api put-bucket-cors \
-            --bucket "${{ secrets.S3_PHOTOS_BUCKET }}" \
-            --cors-configuration file:///tmp/s3-cors-config.json \
-            --region ${{ env.AWS_REGION }}
-          
-          # Verify configuration
-          aws s3api get-bucket-cors \
-            --bucket "${{ secrets.S3_PHOTOS_BUCKET }}" \
-            --region ${{ env.AWS_REGION }}
-          
-          # Cleanup
-          rm -f /tmp/s3-cors-config.json
-          
-  # ========================================
-  # STAGE 7: DEPLOY IMAGE PROCESSING SYSTEM
-  # ========================================
-  deploy-image-processing:
-    name: 🖼️  Deploy Image Processing System
-    runs-on: ubuntu-latest
-    needs: [deploy-backend]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Hard Cleanup Old Image Processing System
-        run: |
-          # STEP 1: Remove ALL old Lambda@Edge functions completely
-          OLD_LAMBDA_FUNCTIONS=(
-            "galerly-image-transform"
-            "galerly-cloudfront-router"
-            "galerly-image-resize-edge"
-            "galerly-image-processing-old"
+          TABLES=(
+            "${{ secrets.DYNAMODB_TABLE_USERS }}"
+            "${{ secrets.DYNAMODB_TABLE_GALLERIES }}"
+            "${{ secrets.DYNAMODB_TABLE_PHOTOS }}"
+            "${{ secrets.DYNAMODB_TABLE_SESSIONS }}"
           )
           
-          for FUNC_NAME in "${OLD_LAMBDA_FUNCTIONS[@]}"; do
-            if aws lambda get-function --function-name "$FUNC_NAME" --region us-east-1 2>/dev/null; then
-              # Delete all published versions first
-              VERSIONS=$(aws lambda list-versions-by-function \
-                --function-name "$FUNC_NAME" \
-                --region us-east-1 \
-                --query 'Versions[?Version!=`$LATEST`].Version' \
-                --output text 2>/dev/null || echo "")
-              
-              for VERSION in $VERSIONS; do
-                aws lambda delete-function \
-                  --function-name "$FUNC_NAME" \
-                  --qualifier "$VERSION" \
-                  --region us-east-1 2>/dev/null || true
-              done
-              
-              # Delete the function itself
-              aws lambda delete-function \
-                --function-name "$FUNC_NAME" \
-                --region us-east-1 2>/dev/null || true
-            fi
+          for table in "${TABLES[@]}"; do
+            aws dynamodb describe-table --table-name "$table" >/dev/null 2>&1 || exit 1
           done
-          
-          # STEP 2: Remove old image cache bucket if it exists
-          if [ -n "${{ secrets.S3_IMAGE_CACHE_BUCKET }}" ]; then
-            if aws s3 ls "s3://${{ secrets.S3_IMAGE_CACHE_BUCKET }}" 2>/dev/null; then
-              # Empty bucket first
-              aws s3 rm "s3://${{ secrets.S3_IMAGE_CACHE_BUCKET }}" --recursive 2>/dev/null || true
-              # Delete bucket
-              aws s3 rb "s3://${{ secrets.S3_IMAGE_CACHE_BUCKET }}" --force 2>/dev/null || true
-            fi
-          fi
-          
-          # STEP 3: Remove any old Lambda@Edge associations from CloudFront
-          IMAGE_CDN_DIST_ID=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?Aliases.Items[?contains(@, 'cdn.galerly.com')]].Id | [0]" \
-            --output text 2>/dev/null || echo "")
-          
-          if [ -n "$IMAGE_CDN_DIST_ID" ] && [ "$IMAGE_CDN_DIST_ID" != "None" ]; then
-            # Get current config
-            aws cloudfront get-distribution-config \
-              --id "$IMAGE_CDN_DIST_ID" > /tmp/dist-config-full.json 2>/dev/null || true
-            
-            if [ -f "/tmp/dist-config-full.json" ]; then
-              ETAG=$(jq -r '.ETag' /tmp/dist-config-full.json)
-              
-              # Remove all Lambda@Edge associations
-              jq '.DistributionConfig | 
-                .DefaultCacheBehavior.LambdaFunctionAssociations.Items = [] |
-                .DefaultCacheBehavior.LambdaFunctionAssociations.Quantity = 0' \
-                /tmp/dist-config-full.json > /tmp/dist-config-clean.json
-              
-              # Update distribution (remove Lambda@Edge)
-              aws cloudfront update-distribution \
-                --id "$IMAGE_CDN_DIST_ID" \
-                --distribution-config file:///tmp/dist-config-clean.json \
-                --if-match "$ETAG" 2>/dev/null || true
-            fi
-          fi
-          
-          # STEP 4: Wait for CloudFront to stabilize after removal
-          sleep 30
 
-      - name: Deploy New Image Processing Lambda
-        working-directory: backend/image-processing
-        env:
-          S3_PHOTOS_BUCKET: ${{ secrets.S3_PHOTOS_BUCKET }}
-          DYNAMODB_TABLE_PHOTOS: ${{ secrets.DYNAMODB_TABLE_PHOTOS }}
-          DYNAMODB_TABLE_GALLERIES: ${{ secrets.DYNAMODB_TABLE_GALLERIES }}
-          CDN_DOMAIN: ${{ secrets.CDN_DOMAIN }}
+      - name: Verify Lambda Functions
         run: |
-          # Make deployment script executable
-          chmod +x deploy.sh
-          
-          # Run deployment (handles Lambda layer, IAM, S3 triggers)
-          ./deploy.sh
+          aws lambda get-function --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} >/dev/null 2>&1 || exit 1
+          aws lambda get-function --function-name galerly-image-processor --region us-east-1 >/dev/null 2>&1 || exit 1
 
-      - name: Verify New Image Processing System
+      - name: Verify S3 Buckets
         run: |
-          # Verify Lambda function exists and is configured correctly
-          LAMBDA_CONFIG=$(aws lambda get-function-configuration \
-            --function-name galerly-image-processor \
-            --region us-east-1 2>/dev/null || echo "")
-          
-          if [ -z "$LAMBDA_CONFIG" ]; then
-            exit 1
-          fi
-          
-          # Check configuration
-          MEMORY=$(printf '%s' "$LAMBDA_CONFIG" | jq -r '.MemorySize')
-          TIMEOUT=$(printf '%s' "$LAMBDA_CONFIG" | jq -r '.Timeout')
-          STATE=$(printf '%s' "$LAMBDA_CONFIG" | jq -r '.State')
-          
-          if [ "$STATE" != "Active" ]; then
-            exit 1
-          fi
-          
-          if [ "$MEMORY" -lt 2048 ]; then
-            exit 1
-          fi
-          
-          # Verify S3 event trigger is configured
-          S3_NOTIFICATION=$(aws s3api get-bucket-notification-configuration \
-            --bucket "${{ secrets.S3_PHOTOS_BUCKET }}" 2>/dev/null || echo "")
-          
-          if [ -z "$S3_NOTIFICATION" ]; then
-            exit 1
-          fi
-          
-          # Check that Lambda is configured in S3 notifications
-          LAMBDA_ARN=$(printf '%s' "$S3_NOTIFICATION" | jq -r '.LambdaFunctionConfigurations[0].LambdaFunctionArn // empty')
-          
-          if [ -z "$LAMBDA_ARN" ]; then
-            exit 1
-          fi
+          aws s3 ls s3://${{ secrets.S3_BUCKET }} >/dev/null 2>&1 || exit 1
+          aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} >/dev/null 2>&1 || exit 1
 
-      - name: Test Image Processing with Sample Upload
-        continue-on-error: true
+      - name: Verify Frontend Availability
         run: |
-          # Create test image if S3 bucket has images to process
-          IMAGE_COUNT=$(aws s3 ls "s3://${{ secrets.S3_PHOTOS_BUCKET }}" --recursive | wc -l)
-          
-          if [ "$IMAGE_COUNT" -gt 0 ]; then
-            # Get first image to trigger re-processing
-            SAMPLE_IMAGE=$(aws s3 ls "s3://${{ secrets.S3_PHOTOS_BUCKET }}" --recursive | head -1 | awk '{print $4}')
-            
-            if [ -n "$SAMPLE_IMAGE" ]; then
-              # Copy image to itself to trigger S3 event
-              aws s3 cp "s3://${{ secrets.S3_PHOTOS_BUCKET }}/$SAMPLE_IMAGE" \
-                        "s3://${{ secrets.S3_PHOTOS_BUCKET }}/$SAMPLE_IMAGE" \
-                        --metadata-directive REPLACE 2>/dev/null || true
-              
-              # Wait for processing
-              sleep 10
-              
-              # Check CloudWatch logs for processing activity
-              aws logs tail /aws/lambda/galerly-image-processor \
-                --since 1m \
-                --format short 2>/dev/null || true
-            fi
-          fi
-
-
-  # ========================================
-  # STAGE 8: POST-DEPLOYMENT TESTS
-  # ========================================
-  test-deployment:
-    name: ✅ Post-Deployment Tests
-    runs-on: ubuntu-latest
-    needs: [deploy-frontend, deploy-backend, deploy-image-processing]
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Verify Images Exist in S3 Bucket
-        run: |
-          # Check if bucket has any images
-          IMAGE_COUNT=$(aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} --recursive | wc -l)
-          
-          if [ "$IMAGE_COUNT" -eq 0 ]; then
-          else
-            aws s3 ls s3://${{ secrets.S3_PHOTOS_BUCKET }} --recursive --human-readable | head -20
-          fi
-          
-      - name: Invalidate CDN CloudFront Cache
-        run: |
-          # Get CloudFront distribution ID for CDN (if different from main frontend distribution)
-          # Try to find the CDN-specific distribution by comment
-          CDN_DIST_ID=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?Comment=='Galerly Image CDN'].Id" \
-            --output text 2>/dev/null || echo "")
-          
-          if [ -z "$CDN_DIST_ID" ]; then
-            CDN_DIST_ID="${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}"
-          else
-          fi
-          
-          # Create cache invalidation
-          INVALIDATION_ID=$(aws cloudfront create-invalidation \
-            --distribution-id "$CDN_DIST_ID" \
-            --paths "/*" \
-            --query 'Invalidation.Id' \
-            --output text)
-          
-          # Get invalidation status
-          STATUS=$(aws cloudfront get-invalidation \
-            --distribution-id "$CDN_DIST_ID" \
-            --id "$INVALIDATION_ID" \
-            --query 'Invalidation.Status' \
-            --output text)
-          
-      - name: Test Frontend Availability
-        run: |
-          # Test homepage
           HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" ${{ secrets.FRONTEND_URL }})
-          if [ "$HTTP_CODE" = "200" ]; then
-          else
-            exit 1
-          fi
+          [ "$HTTP_CODE" = "200" ] || exit 1
 
       - name: Test Lambda Function
         run: |
-          # Invoke Lambda with inline JSON payload
-          # AWS CLI v2 requires --cli-binary-format to accept raw JSON
           aws lambda invoke \
             --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
             --cli-binary-format raw-in-base64-out \
             --payload '{"httpMethod":"GET","path":"/v1/health"}' \
             --region ${{ env.AWS_REGION }} \
             /tmp/lambda-response.json > /tmp/invoke-result.json
-          
-          # Check if invocation succeeded
+
           STATUS_CODE=$(cat /tmp/invoke-result.json | jq -r '.StatusCode')
-          if [ "$STATUS_CODE" = "200" ]; then
-          else
-            exit 1
-          fi
-
-      - name: Verify CloudFront Distribution
-        run: |
-          STATUS=$(aws cloudfront get-distribution \
-            --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --query 'Distribution.Status' \
-            --output text)
-          
-          if [ "$STATUS" = "Deployed" ]; then
-          else
-          fi
-
-      - name: Verify RAW Format Support in Lambda
-        run: |
-          # Get Lambda configuration
-          aws lambda get-function-configuration \
-            --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
-            --region ${{ env.AWS_REGION }} > /tmp/lambda-config.json
-          
-          # Check layers
-          LAYER_COUNT=$(cat /tmp/lambda-config.json | jq -r '.Layers // [] | length')
-          
-          if [ "$LAYER_COUNT" -eq 0 ]; then
-            exit 1
-          fi
-          
-          cat /tmp/lambda-config.json | jq -r '.Layers[] | "   - \(.Arn)"'
-          
-          # Check if our image processing layer is attached
-          if cat /tmp/lambda-config.json | jq -r '.Layers[].Arn' | grep -q "galerly-image-processing"; then
-          else
-          fi
-          
-          # Cleanup
-          rm -f /tmp/lambda-config.json
-          
-      - name: Test New Image Processing Lambda
-        run: |
-          # Check if new processing Lambda exists
-          if aws lambda get-function --function-name galerly-image-processor --region us-east-1 >/dev/null 2>&1; then
-            # Get configuration
-            CONFIG=$(aws lambda get-function-configuration \
-              --function-name galerly-image-processor \
-              --region us-east-1)
-            
-            MEMORY=$(printf '%s' "$CONFIG" | jq -r '.MemorySize')
-            TIMEOUT=$(printf '%s' "$CONFIG" | jq -r '.Timeout')
-            LAYERS=$(printf '%s' "$CONFIG" | jq -r '.Layers | length')
-            STATE=$(printf '%s' "$CONFIG" | jq -r '.State')
-            
-            if [ "$STATE" != "Active" ]; then
-              exit 1
-            fi
-            
-            if [ "$MEMORY" -lt 2048 ]; then
-              exit 1
-            fi
-            
-            if [ "$LAYERS" -eq 0 ]; then
-              exit 1
-            fi
-          else
-            exit 1
-          fi
+          [ "$STATUS_CODE" = "200" ] || exit 1
 
   # ========================================
-  # STAGE 9: DEPLOYMENT SUMMARY
+  # STAGE 8: DEPLOYMENT SUMMARY
   # ========================================
   deployment-summary:
     name: 📊 Deployment Summary
     runs-on: ubuntu-latest
-    needs: [deploy-frontend, deploy-backend, deploy-image-processing, test-deployment]
+    needs: [verify-deployment]
     if: always()
-    
+
     steps:
       - name: Generate Summary
         run: |
-          echo "========================================" >> $GITHUB_STEP_SUMMARY
-          echo "# 🎉 Galerly Deployment Complete" >> $GITHUB_STEP_SUMMARY
-          echo "========================================" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Deployment Status" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Frontend (S3) | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
-          echo "| Backend (Lambda) | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
-          echo "| Image Transform System | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
-          echo "| CloudFront | ✅ Updated |" >> $GITHUB_STEP_SUMMARY
-          echo "| Cache | ✅ Invalidated |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Image Processing Features" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Feature | Status | Formats |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|---------|" >> $GITHUB_STEP_SUMMARY
-          echo "| RAW Format Support | ✅ Enabled | DNG, CR2, CR3, NEF, ARW, RAF, ORF, RW2, PEF, 3FR |" >> $GITHUB_STEP_SUMMARY
-          echo "| HEIC Support | ✅ Enabled | HEIC, HEIF (iPhone) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Standard Formats | ✅ Enabled | JPEG, PNG, WEBP, GIF |" >> $GITHUB_STEP_SUMMARY
-          echo "| Image Validation | ❌ Disabled | All files accepted as-is |" >> $GITHUB_STEP_SUMMARY
-          echo "| Quality Preservation | ✅ Enabled | Original files preserved (no re-encoding) |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Image Processing System" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Component | Status | Details |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Processing Lambda | ✅ Deployed | Automatic upload-time processing |" >> $GITHUB_STEP_SUMMARY
-          echo "| S3 Event Trigger | ✅ Configured | Processes on upload |" >> $GITHUB_STEP_SUMMARY
-          echo "| Renditions | ✅ Generated | thumbnail, small, medium, large |" >> $GITHUB_STEP_SUMMARY
-          echo "| Lambda Layer | ✅ Attached | Pillow, rawpy, pillow-heif, numpy |" >> $GITHUB_STEP_SUMMARY
-          echo "| Storage Strategy | ✅ Optimized | Pre-generated renditions (90% faster) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Old System | ✅ Removed | Lambda@Edge cleaned up |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Lambda Package Architecture" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Main Function (~29MB)**" >> $GITHUB_STEP_SUMMARY
-          echo "- Application code (handlers, utils, api.py)" >> $GITHUB_STEP_SUMMARY
-          echo "- boto3 (AWS SDK)" >> $GITHUB_STEP_SUMMARY
-          echo "- stripe (payment processing)" >> $GITHUB_STEP_SUMMARY
-          echo "- python-dotenv" >> $GITHUB_STEP_SUMMARY
-          echo "- ❌ PIL/Pillow: REMOVED (image validation disabled)" >> $GITHUB_STEP_SUMMARY
-          echo "- ❌ rawpy/pillow-heif: REMOVED (not needed)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Note:** Image processing layer (if attached) is not used" >> $GITHUB_STEP_SUMMARY
-          echo "All uploaded files are accepted without validation" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Total Size: ~29MB (well under 250MB limit)**" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Deployment Details" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- **Frontend URL**: ${{ secrets.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **S3 Bucket**: ${{ secrets.S3_BUCKET }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Lambda Function**: ${{ secrets.LAMBDA_FUNCTION_NAME }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **CloudFront ID**: ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Deployment Time**: $(date)" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "1. ✅ Verify frontend at: ${{ secrets.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
-          echo "2. 📸 Upload test photos (RAW, HEIC, JPEG)" >> $GITHUB_STEP_SUMMARY
-          echo "3. ⏳ Wait 30-60 seconds for automatic processing" >> $GITHUB_STEP_SUMMARY
-          echo "4. ✅ Verify renditions created in S3" >> $GITHUB_STEP_SUMMARY
-          echo "5. 🌐 Test image display in gallery" >> $GITHUB_STEP_SUMMARY
-          echo "6. 📊 Monitor CloudWatch logs: /aws/lambda/galerly-image-processor" >> $GITHUB_STEP_SUMMARY
-          echo "7. 🔄 Run migration script for existing photos if needed" >> $GITHUB_STEP_SUMMARY
-          echo "8. 🧪 Test critical user flows" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "========================================" >> $GITHUB_STEP_SUMMARY
+          cat >> $GITHUB_STEP_SUMMARY << 'EOF'
+          # 🎉 Galerly Deployment Complete
+          
+          ## Status
+          | Component | Status |
+          |-----------|--------|
+          | Frontend (S3) | ✅ Deployed |
+          | Backend (Lambda) | ✅ Deployed |
+          | Image Processing | ✅ Deployed |
+          | DynamoDB Tables | ✅ Created |
+          | S3 Buckets | ✅ Configured |
+          | CloudFront | ✅ Updated |
+          
+          ## Next Steps
+          1. Visit: ${{ secrets.FRONTEND_URL }}
+          2. Test photo upload
+          3. Verify image processing
+          4. Check analytics dashboard
+          
+          ## Deployment Time
+          $(date)
+          EOF

@@ -34,6 +34,7 @@ def handle_get_upload_url(gallery_id, user, event):
         filename = body.get('filename', 'photo.jpg')
         content_type = body.get('content_type', 'image/jpeg')
         file_size = body.get('file_size', 0)
+        use_multipart = body.get('use_multipart', False)
         
         # Extract file extension from original filename to preserve format
         import os
@@ -43,7 +44,12 @@ def handle_get_upload_url(gallery_id, user, event):
         photo_id = str(uuid.uuid4())
         s3_key = f"{gallery_id}/{photo_id}{file_extension}"
         
-        # Generate presigned POST URL (allows uploads up to 5TB!)
+        # For large files (> 10MB), use multipart upload
+        if use_multipart or file_size > 10 * 1024 * 1024:
+            from handlers.multipart_upload_handler import handle_initialize_multipart_upload
+            return handle_initialize_multipart_upload(gallery_id, user, event)
+        
+        # Generate presigned POST URL (for small files < 10MB)
         presigned_data = s3_client.generate_presigned_post(
             Bucket=S3_BUCKET,
             Key=s3_key,

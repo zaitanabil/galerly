@@ -37,6 +37,11 @@ from handlers.photo_upload_presigned import (
     handle_get_upload_url,
     handle_confirm_upload
 )
+from handlers.multipart_upload_handler import (
+    handle_initialize_multipart_upload,
+    handle_complete_multipart_upload,
+    handle_abort_multipart_upload
+)
 from handlers.dashboard_handler import handle_dashboard_stats
 from handlers.client_handler import handle_client_galleries, handle_get_client_gallery, handle_get_client_gallery_by_token
 from handlers.photographer_handler import handle_list_photographers, handle_get_photographer
@@ -367,6 +372,16 @@ def handler(event, context):
             
             if '/confirm-upload' in path and method == 'POST':
                 return handle_confirm_upload(gallery_id, user, event)
+            
+            # Multipart upload endpoints (for files > 10MB)
+            if '/multipart-upload/init' in path and method == 'POST':
+                return handle_initialize_multipart_upload(gallery_id, user, event)
+            
+            if '/multipart-upload/complete' in path and method == 'POST':
+                return handle_complete_multipart_upload(gallery_id, user, event)
+            
+            if '/multipart-upload/abort' in path and method == 'POST':
+                return handle_abort_multipart_upload(gallery_id, user, event)
             
             # Check for duplicate detection endpoint
             if '/check-duplicates' in path and method == 'POST':
