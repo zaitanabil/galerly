@@ -53,8 +53,11 @@ function isRAWUrl(url) {
     if (!url) return false;
     const lowerUrl = url.toLowerCase();
     // Check both extension AND common RAW content-types that browsers can't display
+    // Handle URLs with or without query parameters
     const rawFormats = ['.dng', '.cr2', '.cr3', '.nef', '.arw', '.raf', '.orf', '.rw2', '.pef', '.3fr'];
-    return rawFormats.some(format => lowerUrl.endsWith(format) || lowerUrl.includes(format + '?'));
+    // Remove query parameters for extension check, but also check if format is in the path
+    const urlWithoutQuery = lowerUrl.split('?')[0];
+    return rawFormats.some(format => urlWithoutQuery.endsWith(format) || lowerUrl.includes(format));
     // Note: Files with .jpg extension but DNG content will fail to load and trigger onerror
 }
 
@@ -91,16 +94,21 @@ async function loadImageSmart(img, url, onSuccess, onError) {
         // RAW formats: Use CloudFront transformation (backend provides ?format=jpeg URLs)
         // The thumbnail_url and medium_url from backend already have format=jpeg transformation
         console.log(`🔄 RAW format detected, using CloudFront transformation: ${url}`);
-        // Check if URL already has transformation parameters
-        if (url.includes('format=jpeg') || url.includes('format=auto')) {
-            // Already transformed, load normally
-            await tryLoadImage(img, url, onSuccess, onError);
-        } else {
-            // Add transformation parameters for RAW files
-            const separator = url.includes('?') ? '&' : '?';
-            const transformedUrl = `${url}${separator}format=jpeg&width=2000&height=2000&fit=inside`;
-            await tryLoadImage(img, transformedUrl, onSuccess, onError);
-        }
+        
+        // Always try to load the URL - CloudFront should transform it via Lambda@Edge
+        // If the URL already has format=jpeg, CloudFront should return JPEG
+        await tryLoadImage(img, url, async () => {
+            console.log(`✅ RAW image loaded successfully via CloudFront transformation: ${url}`);
+            if (onSuccess) onSuccess();
+        }, async (error) => {
+            console.warn(`⚠️  CloudFront transformation failed for RAW image: ${url}`);
+            console.warn(`   Error: ${error || 'Unknown error'}`);
+            console.warn(`   This may indicate Lambda@Edge is not configured or is failing.`);
+            // Try without transformation as last resort (will likely fail, but worth trying)
+            const baseUrl = url.split('?')[0];
+            console.log(`   Attempting to load base URL: ${baseUrl}`);
+            await tryLoadImage(img, baseUrl, onSuccess, onError);
+        });
         
     } else {
         // Standard format (JPEG, PNG, GIF, WebP)
@@ -144,7 +152,13 @@ async function convertAndLoadImage(img, url, onSuccess, onError) {
         // Fetch the image as a blob
         const response = await fetch(url);
         if (!response.ok) {
-            throw new Error(`Failed to fetch: ${response.status}`);
+            // Handle 503 errors from CloudFront (Lambda@Edge timeout/failure)
+            if (response.status === 503) {
+                console.warn(`⚠️  CloudFront returned 503 for ${url}`);
+                console.warn(`   This usually means Lambda@Edge timed out or failed.`);
+                console.warn(`   Falling back to client-side conversion...`);
+            }
+            throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
         }
         
         const blob = await response.blob();
@@ -156,23 +170,47 @@ async function convertAndLoadImage(img, url, onSuccess, onError) {
                 await loadHEICLibrary();
             }
             
-            // Convert HEIC to JPEG
-            const jpegBlob = await heic2any({
-                blob: blob,
-                toType: 'image/jpeg',
-                quality: 0.9
-            });
-            
-            // Create object URL and display
-            const objectUrl = URL.createObjectURL(jpegBlob);
-            img.src = objectUrl;
-            
-            // Clean up object URL after image loads
-            img.onload = () => {
-                URL.revokeObjectURL(objectUrl);
-                console.log(`✅ HEIC image converted and displayed`);
-                if (onSuccess) onSuccess();
-            };
+            try {
+                // Convert HEIC to JPEG
+                const jpegBlob = await heic2any({
+                    blob: blob,
+                    toType: 'image/jpeg',
+                    quality: 0.9
+                });
+                
+                // heic2any returns array for multiple outputs, get first item
+                const finalBlob = Array.isArray(jpegBlob) ? jpegBlob[0] : jpegBlob;
+                
+                // Create object URL and display
+                const objectUrl = URL.createObjectURL(finalBlob);
+                img.src = objectUrl;
+                
+                // Clean up object URL after image loads
+                img.onload = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    console.log(`✅ HEIC image converted and displayed`);
+                    if (onSuccess) onSuccess();
+                };
+                
+                img.onerror = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    console.error(`❌ Failed to display converted HEIC image`);
+                    if (onError) onError(new Error('Failed to display converted HEIC'));
+                };
+            } catch (conversionError) {
+                console.error(`❌ HEIC conversion failed:`, conversionError);
+                // If conversion fails, try to display the blob directly (might work in some browsers)
+                const objectUrl = URL.createObjectURL(blob);
+                img.src = objectUrl;
+                img.onload = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    if (onSuccess) onSuccess();
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(objectUrl);
+                    if (onError) onError(conversionError);
+                };
+            }
             
         } else {
             // For other formats, try to display the blob directly
@@ -241,7 +279,8 @@ function enhanceGalleryImages() {
         if (!originalSrc) return;
         
         // ONLY enhance problematic formats (HEIC, TIFF)
-        // RAW formats are handled via CloudFront transformations (backend provides transformed URLs)
+        // RAW formats: Try to load directly (CloudFront should transform via Lambda@Edge)
+        // If RAW URL has format=jpeg, it should work - if not, it will fail gracefully
         // Standard images (JPEG, PNG, GIF, WebP) should load normally
         if (isHEICUrl(originalSrc) || isTIFFUrl(originalSrc)) {
             console.log(`🔍 Enhancing image: ${originalSrc}`);
@@ -249,35 +288,60 @@ function enhanceGalleryImages() {
             // Mark as enhanced BEFORE replacement
             img.dataset.enhanced = 'true';
             
-            // Replace src with loading placeholder
-            img.src = 'data:image/svg+xml,' + encodeURIComponent(`
-                <svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
-                    <rect fill="#F5F5F7" width="400" height="300"/>
-                    <circle cx="200" cy="150" r="20" fill="none" stroke="#007AFF" stroke-width="3">
-                        <animate attributeName="stroke-dasharray" values="0 126;126 0" dur="1.5s" repeatCount="indefinite"/>
-                    </circle>
-                </svg>
-            `);
+            // Start with blurred image (progressive loading)
+            img.style.filter = 'blur(10px)';
+            img.style.transition = 'filter 0.3s ease';
+            img.style.backgroundColor = '#F5F5F7';
             
             // Load smartly
             loadImageSmart(
                 img,
                 originalSrc,
                 () => {
+                    // Remove blur when loaded
+                    img.style.filter = 'none';
                     console.log(`✅ Enhanced image loaded: ${originalSrc}`);
                 },
                 (error) => {
                     console.error(`❌ Failed to load enhanced image:`, error);
-                    // Show error placeholder
-                    img.src = 'data:image/svg+xml,' + encodeURIComponent(`
-                        <svg xmlns="http://www.w3.org/2000/svg" width="400" height="300">
-                            <rect fill="#F5F5F7" width="400" height="300"/>
-                            <text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" 
-                                  fill="#999" font-family="system-ui" font-size="14">Image not available</text>
-                        </svg>
-                    `);
+                    const errorMsg = error?.message || error || 'Unknown error';
+                    console.error(`   Error details: ${errorMsg}`);
+                    // Keep blur and show error state
+                    img.style.filter = 'blur(10px)';
+                    img.style.opacity = '0.5';
+                    img.alt = 'Image not available';
                 }
             );
+        } else if (isRAWUrl(originalSrc)) {
+            // RAW images: Try to load directly - CloudFront should transform via Lambda@Edge
+            // If transformation fails (503 error), the image will fail to load
+            // This is expected if Lambda@Edge is not configured
+            console.log(`📸 RAW image detected in gallery, attempting to load: ${originalSrc}`);
+            img.dataset.enhanced = 'true';
+            
+            // Start with blurred image (progressive loading)
+            img.style.filter = 'blur(10px)';
+            img.style.transition = 'filter 0.3s ease';
+            img.style.backgroundColor = '#F5F5F7';
+            
+            // Try loading the transformed URL
+            const tempImg = new Image();
+            tempImg.crossOrigin = 'anonymous';
+            tempImg.onload = () => {
+                img.src = originalSrc;
+                // Remove blur when loaded
+                img.style.filter = 'none';
+                console.log(`✅ RAW image loaded successfully: ${originalSrc}`);
+            };
+            tempImg.onerror = () => {
+                console.error(`❌ RAW image failed to load: ${originalSrc}`);
+                console.error(`   This usually means CloudFront Lambda@Edge is not processing the ?format=jpeg parameter.`);
+                // Keep blur and show error state
+                img.style.filter = 'blur(10px)';
+                img.style.opacity = '0.5';
+                img.style.border = '2px solid #ef4444';
+            };
+            tempImg.src = originalSrc;
         }
         // Standard images (JPEG, PNG, etc.) - DO NOT mark as enhanced, let them load normally
     });

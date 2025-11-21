@@ -336,7 +336,8 @@ function renderGalleryPhotos(photos, startIndex, count) {
                  data-filename="${photo.filename || ''}"
                  loading="lazy"
                  crossorigin="anonymous"
-                 style="${isApproved ? 'border: 3px solid #10b981;' : ''}"
+                 style="${isApproved ? 'border: 3px solid #10b981;' : ''} filter: blur(10px); transition: filter 0.3s ease; background-color: #F5F5F7;"
+                 onload="this.style.filter='none';"
                  onerror="console.error('Image load failed:', this.src); this.onerror=null; handleImageLoadError(this, '${photo.id}', '${photo.filename || ''}');">
             ${isFavorite ? `
                 <div style="
