@@ -201,23 +201,20 @@ aws lambda add-permission \
     --region $REGION \
     2>/dev/null || echo "⏭️  Permission already exists"
 
+# Wait for permission to propagate
+echo "⏳ Waiting for Lambda permission to propagate..."
+sleep 30
+
 # Create S3 notification configuration
 aws s3api put-bucket-notification-configuration \
     --bucket $SOURCE_BUCKET \
     --notification-configuration "{
         \"LambdaFunctionConfigurations\": [{
             \"LambdaFunctionArn\": \"arn:aws:lambda:${REGION}:${ACCOUNT_ID}:function:${FUNCTION_NAME}\",
-            \"Events\": [\"s3:ObjectCreated:*\"],
-            \"Filter\": {
-                \"Key\": {
-                    \"FilterRules\": [{
-                        \"Name\": \"suffix\",
-                        \"Value\": \"\"
-                    }]
-                }
-            }
+            \"Events\": [\"s3:ObjectCreated:*\"]
         }]
-    }"
+    }" \
+    --region $REGION
 
 echo "✅ S3 trigger configured"
 
