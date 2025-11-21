@@ -2,268 +2,143 @@
 
 ## 📸 Overview
 
-Instagram-style image transformation system with on-demand processing and intelligent caching.
+High-performance image transformation system with cache-first architecture.
 
-**Key Benefits:**
-- ✅ **No duplicate storage** - store only originals
-- ✅ **Supports ALL formats** - RAW (DNG, CR2, NEF), HEIC, TIFF, JPEG, PNG
-- ✅ **Fast delivery** - CloudFront edge caching
-- ✅ **Cost efficient** - only pay for transformations once
-- ✅ **Scalable** - handles any image size or format
+**Key Features:**
+- ✅ **Cache-First** - Check S3 cache before transforming
+- ✅ **Async Processing** - Non-blocking transformations
+- ✅ **All Formats** - RAW (DNG, CR2, NEF), HEIC, TIFF, JPEG, PNG
+- ✅ **Fast Delivery** - CloudFront edge caching
+- ✅ **Cost Efficient** - Transform once, cache forever
 
 ## 🏗️ Architecture
 
 ```
-┌─────────────┐
-│   Browser   │
-└──────┬──────┘
-       │ Request: cdn.galerly.com/photo.dng?format=jpeg&width=800
-       ↓
-┌─────────────────┐
-│   CloudFront    │ ← Global CDN with edge caching
-└────────┬────────┘
-         │ (Cache miss)
-         ↓
-┌──────────────────┐
-│ Lambda@Edge      │ ← Routes transformation requests
-│ (Origin Request) │
-└────────┬─────────┘
-         │
-         ↓
-┌─────────────────────────┐
-│ Image Transform Lambda  │ ← Does the heavy lifting
-│                         │
-│ 1. Check cache bucket   │
-│ 2. Fetch original       │
-│ 3. Process (RAW→JPEG)   │
-│ 4. Resize               │
-│ 5. Store in cache       │
-│ 6. Return image         │
-└────────┬────────────────┘
-         │
-         ↓
-┌─────────────────┐
-│  Cache Bucket   │ ← Stores transformed versions
-└─────────────────┘
+Browser Request: cdn.galerly.com/photo.dng?format=jpeg&width=800
+    ↓
+CloudFront (Edge Cache)
+    ↓ (Cache miss)
+Lambda@Edge (Origin Request)
+    ├─ No ?format= or ?width= → Pass through to S3 (instant)
+    ├─ Check S3 cache → Found? → Serve from cache (instant)
+    └─ Not cached? → Invoke Transform Lambda (async) + Serve original
+                     Next request will hit cache
 ```
 
-## 📁 File Structure
+## 🚀 Quick Start
 
-```
-backend/
-├── image-transform/
-│   ├── lambda_function.py           # Main transformation logic
-│   ├── cloudfront-router.py         # Lambda@Edge router
-│   ├── requirements.txt             # Python dependencies
-│   ├── deploy.sh                    # Deploy transform Lambda
-│   ├── deploy-cloudfront-router.sh  # Deploy router
-│   ├── cache-lifecycle.json         # S3 cache lifecycle policy
-│   └── SETUP.md                     # Detailed setup instructions
-│
-├── handlers/
-│   ├── photo_upload_presigned.py    # Stores originals only
-│   └── photo_handler.py             # Stores originals only
-│
-└── utils/
-    └── cdn_urls.py                  # Generates transformation URLs
+### Automated Deployment (Recommended)
+
+```bash
+git push origin main  # GitHub Actions deploys everything
 ```
 
-## 🚀 Deployment
-
-### 1. Deploy Image Transform Lambda
+### Manual Deployment
 
 ```bash
 cd backend/image-transform
+
+# 1. Deploy Transform Lambda with Layer
 ./deploy.sh
-```
 
-### 2. Create Lambda Layer for Image Processing
-
-```bash
-# Create layer with heavy dependencies (Pillow, rawpy, etc.)
-mkdir -p layer/python
-pip install Pillow rawpy pillow-heif numpy -t layer/python
-cd layer && zip -r ../image-processing-layer.zip . && cd ..
-
-# Upload to AWS
-aws lambda publish-layer-version \
-    --layer-name image-processing \
-    --zip-file fileb://image-processing-layer.zip \
-    --compatible-runtimes python3.11
-
-# Attach to Lambda
-aws lambda update-function-configuration \
-    --function-name galerly-image-transform \
-    --layers arn:aws:lambda:REGION:ACCOUNT:layer:image-processing:1
-```
-
-### 3. Deploy CloudFront Router
-
-```bash
+# 2. Deploy CloudFront Router
 ./deploy-cloudfront-router.sh
 ```
 
-### 4. Configure CloudFront
+## 📁 Files
 
-Update your CloudFront distribution:
-
-```yaml
-Behaviors:
-  - PathPattern: "*.dng?*"
-    EventType: origin-request
-    LambdaFunctionARN: arn:aws:lambda:us-east-1:ACCOUNT:function:galerly-cloudfront-router:VERSION
-  
-  - PathPattern: "*.cr2?*"
-    EventType: origin-request
-    LambdaFunctionARN: arn:aws:lambda:us-east-1:ACCOUNT:function:galerly-cloudfront-router:VERSION
-  
-  # ... add for .nef, .heic, .tiff, etc.
-```
-
-### 5. Create Cache Bucket
-
-```bash
-aws s3 mb s3://galerly-image-cache
-aws s3api put-bucket-lifecycle-configuration \
-    --bucket galerly-image-cache \
-    --lifecycle-configuration file://cache-lifecycle.json
-```
+- `lambda_function.py` - Transform Lambda (processes images)
+- `cloudfront-router.py` - Lambda@Edge (cache-first routing)
+- `deploy.sh` - Deploys Transform Lambda + Layer
+- `deploy-cloudfront-router.sh` - Deploys CloudFront Router
+- `test-local.sh` - Local testing with HEIC images
 
 ## 🔧 How It Works
 
-### Upload Flow
+### Display Flow (Optimized)
 
 ```
-User uploads photo.dng (50MB)
+Request: thumbnail_url (?format=jpeg&width=800)
     ↓
-Backend stores to S3: gallery123/photo456.dng
-    ↓
-Database stores:
-  - url: cdn.galerly.com/gallery123/photo456.dng (original)
-  - thumbnail_url: cdn.galerly.com/gallery123/photo456.dng?format=jpeg&width=800&height=600
-  - medium_url: cdn.galerly.com/gallery123/photo456.dng?format=jpeg&width=2000&height=2000
+Lambda@Edge: Check S3 cache
+    ├─ CACHED? → Redirect to cache (50ms)
+    └─ NOT CACHED? → Trigger async transform + Return original
+                     (Transform completes in background)
+                     (Next request hits cache)
 ```
 
-### Display Flow
+### First vs Subsequent Loads
 
-```
-Browser requests thumbnail_url
-    ↓
-CloudFront receives: cdn.galerly.com/gallery123/photo456.dng?format=jpeg&width=800
-    ↓
-Cache miss → Lambda@Edge triggered
-    ↓
-Lambda@Edge invokes transform Lambda with params:
-  {s3_key: "gallery123/photo456.dng", format: "jpeg", width: 800, height: 600}
-    ↓
-Transform Lambda:
-  1. Checks cache: gallery123/photo456.dng/w800h600fjpeg
-  2. Not found → Fetches original from S3
-  3. Processes RAW → RGB array using rawpy
-  4. Resizes to 800x600 using Pillow
-  5. Converts to JPEG (quality=85)
-  6. Stores in cache bucket
-  7. Returns JPEG (200KB) to CloudFront
-    ↓
-CloudFront caches at edge
-    ↓
-Browser receives JPEG thumbnail (200KB, not 50MB!)
-```
+| Load | Time | What Happens |
+|------|------|--------------|
+| **First** | ~30s for 20 images | Async transforms, show originals |
+| **Second** | 2-3s for 20 images | All from S3 cache |
+| **Third+** | <1s for 20 images | CloudFront edge cache |
 
-### Subsequent Requests
+## 💾 Storage
 
-```
-Browser requests same thumbnail_url
-    ↓
-CloudFront hits edge cache
-    ↓
-Returns cached JPEG instantly (50-200ms)
-```
+Store originals only. Transformations cached on-demand.
 
-## 💾 Storage Comparison
-
-### Example: 1000 photos
-
-| Approach | Original | Thumbnails | Medium | Total | Savings |
-|----------|----------|------------|--------|-------|---------|
-| **Old (Duplicates)** | 50GB | 5GB | 30GB | **85GB** | - |
-| **New (On-Demand)** | 50GB | 0.2GB | 2GB | **52.2GB** | **38%** |
-
-The savings increase with more images since cached versions are tiny!
+**Example: 1000 photos**
+- Originals: 50GB
+- Cached transforms: 2-3GB (only what's requested)
+- Total: 52-53GB (vs 85GB with duplicates)
+- **Savings: 38%**
 
 ## ⚡ Performance
 
-| Scenario | Time | Notes |
-|----------|------|-------|
-| First request (RAW) | 2-5s | Processing + caching |
-| First request (JPEG) | 200-500ms | Resize + cache |
-| Cached request | 50-200ms | CloudFront edge |
-| Download original | Varies | Full quality file |
-
-## 🧪 Testing
-
-### Test Lambda Directly
-
-```bash
-aws lambda invoke \
-    --function-name galerly-image-transform \
-    --payload '{
-        "s3_key": "test/photo.dng",
-        "width": 800,
-        "height": 600,
-        "format": "jpeg"
-    }' \
-    response.json
-```
-
-### Test via CloudFront
-
-```bash
-# RAW image
-curl "https://cdn.galerly.com/gallery/photo.dng?format=jpeg&width=800" -o test.jpg
-
-# HEIC image
-curl "https://cdn.galerly.com/gallery/photo.heic?format=jpeg&width=800" -o test.jpg
-
-# Check cache header
-curl -I "https://cdn.galerly.com/gallery/photo.dng?format=jpeg&width=800"
-# Should see: X-Cache: Hit (after first request)
-```
+| Scenario | Time |
+|----------|------|
+| Regular JPEG (no transform) | 50-100ms |
+| Cached transform | 50-200ms |
+| First RAW transform | 2-5s |
+| ZIP download (originals) | Varies by size |
 
 ## 🎯 Supported Formats
 
-### Input Formats
-- **RAW**: DNG, CR2, CR3, NEF, ARW, RAF, ORF, RW2, PEF, 3FR
-- **HEIC/HEIF**: iPhone photos
-- **Standard**: JPEG, PNG, GIF, WebP, TIFF, BMP
+**Input:** RAW (DNG, CR2, NEF, ARW), HEIC, TIFF, JPEG, PNG  
+**Output:** JPEG (default), PNG, WebP
 
-### Output Formats
-- JPEG (default, best compatibility)
-- PNG (lossless)
-- WebP (modern browsers)
+## 🧪 Local Testing
 
-## 🔐 Security
+```bash
+cd backend/image-transform
 
-- Lambda has read-only access to source bucket
-- Lambda has read-write access to cache bucket only
-- CloudFront requires signed URLs (optional)
-- No public S3 access - all via CloudFront
+# Install dependencies in venv
+python3 -m venv venv
+source venv/bin/activate
+pip install Pillow rawpy pillow-heif boto3
 
-## 💰 Cost Estimate
+# Run tests with your images
+./test-local.sh /path/to/images
+```
 
-For 10,000 photo views/day:
+## 📋 GitHub Secrets Required
 
-| Service | Cost/Month | Notes |
-|---------|-----------|-------|
-| Lambda invocations | ~$5 | Only on cache miss |
-| Lambda compute | ~$10 | RAW processing |
-| S3 storage (cache) | ~$1 | Cached thumbnails |
-| CloudFront | ~$8 | Data transfer |
-| **Total** | **~$24/month** | vs ~$40 with duplicates |
+```
+AWS_ACCESS_KEY_ID
+AWS_SECRET_ACCESS_KEY
+CLOUDFRONT_DISTRIBUTION_ID
+LAMBDA_IMAGE_TRANSFORM_FUNCTION_NAME
+LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME
+S3_IMAGE_CACHE_BUCKET
+S3_PHOTOS_BUCKET
+```
 
-## 📚 References
+## 🔐 IAM Permissions
 
-- [AWS Serverless Image Handler](https://aws.amazon.com/solutions/implementations/serverless-image-handler/)
-- [Lambda@Edge Documentation](https://docs.aws.amazon.com/lambda/latest/dg/lambda-edge.html)
-- [CloudFront Caching](https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/ConfiguringCaching.html)
+**Transform Lambda:**
+- S3: Read from uploads bucket
+- S3: Read/Write to cache bucket
+
+**CloudFront Router:**
+- Lambda: Invoke transform function
+- S3: Head/Get from cache bucket
+
+## 💰 Cost (10k views/day)
+
+- Lambda: ~$10/month
+- S3 cache: ~$1/month
+- CloudFront: ~$8/month
+- **Total: ~$19/month**
 

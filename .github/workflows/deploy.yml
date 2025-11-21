@@ -1141,9 +1141,19 @@ jobs:
           CURRENT_LAMBDA=$(jq -r '.DefaultCacheBehavior.LambdaFunctionAssociations.Items[]? | select(.EventType=="origin-request") | .LambdaFunctionARN' /tmp/dist-config.json || echo "")
           
           if [ "$CURRENT_LAMBDA" = "$ROUTER_ARN" ]; then
-            echo "✅ Lambda@Edge already attached with correct version"
-            echo "   No CloudFront update needed"
+            echo "✅ Correct Lambda@Edge already attached: $ROUTER_ARN"
+            echo "   Skipping CloudFront update"
           else
+            if [ -n "$CURRENT_LAMBDA" ]; then
+              echo "🔄 Replacing existing Lambda@Edge function"
+              echo "   Old: $CURRENT_LAMBDA"
+              echo "   New: $ROUTER_ARN"
+            else
+              echo "🆕 Attaching Lambda@Edge function"
+              echo "   ARN: $ROUTER_ARN"
+            fi
+            echo ""
+            
             echo "🔧 Updating CloudFront distribution..."
             
             # Update Lambda@Edge association using jq
@@ -1218,6 +1228,127 @@ jobs:
           echo ""
           echo "=========================================="
           echo "✅ Lambda@Edge Configuration Complete!"
+          echo "=========================================="
+
+      - name: Verify Lambda@Edge Attachment
+        run: |
+          echo "=========================================="
+          echo "🔍 VERIFYING LAMBDA@EDGE ATTACHMENT"
+          echo "=========================================="
+          echo ""
+          
+          # Check Lambda@Edge attachment to CloudFront
+          echo "📥 Checking CloudFront configuration..."
+          LAMBDA_ASSOCIATIONS=$(aws cloudfront get-distribution-config \
+            --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --query 'DistributionConfig.DefaultCacheBehavior.LambdaFunctionAssociations' \
+            --output json)
+          
+          ORIGIN_REQUEST_LAMBDA=$(echo "$LAMBDA_ASSOCIATIONS" | jq -r '.Items[]? | select(.EventType=="origin-request") | .LambdaFunctionARN' 2>/dev/null || echo "")
+          
+          if [ -n "$ORIGIN_REQUEST_LAMBDA" ]; then
+            echo "✅ Lambda@Edge attached to origin-request event"
+            echo "   ARN: $ORIGIN_REQUEST_LAMBDA"
+            
+            # Check if it's the correct function
+            if [[ "$ORIGIN_REQUEST_LAMBDA" == *"${{ secrets.LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME }}"* ]]; then
+              echo "✅ Correct Lambda@Edge function attached"
+              
+              # Extract version
+              ATTACHED_VERSION=$(echo "$ORIGIN_REQUEST_LAMBDA" | awk -F: '{print $NF}')
+              echo "   Version: $ATTACHED_VERSION"
+            else
+              echo "⚠️  Warning: Different Lambda@Edge function attached"
+            fi
+          else
+            echo "❌ No Lambda@Edge attached to origin-request"
+            echo "   Image transformation will not work!"
+            exit 1
+          fi
+          
+          # Check CloudFront deployment status
+          STATUS=$(aws cloudfront get-distribution \
+            --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --query 'Distribution.Status' \
+            --output text)
+          
+          echo ""
+          echo "🌐 CloudFront Status: $STATUS"
+          
+          if [ "$STATUS" = "Deployed" ]; then
+            echo "✅ CloudFront is fully deployed"
+            echo "   Image transformation is active"
+          else
+            echo "⚠️  CloudFront is still deploying"
+            echo "   Image transformation will activate when deployment completes"
+          fi
+          
+          echo ""
+          echo "=========================================="
+          echo "✅ Lambda@Edge Verification Complete"
+          echo "=========================================="
+
+      - name: Cleanup Old Lambda Functions
+        run: |
+          echo "=========================================="
+          echo "🧹 CLEANING UP OLD LAMBDA FUNCTIONS"
+          echo "=========================================="
+          echo ""
+          
+          # List of old Lambda@Edge functions to remove
+          OLD_FUNCTIONS=(
+            "galerly-image-resize-edge"
+          )
+          
+          for FUNC in "${OLD_FUNCTIONS[@]}"; do
+            echo "🔍 Checking for old function: $FUNC"
+            
+            if aws lambda get-function --function-name "$FUNC" --region us-east-1 >/dev/null 2>&1; then
+              echo "   Found old function: $FUNC"
+              
+              # Check if it's still attached to CloudFront
+              LAMBDA_ASSOCIATIONS=$(aws cloudfront get-distribution-config \
+                --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+                --query 'DistributionConfig.DefaultCacheBehavior.LambdaFunctionAssociations.Items[].LambdaFunctionARN' \
+                --output text 2>/dev/null || echo "")
+              
+              if echo "$LAMBDA_ASSOCIATIONS" | grep -q "$FUNC"; then
+                echo "   ⚠️  Function still attached to CloudFront - skipping deletion"
+              else
+                echo "   🗑️  Deleting old function (not in use)..."
+                
+                # Delete all versions first
+                VERSIONS=$(aws lambda list-versions-by-function \
+                  --function-name "$FUNC" \
+                  --region us-east-1 \
+                  --query 'Versions[?Version!=`$LATEST`].Version' \
+                  --output text 2>/dev/null || echo "")
+                
+                if [ -n "$VERSIONS" ]; then
+                  echo "   📦 Deleting $(echo $VERSIONS | wc -w) versions..."
+                  for VERSION in $VERSIONS; do
+                    aws lambda delete-function \
+                      --function-name "$FUNC" \
+                      --qualifier "$VERSION" \
+                      --region us-east-1 2>/dev/null || true
+                  done
+                fi
+                
+                # Delete the function
+                aws lambda delete-function \
+                  --function-name "$FUNC" \
+                  --region us-east-1 2>/dev/null || true
+                
+                echo "   ✅ Deleted: $FUNC"
+              fi
+            else
+              echo "   ✅ Not found (already cleaned up)"
+            fi
+            echo ""
+          done
+          
+          echo "=========================================="
+          echo "✅ Cleanup Complete"
           echo "=========================================="
 
       - name: Verify Image Transformation System

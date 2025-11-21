@@ -54,8 +54,10 @@ EOF
         --role-name lambda-edge-role \
         --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
     
-    # Create inline policy for Lambda invocation
-    # Lambda@Edge needs to invoke the image-transform Lambda
+    # Create inline policy for Lambda invocation and S3 cache access
+    # Lambda@Edge needs to:
+    # 1. Invoke the image-transform Lambda
+    # 2. Check S3 cache bucket for cached transforms
     cat > /tmp/lambda-invoke-policy.json << EOF
 {
   "Version": "2012-10-17",
@@ -66,6 +68,14 @@ EOF
         "lambda:InvokeFunction"
       ],
       "Resource": "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:galerly-image-transform"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:HeadObject"
+      ],
+      "Resource": "arn:aws:s3:::galerly-image-cache/*"
     }
   ]
 }
@@ -73,10 +83,10 @@ EOF
     
     aws iam put-role-policy \
         --role-name lambda-edge-role \
-        --policy-name LambdaInvokePolicy \
+        --policy-name LambdaEdgePolicy \
         --policy-document file:///tmp/lambda-invoke-policy.json
     
-    echo "✅ IAM policies attached (CloudWatch Logs + Lambda Invoke)"
+    echo "✅ IAM policies attached (CloudWatch + Lambda Invoke + S3 Read)"
     
     # Wait for role to be ready
     echo "⏳ Waiting for IAM role to propagate..."
@@ -85,7 +95,7 @@ EOF
     echo "✅ IAM role created"
     echo ""
 else
-    # Role exists - verify it has Lambda invoke permission
+    # Role exists - verify it has correct permissions
     echo "✅ IAM role exists"
     
     # Update inline policy to ensure correct permissions
@@ -99,6 +109,14 @@ else
         "lambda:InvokeFunction"
       ],
       "Resource": "arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:galerly-image-transform"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:GetObject",
+        "s3:HeadObject"
+      ],
+      "Resource": "arn:aws:s3:::galerly-image-cache/*"
     }
   ]
 }
@@ -106,11 +124,11 @@ EOF
     
     aws iam put-role-policy \
         --role-name lambda-edge-role \
-        --policy-name LambdaInvokePolicy \
+        --policy-name LambdaEdgePolicy \
         --policy-document file:///tmp/lambda-invoke-policy.json \
         2>/dev/null || true
     
-    echo "✅ Lambda invoke permission verified"
+    echo "✅ Lambda invoke and S3 cache permissions verified"
     echo ""
 fi
 
