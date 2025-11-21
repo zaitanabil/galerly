@@ -1,7 +1,7 @@
 {
   "Rules": [
     {
-      "Id": "CleanOldCache",
+      "ID": "CleanOldCache",
       "Status": "Enabled",
       "Prefix": "",
       "Expiration": {
@@ -12,7 +12,7 @@
       }
     },
     {
-      "Id": "CleanIncompleteUploads",
+      "ID": "CleanIncompleteUploads",
       "Status": "Enabled",
       "Prefix": "",
       "AbortIncompleteMultipartUpload": {
