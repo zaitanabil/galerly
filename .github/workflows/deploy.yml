@@ -291,7 +291,6 @@ jobs:
             aws lambda update-function-configuration \
               --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
               --environment "Variables={
-                AWS_REGION=${{ env.AWS_REGION }},
                 JWT_SECRET=${{ secrets.JWT_SECRET }},
                 FRONTEND_URL=${{ secrets.FRONTEND_URL }},
                 S3_PHOTOS_BUCKET=${{ secrets.S3_PHOTOS_BUCKET }},
