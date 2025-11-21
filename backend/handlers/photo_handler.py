@@ -145,10 +145,6 @@ def handle_upload_photo(gallery_id, user, event):
         photo_id = str(uuid.uuid4())
         s3_key_full = f"{gallery_id}/{photo_id}{file_extension}"
         
-        # ⚡ PERFORMANCE FIX: Skip thumbnail generation for faster uploads
-        # Thumbnails will be generated on-demand by CloudFront + Lambda@Edge
-        print(f"⚡ FAST UPLOAD: Skipping thumbnail generation (CloudFront will generate on-demand)")
-        
         # Get proper MIME type from file extension
         from utils.mime_types import get_mime_type
         content_type = get_mime_type(filename_from_client)
@@ -162,8 +158,16 @@ def handle_upload_photo(gallery_id, user, event):
         )
         print(f"✅ Full-res uploaded: {s3_key_full} ({len(image_data):,} bytes, {content_type})")
         
-        # Generate CloudFront CDN URLs with automatic resizing
-        # URL format: https://cdn.galerly.com/resize/{width}x{height}/{s3_key}
+        # ==========================================
+        # STORAGE STRATEGY: Single source of truth
+        # ==========================================
+        # Store ONLY the original file (RAW, HEIC, JPEG, etc.)
+        # Thumbnails generated on-demand by image-transform Lambda
+        # Cached thumbnails stored separately (much smaller than originals)
+        # ==========================================
+        
+        # Generate CDN URLs with transformation parameters
+        # The image-transform Lambda will process these on-demand
         photo_urls = get_photo_urls(s3_key_full)
         
         # Create photo record with hashes for future duplicate detection

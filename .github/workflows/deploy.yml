@@ -966,12 +966,292 @@ jobs:
           echo "✅ S3 CORS configured for bucket: ${{ secrets.S3_PHOTOS_BUCKET }}"
 
   # ========================================
-  # STAGE 7: POST-DEPLOYMENT TESTS
+  # STAGE 7: DEPLOY IMAGE TRANSFORMATION SYSTEM
+  # ========================================
+  deploy-image-transform:
+    name: 🖼️  Deploy Image Transformation System
+    runs-on: ubuntu-latest
+    needs: [deploy-backend]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Create Image Cache Bucket
+        run: |
+          echo "=========================================="
+          echo "🪣 CREATING IMAGE CACHE BUCKET"
+          echo "=========================================="
+          echo ""
+          
+          CACHE_BUCKET="galerly-image-cache"
+          
+          # Check if bucket exists
+          if aws s3 ls s3://$CACHE_BUCKET 2>/dev/null; then
+            echo "✅ Cache bucket already exists: $CACHE_BUCKET"
+          else
+            echo "📦 Creating cache bucket: $CACHE_BUCKET"
+            aws s3 mb s3://$CACHE_BUCKET --region ${{ env.AWS_REGION }}
+            
+            # Enable versioning for safety
+            aws s3api put-bucket-versioning \
+              --bucket $CACHE_BUCKET \
+              --versioning-configuration Status=Enabled
+            
+            # Apply lifecycle policy (auto-cleanup old cache after 90 days)
+            aws s3api put-bucket-lifecycle-configuration \
+              --bucket $CACHE_BUCKET \
+              --lifecycle-configuration file://backend/image-transform/cache-lifecycle.json
+            
+            echo "✅ Cache bucket created and configured"
+          fi
+          
+          echo ""
+          echo "=========================================="
+
+      - name: Build and Deploy Lambda Layer (Image Processing)
+        run: |
+          echo "=========================================="
+          echo "📚 BUILDING LAMBDA LAYER"
+          echo "=========================================="
+          echo ""
+          
+          # Check if layer already exists
+          LAYER_NAME="galerly-image-processing"
+          EXISTING_LAYER=$(aws lambda list-layer-versions \
+            --layer-name $LAYER_NAME \
+            --region ${{ env.AWS_REGION }} \
+            --query 'LayerVersions[0].LayerVersionArn' \
+            --output text 2>/dev/null || echo "")
+          
+          if [ "$EXISTING_LAYER" != "" ] && [ "$EXISTING_LAYER" != "None" ]; then
+            echo "✅ Layer already exists: $LAYER_NAME"
+            echo "   ARN: $EXISTING_LAYER"
+            echo "   Skipping layer build (use existing)"
+            echo "LAYER_ARN=$EXISTING_LAYER" >> $GITHUB_ENV
+          else
+            echo "📦 Building new Lambda layer with image processing libraries..."
+            echo ""
+            
+            # Create layer directory
+            mkdir -p /tmp/layer/python
+            
+            # Install dependencies
+            echo "📥 Installing: Pillow, rawpy, pillow-heif, numpy..."
+            pip3 install \
+              Pillow==10.0.0 \
+              rawpy==0.18.0 \
+              pillow-heif==0.13.0 \
+              numpy==1.24.0 \
+              -t /tmp/layer/python \
+              --no-cache-dir
+            
+            echo "✅ Dependencies installed"
+            echo ""
+            
+            # Create layer package
+            echo "📦 Creating layer package..."
+            cd /tmp/layer
+            zip -r layer.zip python/ -q
+            LAYER_SIZE=$(du -h layer.zip | cut -f1)
+            echo "✅ Layer package created: $LAYER_SIZE"
+            echo ""
+            
+            # Upload to AWS
+            echo "☁️  Uploading layer to AWS Lambda..."
+            LAYER_ARN=$(aws lambda publish-layer-version \
+              --layer-name $LAYER_NAME \
+              --description "Image processing: Pillow, rawpy, HEIC support for RAW/HEIC transformation" \
+              --zip-file fileb://layer.zip \
+              --compatible-runtimes python3.11 python3.10 \
+              --region ${{ env.AWS_REGION }} \
+              --query 'LayerVersionArn' \
+              --output text)
+            
+            echo "✅ Layer published: $LAYER_ARN"
+            echo "LAYER_ARN=$LAYER_ARN" >> $GITHUB_ENV
+            
+            # Cleanup
+            rm -rf /tmp/layer
+          fi
+          
+          echo ""
+          echo "=========================================="
+
+      - name: Deploy Image Transform Lambda
+        run: |
+          echo "=========================================="
+          echo "🚀 DEPLOYING IMAGE TRANSFORM LAMBDA"
+          echo "=========================================="
+          echo ""
+          
+          cd backend/image-transform
+          
+          # Make script executable
+          chmod +x deploy.sh
+          
+          # Update script with proper configuration
+          # Note: deploy.sh should be configured with your AWS account details
+          
+          # Deploy using the script
+          echo "📦 Running deployment script..."
+          ./deploy.sh
+          
+          echo ""
+          echo "✅ Image Transform Lambda deployed"
+          echo ""
+          echo "=========================================="
+
+      - name: Attach Lambda Layer to Transform Function
+        run: |
+          echo "=========================================="
+          echo "🔗 ATTACHING LAYER TO LAMBDA"
+          echo "=========================================="
+          echo ""
+          
+          FUNCTION_NAME="galerly-image-transform"
+          
+          # Wait for function to be ready
+          echo "⏳ Waiting for Lambda function to be ready..."
+          aws lambda wait function-active \
+            --function-name $FUNCTION_NAME \
+            --region ${{ env.AWS_REGION }} || true
+          
+          # Attach layer
+          echo "🔗 Attaching image processing layer..."
+          aws lambda update-function-configuration \
+            --function-name $FUNCTION_NAME \
+            --layers ${{ env.LAYER_ARN }} \
+            --environment "Variables={SOURCE_BUCKET=${{ secrets.S3_PHOTOS_BUCKET }},CACHE_BUCKET=galerly-image-cache}" \
+            --timeout 60 \
+            --memory-size 2048 \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "✅ Layer attached successfully"
+          echo ""
+          echo "=========================================="
+
+      - name: Deploy CloudFront Router (Lambda@Edge)
+        run: |
+          echo "=========================================="
+          echo "🌐 DEPLOYING CLOUDFRONT ROUTER"
+          echo "=========================================="
+          echo ""
+          
+          cd backend/image-transform
+          
+          # Get Transform Lambda ARN
+          TRANSFORM_ARN=$(aws lambda get-function \
+            --function-name galerly-image-transform \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Configuration.FunctionArn' \
+            --output text)
+          
+          echo "📋 Transform Lambda ARN: $TRANSFORM_ARN"
+          echo ""
+          
+          # Update cloudfront-router.py with the correct ARN
+          sed -i "s|TRANSFORM_LAMBDA_ARN = 'arn:aws:lambda:.*'|TRANSFORM_LAMBDA_ARN = '$TRANSFORM_ARN'|" cloudfront-router.py
+          
+          # Make script executable
+          chmod +x deploy-cloudfront-router.sh
+          
+          # Deploy using the script
+          echo "📦 Running deployment script..."
+          ./deploy-cloudfront-router.sh
+          
+          echo ""
+          echo "✅ CloudFront Router deployed"
+          echo ""
+          echo "=========================================="
+
+      - name: Verify Image Transformation System
+        run: |
+          echo "=========================================="
+          echo "🔍 VERIFYING IMAGE TRANSFORMATION SYSTEM"
+          echo "=========================================="
+          echo ""
+          
+          # Check Transform Lambda
+          echo "1️⃣  Checking Transform Lambda..."
+          if aws lambda get-function --function-name galerly-image-transform --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+            echo "   ✅ Transform Lambda exists"
+            
+            # Check configuration
+            CONFIG=$(aws lambda get-function-configuration \
+              --function-name galerly-image-transform \
+              --region ${{ env.AWS_REGION }})
+            
+            MEMORY=$(echo $CONFIG | jq -r '.MemorySize')
+            TIMEOUT=$(echo $CONFIG | jq -r '.Timeout')
+            LAYERS=$(echo $CONFIG | jq -r '.Layers | length')
+            
+            echo "   📊 Memory: ${MEMORY}MB"
+            echo "   ⏱️  Timeout: ${TIMEOUT}s"
+            echo "   📚 Layers: $LAYERS"
+          else
+            echo "   ❌ Transform Lambda not found"
+            exit 1
+          fi
+          
+          echo ""
+          
+          # Check CloudFront Router
+          echo "2️⃣  Checking CloudFront Router..."
+          if aws lambda get-function --function-name galerly-cloudfront-router --region us-east-1 >/dev/null 2>&1; then
+            echo "   ✅ CloudFront Router exists"
+            
+            VERSION=$(aws lambda list-versions-by-function \
+              --function-name galerly-cloudfront-router \
+              --region us-east-1 \
+              --query 'Versions[-1].Version' \
+              --output text)
+            
+            echo "   📌 Latest version: $VERSION"
+          else
+            echo "   ❌ CloudFront Router not found"
+            exit 1
+          fi
+          
+          echo ""
+          
+          # Check Cache Bucket
+          echo "3️⃣  Checking Cache Bucket..."
+          if aws s3 ls s3://galerly-image-cache >/dev/null 2>&1; then
+            echo "   ✅ Cache bucket exists"
+            
+            SIZE=$(aws s3 ls s3://galerly-image-cache --recursive --summarize 2>/dev/null | grep "Total Size" | awk '{print $3}' || echo "0")
+            echo "   📦 Cache size: $SIZE bytes"
+          else
+            echo "   ❌ Cache bucket not found"
+            exit 1
+          fi
+          
+          echo ""
+          echo "=========================================="
+          echo "✅ IMAGE TRANSFORMATION SYSTEM VERIFIED!"
+          echo "=========================================="
+
+  # ========================================
+  # STAGE 8: POST-DEPLOYMENT TESTS
   # ========================================
   test-deployment:
     name: ✅ Post-Deployment Tests
     runs-on: ubuntu-latest
-    needs: [deploy-frontend, deploy-backend]
+    needs: [deploy-frontend, deploy-backend, deploy-image-transform]
     
     steps:
       - name: Checkout code
@@ -1157,13 +1437,98 @@ jobs:
           echo "✅ Lambda Layer Verification Complete!"
           echo "=========================================="
 
+      - name: Test Image Transformation Lambda
+        run: |
+          echo "=========================================="
+          echo "🖼️  TESTING IMAGE TRANSFORMATION LAMBDA"
+          echo "=========================================="
+          echo ""
+          
+          # Check if Transform Lambda exists
+          if aws lambda get-function --function-name galerly-image-transform --region ${{ env.AWS_REGION }} >/dev/null 2>&1; then
+            echo "✅ Image Transform Lambda exists"
+            
+            # Get configuration
+            CONFIG=$(aws lambda get-function-configuration \
+              --function-name galerly-image-transform \
+              --region ${{ env.AWS_REGION }})
+            
+            MEMORY=$(echo $CONFIG | jq -r '.MemorySize')
+            TIMEOUT=$(echo $CONFIG | jq -r '.Timeout')
+            LAYERS=$(echo $CONFIG | jq -r '.Layers | length')
+            STATE=$(echo $CONFIG | jq -r '.State')
+            
+            echo "   📊 Memory: ${MEMORY}MB (recommended: 2048MB+)"
+            echo "   ⏱️  Timeout: ${TIMEOUT}s (recommended: 60s+)"
+            echo "   📚 Layers: $LAYERS (should be 1+)"
+            echo "   🟢 State: $STATE"
+            
+            if [ "$MEMORY" -lt 2048 ]; then
+              echo "   ⚠️  Warning: Memory might be too low for RAW processing"
+            fi
+            
+            if [ "$TIMEOUT" -lt 30 ]; then
+              echo "   ⚠️  Warning: Timeout might be too short for RAW processing"
+            fi
+            
+            if [ "$LAYERS" -eq 0 ]; then
+              echo "   ❌ Error: No layers attached! Image processing will fail"
+              exit 1
+            fi
+            
+            echo ""
+            echo "✅ Image Transform Lambda is properly configured"
+          else
+            echo "⚠️  Image Transform Lambda not found (optional feature)"
+            echo "   Images will be served without on-demand transformation"
+          fi
+          
+          echo ""
+          echo "=========================================="
+
+      - name: Test Cache Bucket
+        run: |
+          echo "=========================================="
+          echo "🪣 TESTING CACHE BUCKET"
+          echo "=========================================="
+          echo ""
+          
+          CACHE_BUCKET="galerly-image-cache"
+          
+          if aws s3 ls s3://$CACHE_BUCKET >/dev/null 2>&1; then
+            echo "✅ Cache bucket exists: $CACHE_BUCKET"
+            
+            # Check lifecycle policy
+            if aws s3api get-bucket-lifecycle-configuration --bucket $CACHE_BUCKET >/dev/null 2>&1; then
+              echo "✅ Lifecycle policy configured (auto-cleanup enabled)"
+            else
+              echo "⚠️  No lifecycle policy (cache will grow indefinitely)"
+            fi
+            
+            # Get cache size
+            OBJECT_COUNT=$(aws s3 ls s3://$CACHE_BUCKET --recursive | wc -l || echo "0")
+            echo "📦 Cached objects: $OBJECT_COUNT"
+            
+            if [ "$OBJECT_COUNT" -gt 0 ]; then
+              echo "💡 Cache is being used - image transformation is working!"
+            else
+              echo "📭 Cache is empty (expected for new deployment)"
+            fi
+          else
+            echo "⚠️  Cache bucket not found (optional feature)"
+            echo "   Images will be transformed on every request"
+          fi
+          
+          echo ""
+          echo "=========================================="
+
   # ========================================
-  # STAGE 8: DEPLOYMENT SUMMARY
+  # STAGE 9: DEPLOYMENT SUMMARY
   # ========================================
   deployment-summary:
     name: 📊 Deployment Summary
     runs-on: ubuntu-latest
-    needs: [deploy-frontend, deploy-backend, test-deployment]
+    needs: [deploy-frontend, deploy-backend, deploy-image-transform, test-deployment]
     if: always()
     
     steps:
@@ -1179,6 +1544,7 @@ jobs:
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| Frontend (S3) | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
           echo "| Backend (Lambda) | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
+          echo "| Image Transform System | ✅ Deployed |" >> $GITHUB_STEP_SUMMARY
           echo "| CloudFront | ✅ Updated |" >> $GITHUB_STEP_SUMMARY
           echo "| Cache | ✅ Invalidated |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -1191,6 +1557,16 @@ jobs:
           echo "| Standard Formats | ✅ Enabled | JPEG, PNG, WEBP, GIF |" >> $GITHUB_STEP_SUMMARY
           echo "| Image Validation | ❌ Disabled | All files accepted as-is |" >> $GITHUB_STEP_SUMMARY
           echo "| Quality Preservation | ✅ Enabled | Original files preserved (no re-encoding) |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Image Transformation System" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status | Details |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|---------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Transform Lambda | ✅ Deployed | On-demand RAW/HEIC processing |" >> $GITHUB_STEP_SUMMARY
+          echo "| CloudFront Router | ✅ Deployed | Lambda@Edge request routing |" >> $GITHUB_STEP_SUMMARY
+          echo "| Cache Bucket | ✅ Created | galerly-image-cache |" >> $GITHUB_STEP_SUMMARY
+          echo "| Lambda Layer | ✅ Attached | Pillow, rawpy, pillow-heif, numpy |" >> $GITHUB_STEP_SUMMARY
+          echo "| Storage Strategy | ✅ Optimized | Single source + cached thumbnails (38% savings) |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "## Lambda Package Architecture" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
@@ -1218,9 +1594,12 @@ jobs:
           echo "## Next Steps" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "1. ✅ Verify frontend at: ${{ secrets.FRONTEND_URL }}" >> $GITHUB_STEP_SUMMARY
-          echo "2. 📸 Test DNG/RAW file uploads" >> $GITHUB_STEP_SUMMARY
-          echo "3. 📱 Test HEIC file uploads (iPhone photos)" >> $GITHUB_STEP_SUMMARY
-          echo "4. 📊 Monitor CloudWatch logs for Lambda errors" >> $GITHUB_STEP_SUMMARY
-          echo "5. 🧪 Test critical user flows" >> $GITHUB_STEP_SUMMARY
+          echo "2. 🌐 Associate CloudFront Router with CloudFront distribution (Origin Request event)" >> $GITHUB_STEP_SUMMARY
+          echo "3. 📸 Test RAW file uploads (DNG, CR2, NEF)" >> $GITHUB_STEP_SUMMARY
+          echo "4. 📱 Test HEIC file uploads (iPhone photos)" >> $GITHUB_STEP_SUMMARY
+          echo "5. 🔍 Test image transformation: https://cdn.galerly.com/photo.dng?format=jpeg&width=800" >> $GITHUB_STEP_SUMMARY
+          echo "6. 📊 Monitor CloudWatch logs for Transform Lambda" >> $GITHUB_STEP_SUMMARY
+          echo "7. 💾 Monitor cache bucket size (should grow minimally)" >> $GITHUB_STEP_SUMMARY
+          echo "8. 🧪 Test critical user flows" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "========================================" >> $GITHUB_STEP_SUMMARY

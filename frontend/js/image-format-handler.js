@@ -80,13 +80,18 @@ async function loadImageSmart(img, url, onSuccess, onError) {
     if (isHEICUrl(url) || isTIFFUrl(url)) {
         console.log(`🔄 Detected ${isHEICUrl(url) ? 'HEIC' : 'TIFF'} image, attempting to load...`);
         
-        // Try to load normally first (in case backend converted it)
+        // For images with data-src, set src now so tryLoadImage can work
+        if (img.dataset.src && !img.src) {
+            img.src = url;
+        }
+        
+        // Try to load normally first (in case CloudFront transformed it)
         await tryLoadImage(img, url, async () => {
             console.log(`✅ Image loaded successfully: ${url}`);
             if (onSuccess) onSuccess();
         }, async () => {
-            // If normal load fails, try conversion
-            console.log(`⚠️  Browser cannot display format, attempting conversion...`);
+            // If normal load fails, try client-side conversion
+            console.log(`⚠️  Browser cannot display format, attempting client-side conversion...`);
             await convertAndLoadImage(img, url, onSuccess, onError);
         });
         
@@ -118,18 +123,21 @@ async function loadImageSmart(img, url, onSuccess, onError) {
 
 /**
  * Try to load image normally
+ * Sets img.src only after successful load to prevent premature onerror
  */
 function tryLoadImage(img, url, onSuccess, onError) {
     return new Promise((resolve) => {
         const tempImg = new Image();
         
         tempImg.onload = () => {
+            // Only set src on actual img after successful load
             img.src = url;
             if (onSuccess) onSuccess();
             resolve(true);
         };
         
         tempImg.onerror = () => {
+            // Don't set src on error - prevents browser from trying to load broken URL
             if (onError) onError();
             resolve(false);
         };
@@ -139,6 +147,7 @@ function tryLoadImage(img, url, onSuccess, onError) {
             tempImg.crossOrigin = 'anonymous';
         }
         
+        // Test load with temp image first
         tempImg.src = url;
     });
 }
@@ -275,73 +284,100 @@ function enhanceGalleryImages() {
         // Skip if already enhanced
         if (img.dataset.enhanced) return;
         
-        const originalSrc = img.src || img.dataset.src;
+        // Get src from either src attribute or data-src (for deferred loading)
+        const originalSrc = img.src || img.dataset.src || img.getAttribute('data-src');
         if (!originalSrc) return;
         
-        // ONLY enhance problematic formats (HEIC, TIFF)
-        // RAW formats: Try to load directly (CloudFront should transform via Lambda@Edge)
-        // If RAW URL has format=jpeg, it should work - if not, it will fail gracefully
+        // If image has data-src but no src, it's waiting for enhancement
+        // Set up blur effect and prepare for loading
+        if (img.dataset.src && !img.src) {
+            // Ensure blur and background are set
+            if (!img.style.filter) {
+                img.style.filter = 'blur(10px)';
+            }
+            if (!img.style.transition) {
+                img.style.transition = 'filter 0.3s ease';
+            }
+            if (!img.style.backgroundColor) {
+                img.style.backgroundColor = '#F5F5F7';
+            }
+            if (!img.style.minHeight) {
+                img.style.minHeight = '200px';
+            }
+        }
+        
+        // ONLY enhance problematic formats (HEIC, TIFF, RAW)
         // Standard images (JPEG, PNG, GIF, WebP) should load normally
-        if (isHEICUrl(originalSrc) || isTIFFUrl(originalSrc)) {
-            console.log(`🔍 Enhancing image: ${originalSrc}`);
-            
-            // Mark as enhanced BEFORE replacement
+        if (isHEICUrl(originalSrc) || isTIFFUrl(originalSrc) || isRAWUrl(originalSrc)) {
+            // Mark as enhanced BEFORE processing
             img.dataset.enhanced = 'true';
             
-            // Start with blurred image (progressive loading)
-            img.style.filter = 'blur(10px)';
-            img.style.transition = 'filter 0.3s ease';
-            img.style.backgroundColor = '#F5F5F7';
+            // Ensure blur effect is set BEFORE loading
+            if (!img.style.filter || !img.style.filter.includes('blur')) {
+                img.style.filter = 'blur(10px)';
+            }
+            if (!img.style.transition) {
+                img.style.transition = 'filter 0.3s ease';
+            }
+            if (!img.style.backgroundColor) {
+                img.style.backgroundColor = '#F5F5F7';
+            }
             
-            // Load smartly
-            loadImageSmart(
-                img,
-                originalSrc,
-                () => {
+            if (isHEICUrl(originalSrc) || isTIFFUrl(originalSrc)) {
+                console.log(`🔍 Enhancing HEIC/TIFF image: ${originalSrc}`);
+                
+                // For HEIC/TIFF, use loadImageSmart which handles conversion
+                // If image has data-src, we need to ensure src is set for loadImageSmart to work
+                // But we'll let loadImageSmart handle the actual loading via tryLoadImage
+                loadImageSmart(
+                    img,
+                    originalSrc,
+                    () => {
+                        // Remove blur when loaded
+                        img.style.filter = 'none';
+                        console.log(`✅ Enhanced image loaded: ${originalSrc}`);
+                    },
+                    (error) => {
+                        console.error(`❌ Failed to load enhanced image:`, error);
+                        const errorMsg = error?.message || error || 'Unknown error';
+                        console.error(`   Error details: ${errorMsg}`);
+                        // Keep blur and show error state
+                        img.style.filter = 'blur(10px)';
+                        img.style.opacity = '0.5';
+                        img.alt = 'Image not available';
+                    }
+                );
+            } else if (isRAWUrl(originalSrc)) {
+                // RAW images: Try to load directly - CloudFront should transform via Lambda@Edge
+                console.log(`📸 RAW image detected, attempting to load: ${originalSrc}`);
+                
+                // Set src now (with blur already applied)
+                if (img.dataset.src && !img.src) {
+                    img.src = originalSrc;
+                }
+                
+                // Try loading the transformed URL
+                const tempImg = new Image();
+                tempImg.crossOrigin = 'anonymous';
+                tempImg.onload = () => {
+                    // Ensure src is set on actual img
+                    if (!img.src) {
+                        img.src = originalSrc;
+                    }
                     // Remove blur when loaded
                     img.style.filter = 'none';
-                    console.log(`✅ Enhanced image loaded: ${originalSrc}`);
-                },
-                (error) => {
-                    console.error(`❌ Failed to load enhanced image:`, error);
-                    const errorMsg = error?.message || error || 'Unknown error';
-                    console.error(`   Error details: ${errorMsg}`);
+                    console.log(`✅ RAW image loaded successfully: ${originalSrc}`);
+                };
+                tempImg.onerror = () => {
+                    console.error(`❌ RAW image failed to load: ${originalSrc}`);
+                    console.error(`   This usually means CloudFront Lambda@Edge is not processing the ?format=jpeg parameter.`);
                     // Keep blur and show error state
                     img.style.filter = 'blur(10px)';
                     img.style.opacity = '0.5';
-                    img.alt = 'Image not available';
-                }
-            );
-        } else if (isRAWUrl(originalSrc)) {
-            // RAW images: Try to load directly - CloudFront should transform via Lambda@Edge
-            // If transformation fails (503 error), the image will fail to load
-            // This is expected if Lambda@Edge is not configured
-            console.log(`📸 RAW image detected in gallery, attempting to load: ${originalSrc}`);
-            img.dataset.enhanced = 'true';
-            
-            // Start with blurred image (progressive loading)
-            img.style.filter = 'blur(10px)';
-            img.style.transition = 'filter 0.3s ease';
-            img.style.backgroundColor = '#F5F5F7';
-            
-            // Try loading the transformed URL
-            const tempImg = new Image();
-            tempImg.crossOrigin = 'anonymous';
-            tempImg.onload = () => {
-                img.src = originalSrc;
-                // Remove blur when loaded
-                img.style.filter = 'none';
-                console.log(`✅ RAW image loaded successfully: ${originalSrc}`);
-            };
-            tempImg.onerror = () => {
-                console.error(`❌ RAW image failed to load: ${originalSrc}`);
-                console.error(`   This usually means CloudFront Lambda@Edge is not processing the ?format=jpeg parameter.`);
-                // Keep blur and show error state
-                img.style.filter = 'blur(10px)';
-                img.style.opacity = '0.5';
-                img.style.border = '2px solid #ef4444';
-            };
-            tempImg.src = originalSrc;
+                    img.style.border = '2px solid #ef4444';
+                };
+                tempImg.src = originalSrc;
+            }
         }
         // Standard images (JPEG, PNG, etc.) - DO NOT mark as enhanced, let them load normally
     });

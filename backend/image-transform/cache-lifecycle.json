@@ -1,0 +1,24 @@
+{
+  "Rules": [
+    {
+      "Id": "CleanOldCache",
+      "Status": "Enabled",
+      "Prefix": "",
+      "Expiration": {
+        "Days": 90
+      },
+      "NoncurrentVersionExpiration": {
+        "NoncurrentDays": 7
+      }
+    },
+    {
+      "Id": "CleanIncompleteUploads",
+      "Status": "Enabled",
+      "Prefix": "",
+      "AbortIncompleteMultipartUpload": {
+        "DaysAfterInitiation": 7
+      }
+    }
+  ]
+}
+

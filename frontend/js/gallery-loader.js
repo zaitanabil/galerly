@@ -328,17 +328,26 @@ function renderGalleryPhotos(photos, startIndex, count) {
         }
         const isFavorite = photo.is_favorite === true;
         const isApproved = photo.status === 'approved';
+        
+        // Check if this is a format that needs enhancement (HEIC, TIFF, RAW)
+        // These formats should be handled by image-format-handler.js to prevent premature onerror
+        const filename = photo.filename || '';
+        const needsEnhancement = /\.(heic|heif|tif|tiff|dng|cr2|cr3|nef|arw|raf|orf|rw2|pef|3fr)$/i.test(filename);
+        
+        // For formats that need enhancement, use data-src and let enhancement handler load it
+        // For standard formats, set src immediately with blur effect
+        const imgAttributes = needsEnhancement 
+            ? `data-src="${thumbnailUrl}" style="${isApproved ? 'border: 3px solid #10b981;' : ''} filter: blur(10px); transition: filter 0.3s ease; background-color: #F5F5F7; min-height: 200px; display: block;"`
+            : `src="${thumbnailUrl}" style="${isApproved ? 'border: 3px solid #10b981;' : ''} filter: blur(10px); transition: filter 0.3s ease; background-color: #F5F5F7;" onload="this.style.filter='none';" onerror="console.error('Image load failed:', this.src); this.onerror=null; handleImageLoadError(this, '${photo.id}', '${photo.filename || ''}');"`;
+        
         photoEl.innerHTML = `
-            <img src="${thumbnailUrl}" 
+            <img ${imgAttributes}
                  alt="${photo.title || `Photo ${i + 1}`}"
                  data-full="${fullUrl}"
                  data-photo-id="${photo.id}"
-                 data-filename="${photo.filename || ''}"
+                 data-filename="${filename}"
                  loading="lazy"
-                 crossorigin="anonymous"
-                 style="${isApproved ? 'border: 3px solid #10b981;' : ''} filter: blur(10px); transition: filter 0.3s ease; background-color: #F5F5F7;"
-                 onload="this.style.filter='none';"
-                 onerror="console.error('Image load failed:', this.src); this.onerror=null; handleImageLoadError(this, '${photo.id}', '${photo.filename || ''}');">
+                 crossorigin="anonymous">
             ${isFavorite ? `
                 <div style="
                     position: absolute;

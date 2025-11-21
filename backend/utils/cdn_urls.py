@@ -1,14 +1,16 @@
 """
-Image URL Generator - CloudFront CDN (Production-Ready)
+Image URL Generator - CloudFront CDN with On-Demand Transformation
 
-Strategy: CloudFront CDN for fast global delivery
-- CloudFront caches images at edge locations worldwide
-- Lambda@Edge (pass-through) - no additional processing
-- Cost: Only CloudFront bandwidth (~$0.085/GB)
-- Fast: 50-200ms from edge locations
-- Reliable: CloudFront 99.9% uptime SLA
+Strategy: CloudFront + Lambda-based Image Transformation
+- Store only original files (RAW, HEIC, JPEG, etc.)
+- Transform on-demand via Lambda function
+- Cache transformed images in S3
+- CloudFront serves cached versions globally
+- Cost efficient: Only store originals + small cached thumbnails
+- Fast: Cached at edge locations
+- Scalable: Handles any format (RAW, HEIC, TIFF, etc.)
 
-For resizing: Images served at original size (simple, fast, reliable)
+Similar to Instagram/Google Photos architecture
 """
 import os
 
@@ -29,7 +31,7 @@ def get_cdn_url(s3_key, size=None, format='auto'):
     Generate CloudFront CDN URL for image with transformation parameters
     
     Args:
-        s3_key: S3 object key (e.g. "gallery123/photo456.jpg")
+        s3_key: S3 object key (e.g. "gallery123/photo456.dng")
         size: Target size tuple (width, height) or None for original
         format: Output format ('auto', 'jpeg', 'webp', 'png')
     
@@ -38,9 +40,9 @@ def get_cdn_url(s3_key, size=None, format='auto'):
     
     Example:
         get_cdn_url('gallery123/photo456.dng', size=(800, 600), format='jpeg')
-        -> https://cdn.galerly.com/gallery123/photo456.dng?format=jpeg&width=800&height=600
+        -> https://cdn.galerly.com/gallery123/photo456.dng?format=jpeg&width=800&height=600&fit=inside
     
-    Note: CloudFront + Lambda@Edge will handle the transformation
+    Note: image-transform Lambda handles the actual transformation
     """
     base_url = f"https://{CDN_DOMAIN}/{s3_key}"
     
@@ -62,13 +64,13 @@ def get_cdn_url(s3_key, size=None, format='auto'):
 
 def get_photo_urls(s3_key):
     """
-    Generate all URL variants for a photo with CloudFront transformation
+    Generate all URL variants for a photo with on-demand transformation
     
-    Returns different sizes for responsive display, all transformed to JPEG
-    Original URL has no transformation (for download)
+    Returns different sizes for responsive display
+    Actual transformation happens via image-transform Lambda (invoked by CloudFront)
     
     Args:
-        s3_key: S3 object key
+        s3_key: S3 object key (original file - RAW, HEIC, JPEG, etc.)
     
     Returns:
         dict with url, medium_url, thumbnail_url, small_thumb_url
@@ -76,7 +78,13 @@ def get_photo_urls(s3_key):
     # Original (no transformation) - for download
     original_url = f"https://{CDN_DOMAIN}/{s3_key}"
     
-    # Transformed versions (JPEG) - for display
+    # Display URLs with transformation parameters
+    # These will trigger the image-transform Lambda via CloudFront/API Gateway
+    # The Lambda will:
+    # 1. Check cache for transformed version
+    # 2. If not cached, transform the original
+    # 3. Store result in cache bucket
+    # 4. Return transformed image
     return {
         'url': original_url,  # Original for download
         'medium_url': get_cdn_url(s3_key, size=(2000, 2000), format='jpeg'),  # Display (large)
