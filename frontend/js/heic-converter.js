@@ -106,19 +106,30 @@ function isHEIC(file) {
  */
 async function processImageForUpload(file) {
     try {
-        // Step 1: Validate image dimensions only
-        const isValid = await validateImageFile(file);
+        // Step 1: If HEIC, convert to JPEG first (browser can't validate HEIC directly)
+        let processedFile = file;
+        if (isHEIC(file)) {
+            console.log(`📱 HEIC file detected: ${file.name}`);
+            processedFile = await convertHEICtoJPEG(file);
+            console.log(`✅ Converted to JPEG for validation`);
+        }
+        
+        // Step 2: Validate image dimensions
+        const isValid = await validateImageFile(processedFile);
         if (!isValid) {
-            throw new Error('Invalid image file - check dimensions (320-8000px)');
+            console.warn(`⚠️  Validation failed, but accepting anyway (backend will handle)`);
+            // Don't throw - accept the file and let backend validate
         }
         
         // Accept ALL formats - CloudFront will handle transformation
-        console.log(`✅ Accepted: ${file.name} (${file.type})`);
-        return file;
+        console.log(`✅ Accepted: ${processedFile.name} (${processedFile.type})`);
+        return processedFile;
         
     } catch (error) {
         console.error('❌ Image processing failed:', error);
-        throw error;
+        // Don't throw - return original file and let backend handle
+        console.log(`⚠️  Returning original file: ${file.name}`);
+        return file;
     }
 }
 
@@ -129,10 +140,27 @@ async function processImageForUpload(file) {
  */
 async function validateImageFile(file) {
     return new Promise((resolve) => {
+        // For non-standard formats (RAW, etc), skip validation
+        const extension = file.name.toLowerCase();
+        const rawFormats = ['.cr2', '.nef', '.arw', '.dng', '.orf', '.rw2', '.raf', '.pef'];
+        if (rawFormats.some(fmt => extension.endsWith(fmt))) {
+            console.log(`✅ RAW format detected, skipping browser validation: ${file.name}`);
+            resolve(true);
+            return;
+        }
+        
         const img = new Image();
         const url = URL.createObjectURL(file);
         
+        // Set timeout - if image doesn't load in 5 seconds, accept it anyway
+        const timeout = setTimeout(() => {
+            URL.revokeObjectURL(url);
+            console.log(`⏱️  Validation timeout, accepting file: ${file.name}`);
+            resolve(true);
+        }, 5000);
+        
         img.onload = () => {
+            clearTimeout(timeout);
             URL.revokeObjectURL(url);
             
             // Check dimensions (Instagram-style limits)
@@ -156,9 +184,11 @@ async function validateImageFile(file) {
         };
         
         img.onerror = () => {
+            clearTimeout(timeout);
             URL.revokeObjectURL(url);
-            console.error('❌ Image load failed');
-            resolve(false);
+            console.warn(`⚠️  Could not validate image, accepting anyway: ${file.name}`);
+            // Don't fail - accept the file and let backend validate
+            resolve(true);
         };
         
         img.src = url;
