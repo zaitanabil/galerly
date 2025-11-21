@@ -82,33 +82,33 @@ def lambda_handler(event, context):
         # Not cached - invoke transform Lambda
         print(f"❌ Cache MISS: {cache_key} - Invoking transform Lambda")
         
-    payload = {
-        's3_key': s3_key,
+        payload = {
+            's3_key': s3_key,
             'cache_key': cache_key,
-        'format': params.get('format', 'jpeg'),
-        'fit': params.get('fit', 'inside'),
-        'quality': int(params.get('quality', 85))
-    }
-    
-    if params.get('width'):
-        payload['width'] = int(params['width'])
-    if params.get('height'):
-        payload['height'] = int(params['height'])
-    
-    try:
+            'format': params.get('format', 'jpeg'),
+            'fit': params.get('fit', 'inside'),
+            'quality': int(params.get('quality', 85))
+        }
+        
+        if params.get('width'):
+            payload['width'] = int(params['width'])
+        if params.get('height'):
+            payload['height'] = int(params['height'])
+        
+        try:
             # Invoke transform Lambda asynchronously for better performance
             lambda_client.invoke(
-            FunctionName=TRANSFORM_LAMBDA_ARN,
+                FunctionName=TRANSFORM_LAMBDA_ARN,
                 InvocationType='Event',  # Async - don't wait for response
-            Payload=json.dumps(payload)
-        )
-        
+                Payload=json.dumps(payload)
+            )
+            
             # Return original while transformation happens in background
             # Next request will hit cache
             print(f"🔄 Transform initiated, serving original")
             return request
             
-    except Exception as e:
-        print(f"❌ Lambda invocation failed: {str(e)}")
-        return request
+        except Exception as e:
+            print(f"❌ Lambda invocation failed: {str(e)}")
+            return request
 
