@@ -36,7 +36,7 @@ GitHub secret `CLOUDFRONT_DISTRIBUTION_ID` must be set to `E3P0EU1X4VGR58`.
 
 ```
 Browser Request: cdn.galerly.com/photo.dng?format=jpeg&width=800
-    ↓
+       ↓
 CloudFront (Edge Cache)
     ↓ (Cache miss)
 Lambda@Edge (Origin Request)

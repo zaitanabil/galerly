@@ -1090,29 +1090,24 @@ jobs:
             --query 'Configuration.FunctionArn' \
             --output text)
           
-          echo "📋 Transform Lambda ARN: $TRANSFORM_ARN"
-          echo ""
+          # Export environment variables for deployment script
+          export TRANSFORM_LAMBDA_ARN="$TRANSFORM_ARN"
+          export CACHE_BUCKET="${{ secrets.S3_IMAGE_CACHE_BUCKET }}"
           
-          # Update cloudfront-router.py with the correct ARN
-          sed -i "s|TRANSFORM_LAMBDA_ARN = 'arn:aws:lambda:.*'|TRANSFORM_LAMBDA_ARN = '$TRANSFORM_ARN'|" cloudfront-router.py
-          
-          # Make script executable
+          # Run deployment script
           chmod +x deploy-cloudfront-router.sh
-          
-          # Run the deployment script
           ./deploy-cloudfront-router.sh
-          
-          echo ""
-          echo "=========================================="
-          echo "✅ CloudFront Router Deployment Complete!"
-          echo "=========================================="
 
       - name: Attach Lambda@Edge to CloudFront Distribution
         run: |
-          echo "=========================================="
-          echo "🔗 ATTACHING LAMBDA@EDGE TO CLOUDFRONT"
-          echo "=========================================="
-          echo ""
+          # Find Image CDN distribution by domain name (cdn.galerly.com)
+          IMAGE_CDN_DIST_ID=$(aws cloudfront list-distributions \
+            --query "DistributionList.Items[?Aliases.Items[?contains(@, 'cdn.galerly.com')]].Id | [0]" \
+            --output text)
+          
+          if [ -z "$IMAGE_CDN_DIST_ID" ] || [ "$IMAGE_CDN_DIST_ID" = "None" ]; then
+            exit 1
+          fi
           
           # Get Lambda@Edge version ARN
           ROUTER_VERSION=$(aws lambda list-versions-by-function \
@@ -1123,112 +1118,59 @@ jobs:
           
           ROUTER_ARN="arn:aws:lambda:us-east-1:$(aws sts get-caller-identity --query Account --output text):function:${{ secrets.LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME }}:${ROUTER_VERSION}"
           
-          echo "📋 Lambda@Edge ARN: $ROUTER_ARN"
-          echo ""
-          
           # Get current CloudFront configuration
-          echo "📥 Fetching current CloudFront configuration..."
           aws cloudfront get-distribution-config \
-            --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} > /tmp/dist-config-full.json
+            --id $IMAGE_CDN_DIST_ID > /tmp/dist-config-full.json
           
           ETAG=$(jq -r '.ETag' /tmp/dist-config-full.json)
           jq '.DistributionConfig' /tmp/dist-config-full.json > /tmp/dist-config.json
-          
-          echo "📋 Current ETag: $ETAG"
-          echo ""
           
           # Check if Lambda@Edge is already attached
           CURRENT_LAMBDA=$(jq -r '.DefaultCacheBehavior.LambdaFunctionAssociations.Items[]? | select(.EventType=="origin-request") | .LambdaFunctionARN' /tmp/dist-config.json || echo "")
           
           if [ "$CURRENT_LAMBDA" = "$ROUTER_ARN" ]; then
-            echo "✅ Correct Lambda@Edge already attached: $ROUTER_ARN"
-            echo "   Skipping CloudFront update"
-          else
-            if [ -n "$CURRENT_LAMBDA" ]; then
-              echo "🔄 Replacing existing Lambda@Edge function"
-              echo "   Old: $CURRENT_LAMBDA"
-              echo "   New: $ROUTER_ARN"
-            else
-              echo "🆕 Attaching Lambda@Edge function"
-              echo "   ARN: $ROUTER_ARN"
-            fi
-            echo ""
-            
-            echo "🔧 Updating CloudFront distribution..."
-            
-            # Update Lambda@Edge association using jq
-            # Remove existing origin-request association if present
-            jq --arg arn "$ROUTER_ARN" '
-              .DefaultCacheBehavior.LambdaFunctionAssociations.Items = 
-                ([.DefaultCacheBehavior.LambdaFunctionAssociations.Items[]? | select(.EventType != "origin-request")] + 
-                [{
-                  "EventType": "origin-request",
-                  "LambdaFunctionARN": $arn,
-                  "IncludeBody": false
-                }]) |
-              .DefaultCacheBehavior.LambdaFunctionAssociations.Quantity = 
-                (.DefaultCacheBehavior.LambdaFunctionAssociations.Items | length)
-            ' /tmp/dist-config.json > /tmp/dist-config-updated.json
-            
-            # Update CloudFront distribution
-            aws cloudfront update-distribution \
-              --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-              --distribution-config file:///tmp/dist-config-updated.json \
-              --if-match "$ETAG" > /dev/null
-            
-            echo "✅ CloudFront distribution update initiated"
-            echo ""
-            echo "⏳ Waiting for CloudFront deployment (5-10 minutes)..."
-            echo "   This prevents hitting GitHub Actions timeout limits"
-            echo "   Checking every 30 seconds..."
-            echo ""
-            
-            # Wait for CloudFront deployment with timeout
-            # Max wait: 15 minutes (30 checks x 30 seconds)
-            # CloudFront typically takes 5-10 minutes
-            MAX_ATTEMPTS=30
-            ATTEMPT=0
-            START_TIME=$(date +%s)
-            
-            while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
-              ATTEMPT=$((ATTEMPT + 1))
-              
-              STATUS=$(aws cloudfront get-distribution \
-                --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
-                --query 'Distribution.Status' \
-                --output text)
-              
-              ELAPSED=$(($(date +%s) - START_TIME))
-              ELAPSED_MIN=$((ELAPSED / 60))
-              ELAPSED_SEC=$((ELAPSED % 60))
-              
-              echo "   Check $ATTEMPT/$MAX_ATTEMPTS: Status=$STATUS (${ELAPSED_MIN}m ${ELAPSED_SEC}s elapsed)"
-              
-              if [ "$STATUS" = "Deployed" ]; then
-                echo ""
-                echo "✅ CloudFront deployment complete!"
-                echo "   Total time: ${ELAPSED_MIN}m ${ELAPSED_SEC}s"
-                break
-              fi
-              
-              if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
-                sleep 30
-              fi
-            done
-            
-            if [ "$STATUS" != "Deployed" ]; then
-              echo ""
-              echo "⚠️  CloudFront still deploying after ${ELAPSED_MIN}m ${ELAPSED_SEC}s"
-              echo "   Status: $STATUS"
-              echo "   Deployment will complete in background"
-              echo "   You can check status with: aws cloudfront get-distribution --id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}"
-            fi
+            exit 0
           fi
           
-          echo ""
-          echo "=========================================="
-          echo "✅ Lambda@Edge Configuration Complete!"
-          echo "=========================================="
+          # Update Lambda@Edge association using jq
+          jq --arg arn "$ROUTER_ARN" '
+            .DefaultCacheBehavior.LambdaFunctionAssociations.Items = 
+              ([.DefaultCacheBehavior.LambdaFunctionAssociations.Items[]? | select(.EventType != "origin-request")] + 
+              [{
+                "EventType": "origin-request",
+                "LambdaFunctionARN": $arn,
+                "IncludeBody": false
+              }]) |
+            .DefaultCacheBehavior.LambdaFunctionAssociations.Quantity = 
+              (.DefaultCacheBehavior.LambdaFunctionAssociations.Items | length)
+          ' /tmp/dist-config.json > /tmp/dist-config-updated.json
+          
+          # Update CloudFront distribution
+          aws cloudfront update-distribution \
+            --id $IMAGE_CDN_DIST_ID \
+            --distribution-config file:///tmp/dist-config-updated.json \
+            --if-match "$ETAG" > /dev/null
+          
+          # Wait for CloudFront deployment
+          MAX_ATTEMPTS=30
+          ATTEMPT=0
+          
+          while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            
+            STATUS=$(aws cloudfront get-distribution \
+              --id $IMAGE_CDN_DIST_ID \
+              --query 'Distribution.Status' \
+              --output text)
+            
+            if [ "$STATUS" = "Deployed" ]; then
+              break
+            fi
+            
+            if [ $ATTEMPT -lt $MAX_ATTEMPTS ]; then
+              sleep 30
+            fi
+          done
 
       - name: Verify Lambda@Edge Attachment
         run: |

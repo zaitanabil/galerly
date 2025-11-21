@@ -141,15 +141,22 @@ echo "📋 Transform Lambda ARN: $TRANSFORM_LAMBDA_ARN"
 echo ""
 
 # Lambda@Edge does not support environment variables
-# Inject ARN into source code at build time
-echo "🔧 Injecting ARN into source code..."
-cp cloudfront-router.py cloudfront-router-build.py
-sed -i.bak "s|__TRANSFORM_LAMBDA_ARN_PLACEHOLDER__|${TRANSFORM_LAMBDA_ARN}|g" cloudfront-router-build.py
-rm -f cloudfront-router-build.py.bak
+# Inject configuration into source code at build time
+sed "s|__TRANSFORM_LAMBDA_ARN_PLACEHOLDER__|${TRANSFORM_LAMBDA_ARN}|g" cloudfront-router.py | \
+  sed "s|__CACHE_BUCKET_PLACEHOLDER__|${CACHE_BUCKET}|g" > /tmp/cloudfront-router.py
 
-# Create deployment package from modified source
+# Verify injection worked
+if grep -q "__TRANSFORM_LAMBDA_ARN_PLACEHOLDER__" /tmp/cloudfront-router.py; then
+  exit 1
+fi
+
+if grep -q "__CACHE_BUCKET_PLACEHOLDER__" /tmp/cloudfront-router.py; then
+  exit 1
+fi
+
+# Create deployment package with correct filename for handler
 rm -f cloudfront-router.zip
-zip -q cloudfront-router.zip cloudfront-router-build.py
+zip -q cloudfront-router.zip -j /tmp/cloudfront-router.py
 
 # Rename inside zip to expected filename
 printf "@ cloudfront-router-build.py\n@=cloudfront-router.py\n" | zipnote -w cloudfront-router.zip

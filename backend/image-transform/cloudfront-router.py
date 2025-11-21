@@ -16,10 +16,9 @@ import boto3
 lambda_client = boto3.client('lambda', region_name='us-east-1')
 s3_client = boto3.client('s3')
 
-# Configuration
+# Configuration - injected at build time by deployment script
 TRANSFORM_LAMBDA_ARN = '__TRANSFORM_LAMBDA_ARN_PLACEHOLDER__'
-CACHE_BUCKET = 'galerly-image-cache'
-SOURCE_BUCKET = 'galerly-uploads'
+CACHE_BUCKET = '__CACHE_BUCKET_PLACEHOLDER__'
 
 def lambda_handler(event, context):
     """
@@ -45,10 +44,10 @@ def lambda_handler(event, context):
     
     # Parse transformation parameters
     params = {}
-    for item in querystring.split('&'):
-        if '=' in item:
-            key, value = item.split('=', 1)
-            params[key] = value
+        for item in querystring.split('&'):
+            if '=' in item:
+                key, value = item.split('=', 1)
+                params[key] = value
     
     # Generate cache key
     cache_parts = [s3_key.replace('/', '_')]
@@ -83,33 +82,33 @@ def lambda_handler(event, context):
         # Not cached - invoke transform Lambda
         print(f"❌ Cache MISS: {cache_key} - Invoking transform Lambda")
         
-        payload = {
-            's3_key': s3_key,
+    payload = {
+        's3_key': s3_key,
             'cache_key': cache_key,
-            'format': params.get('format', 'jpeg'),
-            'fit': params.get('fit', 'inside'),
-            'quality': int(params.get('quality', 85))
-        }
-        
-        if params.get('width'):
-            payload['width'] = int(params['width'])
-        if params.get('height'):
-            payload['height'] = int(params['height'])
-        
-        try:
+        'format': params.get('format', 'jpeg'),
+        'fit': params.get('fit', 'inside'),
+        'quality': int(params.get('quality', 85))
+    }
+    
+    if params.get('width'):
+        payload['width'] = int(params['width'])
+    if params.get('height'):
+        payload['height'] = int(params['height'])
+    
+    try:
             # Invoke transform Lambda asynchronously for better performance
             lambda_client.invoke(
-                FunctionName=TRANSFORM_LAMBDA_ARN,
+            FunctionName=TRANSFORM_LAMBDA_ARN,
                 InvocationType='Event',  # Async - don't wait for response
-                Payload=json.dumps(payload)
-            )
-            
+            Payload=json.dumps(payload)
+        )
+        
             # Return original while transformation happens in background
             # Next request will hit cache
             print(f"🔄 Transform initiated, serving original")
             return request
             
-        except Exception as e:
-            print(f"❌ Lambda invocation failed: {str(e)}")
-            return request
+    except Exception as e:
+        print(f"❌ Lambda invocation failed: {str(e)}")
+        return request
 
