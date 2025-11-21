@@ -210,8 +210,7 @@ jobs:
   validate-secrets:
     name: 🔐 Validate Configuration
     runs-on: ubuntu-latest
-    needs: [cleanup-aws]
-    if: always() && (needs.cleanup-aws.result == 'success' || needs.cleanup-aws.result == 'skipped')
+    if: always()
 
     steps:
       - name: Checkout code
