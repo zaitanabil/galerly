@@ -6,23 +6,19 @@ Deploy this to Lambda@Edge for CloudFront Origin Request events
 Size limit: 1MB (no heavy dependencies)
 
 Configuration:
-- Set TRANSFORM_LAMBDA_ARN environment variable during deployment
-- Attach to CloudFront as Origin Request trigger
-- Ensure Lambda@Edge role has lambda:InvokeFunction permission
+- TRANSFORM_LAMBDA_ARN is injected during deployment (see deploy-cloudfront-router.sh)
+- Lambda@Edge does not support environment variables
+- ARN must be embedded in code at build time
 """
 import json
 import boto3
-import os
 
 lambda_client = boto3.client('lambda', region_name='us-east-1')
 
-# Image transform Lambda ARN from environment variable
-# Lambda@Edge must invoke Lambda in us-east-1
-# Set via: aws lambda update-function-configuration --environment Variables={TRANSFORM_LAMBDA_ARN=...}
-TRANSFORM_LAMBDA_ARN = os.environ.get('TRANSFORM_LAMBDA_ARN')
-
-if not TRANSFORM_LAMBDA_ARN:
-    raise ValueError('TRANSFORM_LAMBDA_ARN environment variable is required')
+# Image transform Lambda ARN
+# This placeholder is replaced during deployment by deploy-cloudfront-router.sh
+# Lambda@Edge cannot use environment variables, so ARN is injected at build time
+TRANSFORM_LAMBDA_ARN = '__TRANSFORM_LAMBDA_ARN_PLACEHOLDER__'
 
 def lambda_handler(event, context):
     """

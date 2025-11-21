@@ -122,10 +122,22 @@ TRANSFORM_LAMBDA_ARN="arn:aws:lambda:us-east-1:${AWS_ACCOUNT_ID}:function:galerl
 echo "📋 Transform Lambda ARN: $TRANSFORM_LAMBDA_ARN"
 echo ""
 
-# Create deployment package from source
-# No modifications to source file - ARN set via environment variable
+# Lambda@Edge does not support environment variables
+# Inject ARN into source code at build time
+echo "🔧 Injecting ARN into source code..."
+cp cloudfront-router.py cloudfront-router-build.py
+sed -i.bak "s|__TRANSFORM_LAMBDA_ARN_PLACEHOLDER__|${TRANSFORM_LAMBDA_ARN}|g" cloudfront-router-build.py
+rm -f cloudfront-router-build.py.bak
+
+# Create deployment package from modified source
 rm -f cloudfront-router.zip
-zip cloudfront-router.zip cloudfront-router.py
+zip -q cloudfront-router.zip cloudfront-router-build.py
+
+# Rename inside zip to expected filename
+printf "@ cloudfront-router-build.py\n@=cloudfront-router.py\n" | zipnote -w cloudfront-router.zip
+
+# Clean up build file
+rm -f cloudfront-router-build.py
 
 echo "📊 Package size: $(du -h cloudfront-router.zip | cut -f1)"
 echo ""
@@ -170,44 +182,12 @@ if aws lambda get-function --function-name $FUNCTION_NAME --region $REGION 2>/de
         printf "\n"
         echo "⚠️  Warning: Update did not complete within ${MAX_WAIT}s"
         echo "   State: $STATE, LastUpdateStatus: $LAST_UPDATE_STATUS"
-        echo "   Attempting to update configuration anyway..."
+        echo "   Attempting to publish version anyway..."
     fi
     
-    # Update environment variables
-    echo "🔧 Updating environment variables..."
-    aws lambda update-function-configuration \
-        --function-name $FUNCTION_NAME \
-        --environment "Variables={TRANSFORM_LAMBDA_ARN=${TRANSFORM_LAMBDA_ARN}}" \
-        --region $REGION \
-        --no-cli-pager
-    
-    # Wait for configuration update
-    printf "⏳ Waiting for configuration update"
-    WAITED=0
-    while [ $WAITED -lt $MAX_WAIT ]; do
-        STATE=$(aws lambda get-function \
-            --function-name $FUNCTION_NAME \
-            --region $REGION \
-            --query 'Configuration.State' \
-            --output text)
-        
-        LAST_UPDATE_STATUS=$(aws lambda get-function \
-            --function-name $FUNCTION_NAME \
-            --region $REGION \
-            --query 'Configuration.LastUpdateStatus' \
-            --output text)
-        
-        if [ "$STATE" = "Active" ] && [ "$LAST_UPDATE_STATUS" = "Successful" ]; then
-            printf "\n"
-            break
-        fi
-        
-        printf "."
-        sleep 2
-        WAITED=$((WAITED + 2))
-    done
-    
     # Publish new version
+    # Lambda@Edge does not support environment variables
+    # ARN is already injected into code during build
     VERSION=$(aws lambda publish-version \
         --function-name $FUNCTION_NAME \
         --region $REGION \
@@ -252,44 +232,12 @@ else
     if [ "$STATE" != "Active" ]; then
         printf "\n"
         echo "⚠️  Warning: Function did not become active within ${MAX_WAIT}s (current state: $STATE)"
-        echo "   Attempting to configure environment anyway..."
+        echo "   Attempting to publish version anyway..."
     fi
     
-    # Set environment variables
-    echo "🔧 Configuring environment variables..."
-    aws lambda update-function-configuration \
-        --function-name $FUNCTION_NAME \
-        --environment "Variables={TRANSFORM_LAMBDA_ARN=${TRANSFORM_LAMBDA_ARN}}" \
-        --region $REGION \
-        --no-cli-pager
-    
-    # Wait for configuration update
-    printf "⏳ Waiting for configuration update"
-    WAITED=0
-    while [ $WAITED -lt $MAX_WAIT ]; do
-        STATE=$(aws lambda get-function \
-            --function-name $FUNCTION_NAME \
-            --region $REGION \
-            --query 'Configuration.State' \
-            --output text)
-        
-        LAST_UPDATE_STATUS=$(aws lambda get-function \
-            --function-name $FUNCTION_NAME \
-            --region $REGION \
-            --query 'Configuration.LastUpdateStatus' \
-            --output text)
-        
-        if [ "$STATE" = "Active" ] && [ "$LAST_UPDATE_STATUS" = "Successful" ]; then
-            printf "\n"
-            break
-        fi
-        
-        printf "."
-        sleep 2
-        WAITED=$((WAITED + 2))
-    done
-    
     # Publish version
+    # Lambda@Edge does not support environment variables
+    # ARN is already injected into code during build
     VERSION=$(aws lambda publish-version \
         --function-name $FUNCTION_NAME \
         --region $REGION \
