@@ -156,13 +156,10 @@ fi
 
 # Create deployment package with correct filename for handler
 rm -f cloudfront-router.zip
-zip -q cloudfront-router.zip -j /tmp/cloudfront-router.py
-
-# Rename inside zip to expected filename
-printf "@ cloudfront-router-build.py\n@=cloudfront-router.py\n" | zipnote -w cloudfront-router.zip
-
-# Clean up build file
-rm -f cloudfront-router-build.py
+cd /tmp
+zip -q cloudfront-router.zip cloudfront-router.py
+mv cloudfront-router.zip "${OLDPWD}/"
+cd "${OLDPWD}"
 
 echo "📊 Package size: $(du -h cloudfront-router.zip | cut -f1)"
 echo ""
