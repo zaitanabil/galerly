@@ -8,7 +8,59 @@ echo ""
 
 FUNCTION_NAME="galerly-cloudfront-router"
 REGION="us-east-1"  # Lambda@Edge must be in us-east-1
-ROLE_ARN="arn:aws:iam::YOUR_ACCOUNT_ID:role/lambda-edge-role"
+
+# Get AWS Account ID dynamically
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+echo "📋 AWS Account ID: $AWS_ACCOUNT_ID"
+
+# IAM Role ARN
+ROLE_ARN="arn:aws:iam::${AWS_ACCOUNT_ID}:role/lambda-edge-role"
+echo "📋 IAM Role: $ROLE_ARN"
+echo ""
+
+# Check if IAM role exists
+if ! aws iam get-role --role-name lambda-edge-role >/dev/null 2>&1; then
+    echo "⚠️  IAM role 'lambda-edge-role' not found!"
+    echo "   Creating IAM role for Lambda@Edge..."
+    echo ""
+    
+    # Create trust policy for Lambda@Edge
+    cat > /tmp/edge-trust-policy.json << 'EOF'
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Service": [
+          "lambda.amazonaws.com",
+          "edgelambda.amazonaws.com"
+        ]
+      },
+      "Action": "sts:AssumeRole"
+    }
+  ]
+}
+EOF
+    
+    # Create role
+    aws iam create-role \
+        --role-name lambda-edge-role \
+        --assume-role-policy-document file:///tmp/edge-trust-policy.json \
+        --description "Execution role for Galerly Lambda@Edge functions"
+    
+    # Attach policies
+    aws iam attach-role-policy \
+        --role-name lambda-edge-role \
+        --policy-arn arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+    
+    # Wait for role to be ready
+    echo "⏳ Waiting for IAM role to propagate..."
+    sleep 10
+    
+    echo "✅ IAM role created"
+    echo ""
+fi
 
 # Create deployment package
 echo "📦 Creating Lambda@Edge package..."
