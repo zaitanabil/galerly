@@ -647,7 +647,7 @@ function renderPhotos(photos, startIndex, count) {
                 loading="lazy"
                 data-full="${getImageUrl(photo.url)}"
                 style="${isPending ? 'opacity: 0.7; border: 3px solid #FFA500;' : ''}"
-                onerror="this.src='https://via.placeholder.com/400x300?text=Image+Not+Available'"
+                crossorigin="anonymous"
             />
             ${showFavoriteIndicator ? `
                 <div style="

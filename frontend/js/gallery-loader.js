@@ -307,8 +307,25 @@ function renderGalleryPhotos(photos, startIndex, count) {
         const photoEl = document.createElement('div');
         photoEl.className = 'gallery-photo';
         photoEl.onclick = () => openPhotoModal(i);
+        // Use thumbnail_url if available (has CloudFront transformations), otherwise fallback to url
+        // For RAW images, thumbnail_url should have ?format=jpeg parameters
         const thumbnailUrl = getImageUrl(photo.thumbnail_url || photo.url);
         const fullUrl = getImageUrl(photo.url);
+        
+        // Debug logging for RAW images - helps diagnose CloudFront transformation issues
+        if (photo.filename && /\.(dng|cr2|cr3|nef|arw|raf|orf|rw2|pef|3fr)$/i.test(photo.filename)) {
+            console.log(`📸 RAW image detected: ${photo.filename}`);
+            console.log(`   thumbnail_url from backend: ${photo.thumbnail_url || 'missing'}`);
+            console.log(`   medium_url from backend: ${photo.medium_url || 'missing'}`);
+            console.log(`   Final thumbnail URL: ${thumbnailUrl}`);
+            
+            // Verify transformation parameters are present
+            if (thumbnailUrl && !thumbnailUrl.includes('format=jpeg')) {
+                console.warn(`⚠️  WARNING: RAW image URL missing format=jpeg parameter!`);
+                console.warn(`   This image may fail to load in the browser.`);
+                console.warn(`   Expected: ...?format=jpeg&width=800&height=600`);
+            }
+        }
         const isFavorite = photo.is_favorite === true;
         const isApproved = photo.status === 'approved';
         photoEl.innerHTML = `
@@ -320,7 +337,7 @@ function renderGalleryPhotos(photos, startIndex, count) {
                  loading="lazy"
                  crossorigin="anonymous"
                  style="${isApproved ? 'border: 3px solid #10b981;' : ''}"
-                 onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%27400%27 height=%27300%27 viewBox=%270 0 400 300%27%3E%3Crect fill=%27%23F5F5F7%27 width=%27400%27 height=%27300%27/%3E%3Crect x=%27160%27 y=%27100%27 width=%2780%27 height=%2760%27 rx=%278%27 fill=%27none%27 stroke=%27%2386868B%27 stroke-width=%273%27/%3E%3Ccircle cx=%27200%27 cy=%27130%27 r=%2715%27 fill=%27none%27 stroke=%27%2386868B%27 stroke-width=%273%27/%3E%3Crect x=%27185%27 y=%2790%27 width=%2730%27 height=%2710%27 rx=%273%27 fill=%27%2386868B%27/%3E%3Ctext x=%2750%25%27 y=%27190%27 text-anchor=%27middle%27 fill=%27%231D1D1F%27 font-family=%27system-ui%27 font-size=%2716%27 font-weight=%27600%27%3ERAW Format%3C/text%3E%3Ctext x=%2750%25%27 y=%27215%27 text-anchor=%27middle%27 fill=%27%2386868B%27 font-family=%27system-ui%27 font-size=%2713%27%3EDownload for full quality%3C/text%3E%3C/svg%3E'">
+                 onerror="console.error('Image load failed:', this.src); this.onerror=null; handleImageLoadError(this, '${photo.id}', '${photo.filename || ''}');">
             ${isFavorite ? `
                 <div style="
                     position: absolute;
@@ -871,6 +888,55 @@ async function readFileAsBase64(file) {
         reader.readAsDataURL(file);
     });
 }
+/**
+ * Handle image load error - log details for debugging
+ */
+async function handleImageLoadError(img, photoId, filename) {
+    const failedUrl = img.src;
+    console.error(`❌ Image load failed for photo ${photoId}`);
+    console.error(`   Filename: ${filename}`);
+    console.error(`   Failed URL: ${failedUrl}`);
+    
+    // Check if it's a RAW format
+    const isRAW = filename && /\.(dng|cr2|cr3|nef|arw|raf|orf|rw2|pef|3fr)$/i.test(filename);
+    
+    if (isRAW) {
+        console.warn(`⚠️  RAW image failed to load. CloudFront transformation may not be configured.`);
+        console.warn(`   Expected: URL with ?format=jpeg parameters`);
+        console.warn(`   Actual: ${failedUrl}`);
+        
+        // Try loading the original URL directly (might work if CloudFront is configured)
+        // But browsers can't display RAW, so this will likely fail too
+        console.log(`   Note: Browsers cannot display RAW formats directly.`);
+        console.log(`   Solution: Lambda@Edge must process ?format=jpeg parameters.`);
+    }
+    
+    // Show visual error indicator
+    img.style.border = '2px solid #ef4444';
+    img.style.opacity = '0.5';
+    img.alt = 'Image failed to load - check console for details';
+    
+    // Add error overlay
+    const errorOverlay = document.createElement('div');
+    errorOverlay.style.cssText = `
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(239, 68, 68, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ef4444;
+        font-size: 12px;
+        font-weight: 500;
+    `;
+    errorOverlay.textContent = 'Load Error';
+    img.parentElement.style.position = 'relative';
+    img.parentElement.appendChild(errorOverlay);
+}
+
 /**
  * Load more photos (called by button)
  */

@@ -53,10 +53,11 @@ function getApiUrl(endpoint) {
     return `${CONFIG.API_BASE_URL}/${endpoint}`;
 }
 // Helper function to get image URL (with CDN if available)
+// IMPORTANT: Preserves CloudFront transformation parameters (?format=jpeg&width=800&height=600)
 function getImageUrl(path) {
     if (!path) return '';
     
-    // Convert old S3 URLs to CloudFront CDN
+    // Convert old S3 URLs to CloudFront CDN (preserve query params if any)
     if (path.includes('galerly-images-storage.s3')) {
         const match = path.match(/galerly-images-storage\.s3[^/]*\.amazonaws\.com\/(.+)$/);
         if (match) {
@@ -65,12 +66,12 @@ function getImageUrl(path) {
         }
     }
     
-    // If already CDN URL, return as-is
+    // If already CDN URL, return as-is (preserves transformation parameters)
     if (path.includes('cdn.galerly.com')) {
         return path;
     }
     
-    // If path is already a full URL, return it
+    // If path is already a full URL, return it (preserves query params)
     if (path.startsWith('http://') || path.startsWith('https://')) {
         return path;
     }

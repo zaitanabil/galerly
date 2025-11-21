@@ -6,10 +6,14 @@
  * Handles:
  * - HEIC/HEIF files (converts to displayable format)
  * - TIFF files (converts if needed)
- * - RAW formats (shows proper error message)
+ * - RAW formats (uses CloudFront URL transformations - backend provides ?format=jpeg URLs)
  * - All standard formats (JPEG, PNG, GIF, WebP)
  * 
  * Big Tech Approach: Instagram, Google Photos, iCloud
+ * 
+ * NOTE: RAW images are displayed via CloudFront transformations.
+ * Backend provides thumbnail_url and medium_url with ?format=jpeg parameters.
+ * Original files are preserved for download.
  */
 
 /**
@@ -84,10 +88,19 @@ async function loadImageSmart(img, url, onSuccess, onError) {
         });
         
     } else if (isRAWUrl(url)) {
-        // RAW formats cannot be displayed in browsers
-        console.warn(`⚠️  RAW format detected: ${url}`);
-        showRAWPlaceholder(img);
-        if (onError) onError('RAW format not supported in browser');
+        // RAW formats: Use CloudFront transformation (backend provides ?format=jpeg URLs)
+        // The thumbnail_url and medium_url from backend already have format=jpeg transformation
+        console.log(`🔄 RAW format detected, using CloudFront transformation: ${url}`);
+        // Check if URL already has transformation parameters
+        if (url.includes('format=jpeg') || url.includes('format=auto')) {
+            // Already transformed, load normally
+            await tryLoadImage(img, url, onSuccess, onError);
+        } else {
+            // Add transformation parameters for RAW files
+            const separator = url.includes('?') ? '&' : '?';
+            const transformedUrl = `${url}${separator}format=jpeg&width=2000&height=2000&fit=inside`;
+            await tryLoadImage(img, transformedUrl, onSuccess, onError);
+        }
         
     } else {
         // Standard format (JPEG, PNG, GIF, WebP)
@@ -208,37 +221,14 @@ function loadHEICLibrary() {
 }
 
 /**
- * Show placeholder for RAW images (DNG, CR2, etc.)
- * RAW files cannot be displayed in browsers - download required
+ * RAW images are handled via CloudFront transformations
+ * No placeholder needed - backend provides transformed URLs
  */
-function showRAWPlaceholder(img) {
-    img.src = 'data:image/svg+xml,' + encodeURIComponent(`
-        <svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300">
-            <rect fill="#F5F5F7" width="400" height="300"/>
-            <g>
-                <!-- Camera icon -->
-                <rect x="160" y="100" width="80" height="60" rx="8" fill="none" stroke="#86868B" stroke-width="3"/>
-                <circle cx="200" cy="130" r="15" fill="none" stroke="#86868B" stroke-width="3"/>
-                <rect x="185" y="90" width="30" height="10" rx="3" fill="#86868B"/>
-            </g>
-            <text x="50%" y="190" dominant-baseline="middle" text-anchor="middle"
-                  fill="#1D1D1F" font-family="system-ui, -apple-system, sans-serif"
-                  font-size="16" font-weight="600">RAW Format (DNG/CR2)</text>
-            <text x="50%" y="215" dominant-baseline="middle" text-anchor="middle"
-                  fill="#86868B" font-family="system-ui, -apple-system, sans-serif"
-                  font-size="13">Download to view full quality</text>
-            <text x="50%" y="235" dominant-baseline="middle" text-anchor="middle"
-                  fill="#007AFF" font-family="system-ui, -apple-system, sans-serif"
-                  font-size="12" font-weight="500">↓ Use Download Button</text>
-        </svg>
-    `);
-    img.alt = "RAW format image - download to view";
-}
 
 /**
  * Enhanced image loading for all gallery images
  * Automatically upgrades all <img> tags with smart loading
- * ONLY for HEIC, TIFF, and RAW formats - standard images load normally
+ * ONLY for HEIC and TIFF formats - RAW uses CloudFront transformations, standard images load normally
  */
 function enhanceGalleryImages() {
     const images = document.querySelectorAll('.gallery-grid img, .gallery-photo img, .modal-image-wrapper img');
@@ -250,9 +240,10 @@ function enhanceGalleryImages() {
         const originalSrc = img.src || img.dataset.src;
         if (!originalSrc) return;
         
-        // ONLY enhance problematic formats (HEIC, TIFF, RAW)
+        // ONLY enhance problematic formats (HEIC, TIFF)
+        // RAW formats are handled via CloudFront transformations (backend provides transformed URLs)
         // Standard images (JPEG, PNG, GIF, WebP) should load normally
-        if (isHEICUrl(originalSrc) || isTIFFUrl(originalSrc) || isRAWUrl(originalSrc)) {
+        if (isHEICUrl(originalSrc) || isTIFFUrl(originalSrc)) {
             console.log(`🔍 Enhancing image: ${originalSrc}`);
             
             // Mark as enhanced BEFORE replacement
