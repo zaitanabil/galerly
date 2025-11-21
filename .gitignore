@@ -50,3 +50,10 @@ tmp/
 temp/
 *.tmp
 *.bak
+
+# Marketing assets (large design files)
+marketing/
+*.psd
+*.ai
+*.sketch
+*.fig
