@@ -1258,7 +1258,12 @@ jobs:
               ATTACHED_VERSION=$(echo "$ORIGIN_REQUEST_LAMBDA" | awk -F: '{print $NF}')
               echo "   Version: $ATTACHED_VERSION"
             else
-              echo "⚠️  Warning: Different Lambda@Edge function attached"
+              echo "❌ WRONG FUNCTION ATTACHED!"
+              echo "   Expected: ${{ secrets.LAMBDA_CLOUDFRONT_ROUTER_FUNCTION_NAME }}"
+              echo "   Got: $ORIGIN_REQUEST_LAMBDA"
+              echo ""
+              echo "   This will cause image transformation failures!"
+              exit 1
             fi
           else
             echo "❌ No Lambda@Edge attached to origin-request"

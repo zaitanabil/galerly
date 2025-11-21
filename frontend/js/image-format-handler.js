@@ -76,43 +76,27 @@ async function loadImageSmart(img, url, onSuccess, onError) {
         return;
     }
     
-    // Step 1: Check if it's a problematic format
+    // Check if it's a problematic format
     if (isHEICUrl(url) || isTIFFUrl(url)) {
-        console.log(`🔄 Detected ${isHEICUrl(url) ? 'HEIC' : 'TIFF'} image, attempting to load...`);
-        
-        // For images with data-src, set src now so tryLoadImage can work
-        if (img.dataset.src && !img.src) {
-            img.src = url;
-        }
-        
         // Try to load normally first (in case CloudFront transformed it)
         await tryLoadImage(img, url, async () => {
-            console.log(`✅ Image loaded successfully: ${url}`);
             if (onSuccess) onSuccess();
         }, async () => {
             // If normal load fails, try client-side conversion
-            console.log(`⚠️  Browser cannot display format, attempting client-side conversion...`);
             await convertAndLoadImage(img, url, onSuccess, onError);
         });
         
     } else if (isRAWUrl(url)) {
         // RAW formats: Use CloudFront transformation (backend provides ?format=jpeg URLs)
         // The thumbnail_url and medium_url from backend already have format=jpeg transformation
-        console.log(`🔄 RAW format detected, using CloudFront transformation: ${url}`);
         
         // Always try to load the URL - CloudFront should transform it via Lambda@Edge
         // If the URL already has format=jpeg, CloudFront should return JPEG
         await tryLoadImage(img, url, async () => {
-            console.log(`✅ RAW image loaded successfully via CloudFront transformation: ${url}`);
             if (onSuccess) onSuccess();
         }, async (error) => {
-            console.warn(`⚠️  CloudFront transformation failed for RAW image: ${url}`);
-            console.warn(`   Error: ${error || 'Unknown error'}`);
-            console.warn(`   This may indicate Lambda@Edge is not configured or is failing.`);
-            // Try without transformation as last resort (will likely fail, but worth trying)
-            const baseUrl = url.split('?')[0];
-            console.log(`   Attempting to load base URL: ${baseUrl}`);
-            await tryLoadImage(img, baseUrl, onSuccess, onError);
+            // CloudFront transformation failed
+            if (onError) onError(error || 'RAW transformation failed');
         });
         
     } else {
@@ -163,9 +147,8 @@ async function convertAndLoadImage(img, url, onSuccess, onError) {
         if (!response.ok) {
             // Handle 503 errors from CloudFront (Lambda@Edge timeout/failure)
             if (response.status === 503) {
-                console.warn(`⚠️  CloudFront returned 503 for ${url}`);
-                console.warn(`   This usually means Lambda@Edge timed out or failed.`);
-                console.warn(`   Falling back to client-side conversion...`);
+                // CloudFront Lambda@Edge error
+                throw new Error('CloudFront transformation failed (503)');
             }
             throw new Error(`Failed to fetch: ${response.status} ${response.statusText}`);
         }
@@ -197,18 +180,15 @@ async function convertAndLoadImage(img, url, onSuccess, onError) {
                 // Clean up object URL after image loads
                 img.onload = () => {
                     URL.revokeObjectURL(objectUrl);
-                    console.log(`✅ HEIC image converted and displayed`);
                     if (onSuccess) onSuccess();
                 };
                 
                 img.onerror = () => {
                     URL.revokeObjectURL(objectUrl);
-                    console.error(`❌ Failed to display converted HEIC image`);
                     if (onError) onError(new Error('Failed to display converted HEIC'));
                 };
             } catch (conversionError) {
-                console.error(`❌ HEIC conversion failed:`, conversionError);
-                // If conversion fails, try to display the blob directly (might work in some browsers)
+                // Conversion failed
                 const objectUrl = URL.createObjectURL(blob);
                 img.src = objectUrl;
                 img.onload = () => {
@@ -238,7 +218,6 @@ async function convertAndLoadImage(img, url, onSuccess, onError) {
         }
         
     } catch (error) {
-        console.error('❌ Image conversion failed:', error);
         if (onError) onError(error);
     }
 }
@@ -256,7 +235,6 @@ function loadHEICLibrary() {
         const script = document.createElement('script');
         script.src = 'https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js';
         script.onload = () => {
-            console.log('✅ HEIC converter library loaded');
             resolve();
         };
         script.onerror = () => {
@@ -324,23 +302,15 @@ function enhanceGalleryImages() {
             }
             
             if (isHEICUrl(originalSrc) || isTIFFUrl(originalSrc)) {
-                console.log(`🔍 Enhancing HEIC/TIFF image: ${originalSrc}`);
-                
                 // For HEIC/TIFF, use loadImageSmart which handles conversion
-                // If image has data-src, we need to ensure src is set for loadImageSmart to work
-                // But we'll let loadImageSmart handle the actual loading via tryLoadImage
                 loadImageSmart(
                     img,
                     originalSrc,
                     () => {
                         // Remove blur when loaded
                         img.style.filter = 'none';
-                        console.log(`✅ Enhanced image loaded: ${originalSrc}`);
                     },
                     (error) => {
-                        console.error(`❌ Failed to load enhanced image:`, error);
-                        const errorMsg = error?.message || error || 'Unknown error';
-                        console.error(`   Error details: ${errorMsg}`);
                         // Keep blur and show error state
                         img.style.filter = 'blur(10px)';
                         img.style.opacity = '0.5';
@@ -349,7 +319,6 @@ function enhanceGalleryImages() {
                 );
             } else if (isRAWUrl(originalSrc)) {
                 // RAW images: Try to load directly - CloudFront should transform via Lambda@Edge
-                console.log(`📸 RAW image detected, attempting to load: ${originalSrc}`);
                 
                 // Set src now (with blur already applied)
                 if (img.dataset.src && !img.src) {
@@ -366,12 +335,9 @@ function enhanceGalleryImages() {
                     }
                     // Remove blur when loaded
                     img.style.filter = 'none';
-                    console.log(`✅ RAW image loaded successfully: ${originalSrc}`);
                 };
                 tempImg.onerror = () => {
-                    console.error(`❌ RAW image failed to load: ${originalSrc}`);
-                    console.error(`   This usually means CloudFront Lambda@Edge is not processing the ?format=jpeg parameter.`);
-                    // Keep blur and show error state
+                    // RAW transformation failed
                     img.style.filter = 'blur(10px)';
                     img.style.opacity = '0.5';
                     img.style.border = '2px solid #ef4444';

@@ -312,20 +312,6 @@ function renderGalleryPhotos(photos, startIndex, count) {
         const thumbnailUrl = getImageUrl(photo.thumbnail_url || photo.url);
         const fullUrl = getImageUrl(photo.url);
         
-        // Debug logging for RAW images - helps diagnose CloudFront transformation issues
-        if (photo.filename && /\.(dng|cr2|cr3|nef|arw|raf|orf|rw2|pef|3fr)$/i.test(photo.filename)) {
-            console.log(`📸 RAW image detected: ${photo.filename}`);
-            console.log(`   thumbnail_url from backend: ${photo.thumbnail_url || 'missing'}`);
-            console.log(`   medium_url from backend: ${photo.medium_url || 'missing'}`);
-            console.log(`   Final thumbnail URL: ${thumbnailUrl}`);
-            
-            // Verify transformation parameters are present
-            if (thumbnailUrl && !thumbnailUrl.includes('format=jpeg')) {
-                console.warn(`⚠️  WARNING: RAW image URL missing format=jpeg parameter!`);
-                console.warn(`   This image may fail to load in the browser.`);
-                console.warn(`   Expected: ...?format=jpeg&width=800&height=600`);
-            }
-        }
         const isFavorite = photo.is_favorite === true;
         const isApproved = photo.status === 'approved';
         
