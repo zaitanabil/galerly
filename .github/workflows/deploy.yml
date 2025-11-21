@@ -259,8 +259,16 @@ jobs:
         run: |
           cd backend
           
+          # Clean up old package
+          rm -rf package lambda-deployment.zip
+          mkdir -p package
+          
           # Install lightweight dependencies (excluding image libs)
-          pip install boto3 stripe python-dotenv requests beautifulsoup4 lxml certifi -t package/
+          pip install boto3 stripe python-dotenv requests beautifulsoup4 lxml certifi urllib3 -t package/
+          
+          # Verify certifi is installed correctly
+          echo "Verifying certifi installation..."
+          python3 -c "import sys; sys.path.insert(0, 'package'); import certifi; print(f'Certifi CA bundle: {certifi.where()}')"
           
           # Copy application code
           cp api.py package/
@@ -272,6 +280,9 @@ jobs:
           zip -r ../lambda-deployment.zip . -q
           cd ..
           zip -g lambda-deployment.zip scheduled_lambda.py
+          
+          # Show package size
+          ls -lh lambda-deployment.zip
 
       - name: Deploy/Update Lambda Function
         run: |
@@ -297,7 +308,9 @@ jobs:
                 DYNAMODB_TABLE_USERS=${{ secrets.DYNAMODB_TABLE_USERS }},
                 DYNAMODB_TABLE_GALLERIES=${{ secrets.DYNAMODB_TABLE_GALLERIES }},
                 DYNAMODB_TABLE_PHOTOS=${{ secrets.DYNAMODB_TABLE_PHOTOS }},
-                STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+                STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }},
+                REQUESTS_CA_BUNDLE=/var/task/certifi/cacert.pem,
+                SSL_CERT_FILE=/var/task/certifi/cacert.pem
               }"
           else
             echo "❌ Lambda function not found. Please create it manually first."
