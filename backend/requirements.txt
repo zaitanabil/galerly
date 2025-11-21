@@ -4,6 +4,9 @@
 # AWS SDK
 boto3>=1.28.0
 
+# SSL Certificates (required for AWS SDK HTTPS connections in Lambda)
+certifi>=2023.0.0
+
 # Stripe Payment Processing
 stripe>=7.0.0
 

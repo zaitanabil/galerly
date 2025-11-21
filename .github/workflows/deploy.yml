@@ -260,7 +260,7 @@ jobs:
           cd backend
           
           # Install lightweight dependencies (excluding image libs)
-          pip install boto3 stripe python-dotenv requests beautifulsoup4 lxml -t package/
+          pip install boto3 stripe python-dotenv requests beautifulsoup4 lxml certifi -t package/
           
           # Copy application code
           cp api.py package/
