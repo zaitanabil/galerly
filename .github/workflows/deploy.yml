@@ -165,6 +165,12 @@ jobs:
             aws s3 mb s3://${{ secrets.S3_BUCKET }} --region ${{ env.AWS_REGION }}
             aws s3 website s3://${{ secrets.S3_BUCKET }} --index-document index.html --error-document 404.html
             
+            # Disable Block Public Access (needed for public website)
+            aws s3api put-public-access-block \
+              --bucket ${{ secrets.S3_BUCKET }} \
+              --public-access-block-configuration \
+                "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false"
+            
             # Public read policy
             aws s3api put-bucket-policy --bucket ${{ secrets.S3_BUCKET }} --policy "{
               \"Version\": \"2012-10-17\",
@@ -186,6 +192,12 @@ jobs:
           # Renditions bucket
           if ! aws s3 ls s3://galerly-renditions 2>/dev/null; then
             aws s3 mb s3://galerly-renditions --region ${{ env.AWS_REGION }}
+            
+            # Disable Block Public Access for this bucket (needed for CDN)
+            aws s3api put-public-access-block \
+              --bucket galerly-renditions \
+              --public-access-block-configuration \
+                "BlockPublicAcls=false,IgnorePublicAcls=false,BlockPublicPolicy=false,RestrictPublicBuckets=false"
             
             # Public read for CDN
             aws s3api put-bucket-policy --bucket galerly-renditions --policy "{
