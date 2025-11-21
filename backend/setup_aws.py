@@ -12,7 +12,7 @@ from botocore.exceptions import ClientError
 
 # AWS Configuration - Use environment variables with fallbacks
 REGION = os.environ.get('AWS_REGION', 'us-east-1')
-API_GATEWAY_ID = os.environ.get('API_GATEWAY_ID', '')  # Must be provided via environment
+API_GATEWAY_ID = os.environ.get('API_GATEWAY_ID', '')
 S3_BUCKET_NAME = os.environ.get('S3_PHOTOS_BUCKET', 'galerly-images-storage')
 FRONTEND_URL = os.environ.get('FRONTEND_URL', 'https://galerly.com')
 

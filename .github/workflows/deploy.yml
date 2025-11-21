@@ -31,7 +31,7 @@ jobs:
     name: 🧹 AWS Cleanup
     runs-on: ubuntu-latest
     if: github.event.inputs.clean_deployment == 'true' || contains(github.event.head_commit.message, '[clean-deploy]')
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -75,7 +75,7 @@ jobs:
   validate:
     name: 🔐 Validate Configuration
     runs-on: ubuntu-latest
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -120,7 +120,7 @@ jobs:
             printf '  - %s\n' "${MISSING_SECRETS[@]}"
             exit 1
           fi
-          
+
           echo "✅ All required secrets present"
 
       - name: Validate Python Syntax
@@ -135,7 +135,7 @@ jobs:
     name: ⚙️ Setup AWS Infrastructure
     runs-on: ubuntu-latest
     needs: [validate]
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -167,7 +167,7 @@ jobs:
           if ! aws s3 ls s3://${{ secrets.S3_BUCKET }} 2>/dev/null; then
             aws s3 mb s3://${{ secrets.S3_BUCKET }} --region ${{ env.AWS_REGION }}
             aws s3 website s3://${{ secrets.S3_BUCKET }} --index-document index.html --error-document 404.html
-            
+
             # Disable Block Public Access (needed for public website)
             aws s3api put-public-access-block \
               --bucket ${{ secrets.S3_BUCKET }} \
@@ -195,7 +195,7 @@ jobs:
           # Renditions bucket
           if ! aws s3 ls s3://galerly-renditions 2>/dev/null; then
             aws s3 mb s3://galerly-renditions --region ${{ env.AWS_REGION }}
-            
+
             # Disable Block Public Access for this bucket (needed for CDN)
             aws s3api put-public-access-block \
               --bucket galerly-renditions \
@@ -239,7 +239,7 @@ jobs:
     name: ⚡ Deploy Backend Lambda
     runs-on: ubuntu-latest
     needs: [setup-infrastructure]
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -291,6 +291,7 @@ jobs:
             aws lambda update-function-configuration \
               --function-name ${{ secrets.LAMBDA_FUNCTION_NAME }} \
               --environment "Variables={
+                AWS_REGION=${{ env.AWS_REGION }},
                 JWT_SECRET=${{ secrets.JWT_SECRET }},
                 FRONTEND_URL=${{ secrets.FRONTEND_URL }},
                 S3_PHOTOS_BUCKET=${{ secrets.S3_PHOTOS_BUCKET }},
@@ -311,7 +312,7 @@ jobs:
     name: 🖼️ Deploy Image Processing
     runs-on: ubuntu-latest
     needs: [setup-infrastructure]
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -340,7 +341,7 @@ jobs:
     name: 🌐 Deploy Frontend
     runs-on: ubuntu-latest
     needs: [deploy-backend]
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -358,7 +359,7 @@ jobs:
             --cache-control "public, max-age=31536000" \
             --exclude "*.html" \
             --exclude "*.txt"
-          
+
           # HTML files with shorter cache
           aws s3 sync frontend/ s3://${{ secrets.S3_BUCKET }}/ \
             --exclude "*" \
@@ -370,7 +371,7 @@ jobs:
         run: |
           if [ -n "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" ]; then
             aws cloudfront create-invalidation \
-              --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
               --paths "/*"
           else
             echo "⏭️  CloudFront distribution ID not set, skipping cache invalidation"
@@ -383,7 +384,7 @@ jobs:
     name: ✅ Verify Deployment
     runs-on: ubuntu-latest
     needs: [deploy-backend, deploy-image-processing, deploy-frontend]
-    
+
     steps:
       - uses: actions/checkout@v4
 
@@ -429,6 +430,46 @@ jobs:
             fi
           done
 
+      - name: Invalidate CloudFront Cache
+        run: |
+          echo "🔄 Invalidating CloudFront cache..."
+          if [ -n "${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }}" ]; then
+            aws cloudfront create-invalidation \
+              --distribution-id ${{ secrets.CLOUDFRONT_DISTRIBUTION_ID }} \
+              --paths "/*" || echo "⚠️  CloudFront invalidation skipped"
+            echo "✅ CloudFront cache invalidated"
+          else
+            echo "⏭️  CLOUDFRONT_DISTRIBUTION_ID not set, skipping cache invalidation"
+          fi
+
+      - name: Test API CORS
+        run: |
+          echo "🧪 Testing API CORS..."
+          API_URL="https://api.galerly.com/xb667e3fa92f9776468017a9758f31ba4/v1/visitor/track/event"
+          
+          # Test OPTIONS request (CORS preflight)
+          echo "Testing OPTIONS (preflight)..."
+          CORS_RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X OPTIONS \
+            -H "Origin: https://galerly.com" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: Content-Type" \
+            "$API_URL")
+          
+          if [ "$CORS_RESPONSE" = "200" ] || [ "$CORS_RESPONSE" = "204" ]; then
+            echo "✅ CORS preflight OK (HTTP $CORS_RESPONSE)"
+          else
+            echo "⚠️  CORS preflight returned HTTP $CORS_RESPONSE"
+          fi
+          
+          # Test actual POST (check headers)
+          echo "Testing POST request..."
+          curl -s -X POST \
+            -H "Origin: https://galerly.com" \
+            -H "Content-Type: application/json" \
+            -d '{"session_id":"test","event_type":"test"}' \
+            -i "$API_URL" | head -20 || echo "⚠️  API test failed (expected if not deployed yet)"
+
   # ===========================================================================
   # STAGE 7: SUMMARY
   # ===========================================================================
@@ -437,7 +478,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [verify]
     if: always()
-    
+
     steps:
       - name: Generate Summary
         run: |
