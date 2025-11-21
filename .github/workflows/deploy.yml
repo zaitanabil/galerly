@@ -97,6 +97,9 @@ jobs:
           [ -z "${{ secrets.FRONTEND_URL }}" ] && MISSING_SECRETS+=("FRONTEND_URL")
           [ -z "${{ secrets.JWT_SECRET }}" ] && MISSING_SECRETS+=("JWT_SECRET")
           
+          # API Gateway
+          [ -z "${{ secrets.API_GATEWAY_ID }}" ] && MISSING_SECRETS+=("API_GATEWAY_ID")
+          
           # S3 Buckets
           [ -z "${{ secrets.S3_BUCKET }}" ] && MISSING_SECRETS+=("S3_BUCKET")
           [ -z "${{ secrets.S3_PHOTOS_BUCKET }}" ] && MISSING_SECRETS+=("S3_PHOTOS_BUCKET")
@@ -216,9 +219,11 @@ jobs:
         env:
           S3_PHOTOS_BUCKET: ${{ secrets.S3_PHOTOS_BUCKET }}
           FRONTEND_URL: ${{ secrets.FRONTEND_URL }}
+          API_GATEWAY_ID: ${{ secrets.API_GATEWAY_ID }}
         run: |
           cd backend
-          python setup_aws.py s3-cors
+          # Configure both S3 and API Gateway CORS
+          python setup_aws.py all
 
       - name: Configure S3 Lifecycle Policies
         env:
