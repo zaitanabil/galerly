@@ -44,10 +44,10 @@ def lambda_handler(event, context):
     
     # Parse transformation parameters
     params = {}
-        for item in querystring.split('&'):
-            if '=' in item:
-                key, value = item.split('=', 1)
-                params[key] = value
+    for item in querystring.split('&'):
+        if '=' in item:
+            key, value = item.split('=', 1)
+            params[key] = value
     
     # Generate cache key
     cache_parts = [s3_key.replace('/', '_')]
