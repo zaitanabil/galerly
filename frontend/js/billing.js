@@ -27,6 +27,282 @@ function loadStripe() {
     });
 }
 
+// ==========================================
+// REUSABLE MODAL UTILITY FUNCTIONS
+// ==========================================
+
+// Base modal styles
+const MODAL_BASE_STYLES = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    animation: fadeIn 0.2s ease;
+`;
+
+const MODAL_CONTENT_STYLES = `
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 24px;
+    padding: 40px;
+    max-width: 500px;
+    width: 90%;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    animation: slideUp 0.3s ease;
+`;
+
+const MODAL_ANIMATIONS = `
+    <style>
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { 
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+`;
+
+// Show custom alert modal (replaces alert())
+function showAlert(message, title = 'Notice', icon = 'ℹ️') {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.style.cssText = MODAL_BASE_STYLES;
+        
+        const modalContent = document.createElement('div');
+        modalContent.style.cssText = MODAL_CONTENT_STYLES + 'text-align: center;';
+        
+        modalContent.innerHTML = `
+            ${MODAL_ANIMATIONS}
+            <div style="font-size: 3rem; margin-bottom: 16px;">${icon}</div>
+            <h2 style="
+                font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 1.75rem;
+                font-weight: 600;
+                color: #1D1D1F;
+                margin: 0 0 16px 0;
+                letter-spacing: -0.02em;
+            ">${title}</h2>
+            <p style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 1rem;
+                color: #6B6B6B;
+                line-height: 1.6;
+                margin: 0 0 24px 0;
+                white-space: pre-line;
+            ">${message}</p>
+            <button id="alert-ok-btn" style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                padding: 12px 32px;
+                background: #0066CC;
+                color: white;
+                border: none;
+                border-radius: 980px;
+                cursor: pointer;
+                font-weight: 500;
+                font-size: 1rem;
+                transition: all 0.2s ease;
+            " onmouseover="this.style.background='#0055AA'" onmouseout="this.style.background='#0066CC'">
+                OK
+            </button>
+        `;
+        
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+        
+        const closeModal = () => {
+            modal.remove();
+            resolve();
+        };
+        
+        modalContent.querySelector('#alert-ok-btn').addEventListener('click', closeModal);
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal();
+        });
+    });
+}
+
+// Show custom confirm modal (replaces confirm())
+function showConfirm(message, title = 'Confirm', confirmText = 'Confirm', cancelText = 'Cancel') {
+    return new Promise((resolve) => {
+        const modal = document.createElement('div');
+        modal.style.cssText = MODAL_BASE_STYLES;
+        
+        const modalContent = document.createElement('div');
+        modalContent.style.cssText = MODAL_CONTENT_STYLES;
+        
+        modalContent.innerHTML = `
+            ${MODAL_ANIMATIONS}
+            <h2 style="
+                font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 1.75rem;
+                font-weight: 600;
+                color: #1D1D1F;
+                margin: 0 0 16px 0;
+                letter-spacing: -0.02em;
+            ">${title}</h2>
+            <p style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 1rem;
+                color: #6B6B6B;
+                line-height: 1.6;
+                margin: 0 0 32px 0;
+                white-space: pre-line;
+            ">${message}</p>
+            <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button id="confirm-cancel-btn" style="
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    padding: 12px 32px;
+                    background: #F5F5F7;
+                    color: #1D1D1F;
+                    border: none;
+                    border-radius: 980px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    font-size: 1rem;
+                    transition: all 0.2s ease;
+                " onmouseover="this.style.background='#E8E8ED'" onmouseout="this.style.background='#F5F5F7'">
+                    ${cancelText}
+                </button>
+                <button id="confirm-ok-btn" style="
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    padding: 12px 32px;
+                    background: #0066CC;
+                    color: white;
+                    border: none;
+                    border-radius: 980px;
+                    cursor: pointer;
+                    font-weight: 500;
+                    font-size: 1rem;
+                    transition: all 0.2s ease;
+                " onmouseover="this.style.background='#0055AA'" onmouseout="this.style.background='#0066CC'">
+                    ${confirmText}
+                </button>
+            </div>
+        `;
+        
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+        
+        const closeModal = (result) => {
+            modal.remove();
+            resolve(result);
+        };
+        
+        modalContent.querySelector('#confirm-ok-btn').addEventListener('click', () => closeModal(true));
+        modalContent.querySelector('#confirm-cancel-btn').addEventListener('click', () => closeModal(false));
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) closeModal(false);
+        });
+    });
+}
+
+// Show custom error alert
+function showError(message, title = 'Error') {
+    return showAlert(message, title, '✕');
+}
+
+// Show custom success alert
+function showSuccess(message, title = 'Success') {
+    return showAlert(message, title, '✓');
+}
+
+// Open URL in branded modal iframe (replaces window.open for PDFs)
+function openInModal(url, title = 'Document') {
+    const modal = document.createElement('div');
+    modal.style.cssText = MODAL_BASE_STYLES;
+    
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: rgba(255, 255, 255, 0.98);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 24px;
+        padding: 24px;
+        max-width: 90vw;
+        max-height: 90vh;
+        width: 900px;
+        height: 80vh;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        animation: slideUp 0.3s ease;
+        display: flex;
+        flex-direction: column;
+    `;
+    
+    modalContent.innerHTML = `
+        ${MODAL_ANIMATIONS}
+        <div style="
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        ">
+            <h3 style="
+                font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 1.25rem;
+                font-weight: 600;
+                color: #1D1D1F;
+                margin: 0;
+            ">${title}</h3>
+            <button id="modal-close-btn" style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                padding: 8px 20px;
+                background: #F5F5F7;
+                color: #1D1D1F;
+                border: none;
+                border-radius: 980px;
+                cursor: pointer;
+                font-weight: 500;
+                font-size: 0.875rem;
+                transition: all 0.2s ease;
+            " onmouseover="this.style.background='#E8E8ED'" onmouseout="this.style.background='#F5F5F7'">
+                Close
+            </button>
+        </div>
+        <iframe 
+            src="${url}" 
+            style="
+                width: 100%;
+                height: 100%;
+                border: none;
+                border-radius: 12px;
+                background: white;
+            "
+        ></iframe>
+    `;
+    
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    
+    const closeModal = () => modal.remove();
+    
+    modalContent.querySelector('#modal-close-btn').addEventListener('click', closeModal);
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) closeModal();
+    });
+}
+
 // Load subscription data
 async function loadSubscription() {
     try {
@@ -113,22 +389,211 @@ async function downgradeSubscription(galleriesToDelete = []) {
     }
 }
 
-// Cancel subscription
+// Cancel subscription - Show custom modal
 async function cancelSubscription() {
-    if (!confirm('Are you sure you want to cancel your subscription? You will continue to have access until the end of your billing period.')) {
-        return;
-    }
+    showCancelSubscriptionModal();
+}
+
+// Show cancel subscription modal
+function showCancelSubscriptionModal() {
+    // Create modal overlay
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease;
+    `;
     
-    try {
-        await window.apiRequest('billing/subscription/cancel', {
-            method: 'POST'
-        });
-        alert('Subscription canceled successfully. You will continue to have access until the end of your billing period.');
-        location.reload();
-    } catch (error) {
-        console.error('Error canceling subscription:', error);
-        alert('Failed to cancel subscription: ' + error.message);
-    }
+    // Create modal content
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 24px;
+        padding: 40px;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        animation: slideUp 0.3s ease;
+    `;
+    
+    modalContent.innerHTML = `
+        <style>
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes slideUp {
+                from { 
+                    opacity: 0;
+                    transform: translateY(20px);
+                }
+                to { 
+                    opacity: 1;
+                    transform: translateY(0);
+                }
+            }
+        </style>
+        <h2 style="
+            font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: #1D1D1F;
+            margin: 0 0 16px 0;
+            letter-spacing: -0.02em;
+        ">Cancel Subscription</h2>
+        
+        <p style="
+            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 1rem;
+            color: #6B6B6B;
+            line-height: 1.6;
+            margin: 0 0 32px 0;
+        ">
+            Your subscription will be canceled at the end of your billing period. 
+            You'll continue to have access to all features until then.
+        </p>
+        
+        <div style="
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        ">
+            <button id="cancel-modal-cancel-btn" style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                padding: 12px 32px;
+                background: #F5F5F7;
+                color: #1D1D1F;
+                border: none;
+                border-radius: 980px;
+                cursor: pointer;
+                font-weight: 500;
+                font-size: 1rem;
+                transition: all 0.2s ease;
+            " onmouseover="this.style.background='#E8E8ED'" onmouseout="this.style.background='#F5F5F7'">
+                Keep Subscription
+            </button>
+            <button id="cancel-modal-confirm-btn" style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                padding: 12px 32px;
+                background: #FF6F61;
+                color: white;
+                border: none;
+                border-radius: 980px;
+                cursor: pointer;
+                font-weight: 500;
+                font-size: 1rem;
+                transition: all 0.2s ease;
+            " onmouseover="this.style.background='#E65F51'" onmouseout="this.style.background='#FF6F61'">
+                Cancel Subscription
+            </button>
+        </div>
+    `;
+    
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+    
+    // Keep subscription button
+    modalContent.querySelector('#cancel-modal-cancel-btn').addEventListener('click', () => {
+        modal.remove();
+    });
+    
+    // Confirm cancel button
+    modalContent.querySelector('#cancel-modal-confirm-btn').addEventListener('click', async () => {
+        const confirmBtn = modalContent.querySelector('#cancel-modal-confirm-btn');
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Processing...';
+        confirmBtn.style.opacity = '0.6';
+        
+        try {
+            await window.apiRequest('billing/subscription/cancel', {
+                method: 'POST'
+            });
+            
+            // Show success message
+            modalContent.innerHTML = `
+                <div style="text-align: center; padding: 20px 0;">
+                    <div style="font-size: 3rem; margin-bottom: 16px;">✓</div>
+                    <h3 style="
+                        font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                        font-size: 1.5rem;
+                        font-weight: 600;
+                        color: #1D1D1F;
+                        margin: 0 0 12px 0;
+                    ">Subscription Canceled</h3>
+                    <p style="
+                        font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                        font-size: 1rem;
+                        color: #6B6B6B;
+                        line-height: 1.6;
+                        margin: 0;
+                    ">
+                        You'll continue to have access until the end of your billing period.
+                    </p>
+                </div>
+            `;
+            
+            setTimeout(() => {
+                modal.remove();
+                location.reload();
+            }, 2000);
+        } catch (error) {
+            console.error('Error canceling subscription:', error);
+            
+            // Show error message
+            modalContent.innerHTML = `
+                <div style="text-align: center; padding: 20px 0;">
+                    <div style="font-size: 3rem; margin-bottom: 16px; color: #FF3B30;">✕</div>
+                    <h3 style="
+                        font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                        font-size: 1.5rem;
+                        font-weight: 600;
+                        color: #1D1D1F;
+                        margin: 0 0 12px 0;
+                    ">Cancellation Failed</h3>
+                    <p style="
+                        font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                        font-size: 1rem;
+                        color: #6B6B6B;
+                        line-height: 1.6;
+                        margin: 0 0 24px 0;
+                    ">
+                        ${error.message || 'An error occurred. Please try again.'}
+                    </p>
+                    <button onclick="this.closest('[style*=\\'position: fixed\\']').remove()" style="
+                        font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                        padding: 12px 32px;
+                        background: #F5F5F7;
+                        color: #1D1D1F;
+                        border: none;
+                        border-radius: 980px;
+                        cursor: pointer;
+                        font-weight: 500;
+                        font-size: 1rem;
+                    ">Close</button>
+                </div>
+            `;
+        }
+    });
 }
 
 // Show modal for selecting galleries to delete before downgrade
@@ -201,7 +666,7 @@ function showDowngradeSelectionModal(checkData) {
         const selectedGalleries = Array.from(modal.querySelectorAll('.gallery-checkbox:checked')).map(cb => cb.value);
         
         if (selectedGalleries.length === 0) {
-            alert('Please select at least one gallery to delete.');
+            showAlert('Please select at least one gallery to delete.', 'Selection Required', '⚠️');
             return;
         }
         
@@ -234,12 +699,18 @@ function showDowngradeSelectionModal(checkData) {
         }
         
         if (!canProceed) {
-            alert(warningMessage + 'Please select more galleries.');
+            showAlert(warningMessage + 'Please select more galleries.', 'Cannot Proceed', '⚠️');
             return;
         }
         
         // Confirm deletion
-        if (!confirm(`Are you sure you want to delete ${selectedGalleries.length} gallery(ies) and schedule downgrade to Starter plan? You will be downgraded at the end of your current billing period. This action cannot be undone.`)) {
+        const confirmed = await showConfirm(
+            `Are you sure you want to delete ${selectedGalleries.length} gallery(ies) and schedule downgrade to Starter plan?\n\nYou will be downgraded at the end of your current billing period.\n\nThis action cannot be undone.`,
+            'Confirm Downgrade & Deletion',
+            'Delete & Downgrade',
+            'Cancel'
+        );
+        if (!confirmed) {
             return;
         }
         
@@ -250,12 +721,12 @@ function showDowngradeSelectionModal(checkData) {
         
         try {
             const result = await downgradeSubscription(selectedGalleries);
-            alert(`Downgrade scheduled successfully! ${result.message || `Deleted ${result.deleted_galleries} galleries and ${result.deleted_photos} photos. Freed ${result.freed_storage_gb} GB. You will be downgraded to Starter plan at the end of your current billing period.`}`);
+            await showSuccess(`Downgrade scheduled successfully!\n\n${result.message || `Deleted ${result.deleted_galleries} galleries and ${result.deleted_photos} photos. Freed ${result.freed_storage_gb} GB.\n\nYou will be downgraded to Starter plan at the end of your current billing period.`}`);
             modal.remove();
             location.reload();
         } catch (error) {
             console.error('Error downgrading:', error);
-            alert('Failed to downgrade: ' + (error.message || 'Unknown error'));
+            showError('Failed to downgrade: ' + (error.message || 'Unknown error'), 'Downgrade Failed');
             confirmBtn.disabled = false;
             confirmBtn.textContent = 'Downgrade & Delete Selected';
         }
@@ -263,16 +734,13 @@ function showDowngradeSelectionModal(checkData) {
 }
 
 // Display subscription info
-function displaySubscription(subscription) {
+async function displaySubscription(subscription) {
     const container = document.getElementById('subscription-info');
     if (!container) return;
     
     const plan = subscription.plan_details || {};
     const currentPlan = subscription.plan || 'free';
-    // Status should reflect the actual plan, not Stripe subscription status
-    // If plan is 'free', status is 'free' regardless of subscription record
-    const status = currentPlan === 'free' ? 'free' : (subscription.status || 'active');
-    const statusClass = status === 'active' ? 'status-active' : status === 'canceled' ? 'status-canceled' : 'status-free';
+        const status = currentPlan === 'free' ? 'free' : (subscription.status || 'active');
     
     // Check for pending plan change
     const pendingPlan = subscription.pending_plan;
@@ -280,75 +748,203 @@ function displaySubscription(subscription) {
     const pendingPlanName = pendingPlan ? (pendingPlan === 'free' ? 'Starter' : pendingPlan === 'plus' ? 'Plus' : 'Pro') : null;
     
     let html = `
-        <div style="display: flex; align-items: baseline; margin: 24px 0;">
-            <span style="font-size: 48px; font-weight: 800; line-height: 1;">${plan.name || subscription.plan}</span>
-            ${pendingPlan ? `<span style="font-size: 18px; color: #6b7280; margin-left: 16px; font-weight: 500;">→ ${pendingPlanName}</span>` : ''}
+        <div style="
+            display: flex;
+            align-items: baseline;
+            gap: 16px;
+            margin-bottom: 24px;
+        ">
+            <h2 style="
+                font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 3rem;
+                font-weight: 800;
+                line-height: 1;
+                color: #1D1D1F;
+                margin: 0;
+                letter-spacing: -0.02em;
+            ">${plan.name || (currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1))}</h2>
+            ${pendingPlan ? `<span style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 1rem;
+                color: #86868B;
+                font-weight: 500;
+            ">→ ${pendingPlanName}</span>` : ''}
         </div>
-        <p style="margin-bottom: 24px;">
-            Status: <span class="${statusClass}" style="color: ${status === 'active' ? '#10b981' : status === 'canceled' ? '#ef4444' : '#6b7280'}; font-weight: 600;">${status === 'free' ? 'Starter Plan' : status.charAt(0).toUpperCase() + status.slice(1)}</span>
+        <p style="
+            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 0.9375rem;
+            color: #86868B;
+            margin-bottom: 32px;
+        ">
+            <span style="color: ${status === 'active' ? '#34C759' : status === 'canceled' ? '#FF6F61' : '#86868B'}; font-weight: 500;">
+                ${status === 'free' ? 'Starter Plan' : status.charAt(0).toUpperCase() + status.slice(1)}
+            </span>
         </p>
     `;
     
-    // Show message if subscription is canceled but user still has access
+    // Check for pending refund
+    try {
+        const refundStatus = await window.apiRequest('billing/refund/status');
+        
+        if (refundStatus && refundStatus.has_pending_refund) {
+            html += `
+                <div style="
+                    background: #FFF9E6;
+                    border: 1px solid #FFE082;
+                    border-radius: 16px;
+                    padding: 20px;
+                    margin-bottom: 32px;
+                ">
+                    <p style="
+                        font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                        font-size: 0.9375rem;
+                        color: #856404;
+                        margin: 0 0 8px 0;
+                        font-weight: 600;
+                    ">Refund Request ${refundStatus.status === 'approved' ? 'Approved' : 'Pending'}</p>
+                    <p style="
+                        font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                        font-size: 0.875rem;
+                        color: #856404;
+                        margin: 0;
+                        line-height: 1.6;
+                    ">
+                        Reference: <strong>${refundStatus.refund_id ? refundStatus.refund_id.substring(0, 8) : 'N/A'}</strong> • 
+                        ${refundStatus.created_at ? new Date(refundStatus.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                    </p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('❌ Error checking refund status:', error);
+    }
+    
+    html += `
+    `;
+    
+    // Show message if subscription is canceled
     if (status === 'canceled' && currentPlan !== 'free') {
-        const changeDate = pendingPlanChangeAt ? new Date(pendingPlanChangeAt * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : null;
+        const changeDate = pendingPlanChangeAt ? new Date(pendingPlanChangeAt * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) : null;
         html += `
-            <div style="background: #fff3cd; border-left: 4px solid #ffc107; padding: 16px; margin-bottom: 24px; border-radius: 4px;">
-                <p style="margin: 0; font-weight: 600; color: #856404;">⚠️ Subscription Canceled</p>
-                <p style="margin: 8px 0 0 0; color: #856404;">
-                    Your subscription is scheduled to cancel${changeDate ? ` on ${changeDate}` : ''} at the end of your billing period. 
-                    ${pendingPlan ? `You will be moved to the <strong>${pendingPlanName}</strong> plan. ` : ''}
-                    You will continue to have access to all current plan features until then.
+            <div style="
+                background: #FFF9E6;
+                border-left: 3px solid #FFE082;
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 32px;
+            ">
+                <p style="
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 0.9375rem;
+                    color: #856404;
+                    margin: 0 0 8px 0;
+                    font-weight: 600;
+                ">Subscription Canceled</p>
+                <p style="
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 0.875rem;
+                    color: #856404;
+                    margin: 0;
+                    line-height: 1.6;
+                ">
+                    ${changeDate ? `Ends ${changeDate}. ` : ''}Access continues until then.
                 </p>
             </div>
         `;
     }
     
-    // Show message if there's a pending plan change (not cancellation)
+    // Show message if there's a pending plan change
     if (pendingPlan && pendingPlanChangeAt && status !== 'canceled') {
-        const changeDate = new Date(pendingPlanChangeAt * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-        const changeTime = new Date(pendingPlanChangeAt * 1000).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+        const changeDate = new Date(pendingPlanChangeAt * 1000).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
         html += `
-            <div style="background: #e0f2fe; border-left: 4px solid #0284c7; padding: 16px; margin-bottom: 24px; border-radius: 4px;">
-                <p style="margin: 0; font-weight: 600; color: #0c4a6e;">📅 Plan Change Scheduled</p>
-                <p style="margin: 8px 0 0 0; color: #0c4a6e;">
-                    <strong>Current Plan:</strong> ${plan.name || subscription.plan}<br>
-                    <strong>Future Plan:</strong> ${pendingPlanName}<br>
-                    <strong>Effective Date:</strong> ${changeDate} at ${changeTime}
-                </p>
-                <p style="margin: 12px 0 0 0; color: #0c4a6e; font-size: 14px;">
-                    Your plan will change to <strong>${pendingPlanName}</strong> at the end of your current billing period. 
-                    You will continue to have access to your current plan features until then.
+            <div style="
+                background: #E8F4FD;
+                border-left: 3px solid #0066CC;
+                border-radius: 12px;
+                padding: 20px;
+                margin-bottom: 32px;
+            ">
+                <p style="
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 0.9375rem;
+                    color: #0055AA;
+                    margin: 0 0 8px 0;
+                    font-weight: 600;
+                ">Plan Change Scheduled</p>
+                <p style="
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 0.875rem;
+                    color: #0055AA;
+                    margin: 0;
+                    line-height: 1.6;
+                ">
+                    Switching to ${pendingPlanName} on ${changeDate}.
                 </p>
             </div>
         `;
     }
     
+    // Features list
     if (plan.features && plan.features.length > 0) {
-        html += `<ul style="list-style: none; padding: 0; margin: 24px 0;">`;
+        html += `<ul style="
+            list-style: none;
+            padding: 0;
+            margin: 32px 0;
+        ">`;
         plan.features.forEach(feature => {
-            html += `<li style="margin-bottom: 12px;">→ ${feature}</li>`;
+            html += `
+                <li style="
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 0.9375rem;
+                    color: #1D1D1F;
+                    margin-bottom: 12px;
+                    display: flex;
+                    align-items: center;
+                ">
+                    <span style="color: #0066CC; margin-right: 12px; font-weight: 600;">✓</span>
+                    ${feature}
+                </li>
+            `;
         });
         html += `</ul>`;
     }
     
-    // Only show cancel button if user has an active paid subscription
+    // Action buttons
     if (status === 'active' && subscription.subscription && currentPlan !== 'free') {
-        // Add refund check button
         html += `
-            <button onclick="checkRefundEligibility()" class="item-5 idtTuz submit-btn" style="margin-top: 24px; width: 100%; background: #f97316; color: white;">
-                <div class="main-6 jpIyal">
-                    <span>Request Refund</span>
-                </div>
-            </button>
-        `;
-        
-        html += `
-            <button onclick="cancelSubscription()" class="item-5 idtTuz submit-btn" style="margin-top: 12px; width: 100%; background: #f3f4f6; color: #374151;">
-                <div class="main-6 jpIyal">
-                    <span>Cancel Subscription</span>
-                </div>
-            </button>
+            <div style="
+                display: grid; 
+                grid-template-columns: 1fr 1fr; 
+                gap: 12px;
+                margin-top: 32px;
+            ">
+                <a href="#" onclick="checkRefundEligibility(); return false;" aria-label="Request Refund" 
+                    class="image-18 nav-6 container-0" 
+                    style="background: #FF6F61; width: 100%;">
+                    <div class="title-18 main-6">
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Request Refund<span class="text-18 feature-7">
+                            <svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="white">
+                                <path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" 
+                                    stroke="currentColor" stroke-linecap="round"></path>
+                                <path d="M1 7L16 7" stroke="currentColor" stroke-linecap="round"></path>
+                            </svg>
+                        </span></span>
+                    </div>
+                </a>
+                <a href="#" onclick="cancelSubscription(); return false;" aria-label="Cancel Subscription" 
+                    class="logo-18 list-5"
+                    style="width: 100%;">
+                    <div class="title-18 main-6">
+                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Cancel<span class="text-18 feature-7">
+                            <svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="var(--text-on-button-secondary)">
+                                <path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" 
+                                    stroke="currentColor" stroke-linecap="round"></path>
+                                <path d="M1 7L16 7" stroke="currentColor" stroke-linecap="round"></path>
+                            </svg>
+                        </span></span>
+                    </div>
+                </a>
+            </div>
         `;
     }
     
@@ -371,49 +967,111 @@ function displayUsage(usage) {
     const storageLimitText = storageLimit.limit_gb === -1 ? 'Unlimited' : `${storageLimit.limit_gb} GB`;
     
     let html = `
-        <!-- Gallery Limit Card -->
+        <!-- Gallery Limit -->
         <div class="card-18 hero-10 animation-11 textarea-7">
             <div class="button-18 list-7">
                 <div class="container-15 item-7">
-                    <h3 class="grid-15 animation-7">
-                        Monthly Galleries
-                    </h3>
+                    <h3 class="grid-15 animation-7">Monthly Galleries</h3>
                     <div class="input-15 background-7">
-                        <div style="display: flex; align-items: baseline; margin: 24px 0;">
-                            <span style="font-size: 48px; font-weight: 800; line-height: 1;">${galleryLimit.used || 0}</span>
-                            <span style="font-size: 18px; margin-left: 8px; opacity: 0.7;">/ ${galleryLimitText}</span>
+                        <div style="
+                            display: flex;
+                            align-items: baseline;
+                            margin: 24px 0;
+                        ">
+                            <span style="
+                                font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                                font-size: 3rem;
+                                font-weight: 800;
+                                line-height: 1;
+                                color: #1D1D1F;
+                            ">${galleryLimit.used || 0}</span>
+                            <span style="
+                                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                                font-size: 1rem;
+                                color: #86868B;
+                                margin-left: 8px;
+                            ">/ ${galleryLimitText}</span>
                         </div>
                         ${galleryLimit.limit !== -1 ? `
-                            <div style="height: 8px; background: rgba(0, 0, 0, 0.08); border-radius: 4px; overflow: hidden; margin-top: 16px;">
-                                <div style="height: 100%; background: linear-gradient(90deg, #0066CC, #0077FF); width: ${galleryPercent}%; transition: width 0.3s ease; border-radius: 4px;"></div>
+                            <div style="
+                                height: 6px;
+                                background: rgba(0, 0, 0, 0.06);
+                                border-radius: 3px;
+                                overflow: hidden;
+                                margin-top: 16px;
+                            ">
+                                <div style="
+                                    height: 100%;
+                                    background: #0066CC;
+                                    width: ${galleryPercent}%;
+                                    transition: width 0.3s ease;
+                                    border-radius: 3px;
+                                "></div>
                             </div>
                         ` : ''}
-                        <p style="margin-top: 16px; margin-bottom: 0;">
-                            ${galleryLimit.limit === -1 ? 'Unlimited galleries per month' : `${galleryLimit.remaining || 0} remaining this month`}
+                        <p style="
+                            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                            font-size: 0.875rem;
+                            color: #86868B;
+                            margin-top: 16px;
+                            margin-bottom: 0;
+                        ">
+                            ${galleryLimit.limit === -1 ? 'Unlimited galleries' : `${galleryLimit.remaining || 0} remaining`}
                         </p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Storage Limit Card -->
+        <!-- Storage Limit -->
         <div class="card-18 hero-10 animation-11 textarea-7">
             <div class="button-18 list-7">
                 <div class="container-15 item-7">
-                    <h3 class="grid-15 animation-7">
-                        Storage
-                    </h3>
+                    <h3 class="grid-15 animation-7">Storage</h3>
                     <div class="input-15 background-7">
-                        <div style="display: flex; align-items: baseline; margin: 24px 0;">
-                            <span style="font-size: 48px; font-weight: 800; line-height: 1;">${(storageLimit.used_gb || 0).toFixed(1)}</span>
-                            <span style="font-size: 18px; margin-left: 8px; opacity: 0.7;">GB / ${storageLimitText}</span>
+                        <div style="
+                            display: flex;
+                            align-items: baseline;
+                            margin: 24px 0;
+                        ">
+                            <span style="
+                                font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                                font-size: 3rem;
+                                font-weight: 800;
+                                line-height: 1;
+                                color: #1D1D1F;
+                            ">${(storageLimit.used_gb || 0).toFixed(1)}</span>
+                            <span style="
+                                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                                font-size: 1rem;
+                                color: #86868B;
+                                margin-left: 8px;
+                            ">GB / ${storageLimitText}</span>
                         </div>
                         ${storageLimit.limit_gb !== -1 ? `
-                            <div style="height: 8px; background: rgba(0, 0, 0, 0.08); border-radius: 4px; overflow: hidden; margin-top: 16px;">
-                                <div style="height: 100%; background: linear-gradient(90deg, #0066CC, #0077FF); width: ${storagePercent}%; transition: width 0.3s ease; border-radius: 4px;"></div>
+                            <div style="
+                                height: 6px;
+                                background: rgba(0, 0, 0, 0.06);
+                                border-radius: 3px;
+                                overflow: hidden;
+                                margin-top: 16px;
+                            ">
+                                <div style="
+                                    height: 100%;
+                                    background: #0066CC;
+                                    width: ${storagePercent}%;
+                                    transition: width 0.3s ease;
+                                    border-radius: 3px;
+                                "></div>
                             </div>
                         ` : ''}
-                        <p style="margin-top: 16px; margin-bottom: 0;">
+                        <p style="
+                            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                            font-size: 0.875rem;
+                            color: #86868B;
+                            margin-top: 16px;
+                            margin-bottom: 0;
+                        ">
                             ${storageLimit.limit_gb === -1 ? 'Unlimited storage' : `${((storageLimit.limit_gb || 0) - (storageLimit.used_gb || 0)).toFixed(1)} GB available`}
                         </p>
                     </div>
@@ -422,37 +1080,44 @@ function displayUsage(usage) {
         </div>
     `;
     
-    // Add warning card if approaching limits
+    // Warning if approaching limits
     if (galleryLimit.remaining === 0 || (storageLimit.usage_percent && storageLimit.usage_percent >= 90)) {
-        // Determine which plan to upgrade to based on current plan
         const currentPlan = usage.plan?.id || 'free';
-        let upgradePlan = 'plus'; // Default: Starter → Plus
-        let upgradePlanName = 'Plus';
-        
-        if (currentPlan === 'plus' || currentPlan === 'pro') {
-            // Plus user approaching limits → upgrade to Pro
-            upgradePlan = 'pro';
-            upgradePlanName = 'Pro';
-        }
+        let upgradePlan = currentPlan === 'plus' ? 'pro' : 'plus';
+        let upgradePlanName = currentPlan === 'plus' ? 'Pro' : 'Plus';
         
         html += `
-            <div class="card-18 hero-10 animation-11 textarea-7" style="grid-column: 1/-1; border-left: 4px solid #ffc107; background: #fffbf0;">
+            <div class="card-18 hero-10 animation-11 textarea-7" style="
+                border-left: 3px solid #FFE082;
+                background: #FFF9E6;
+            ">
                 <div class="button-18 list-7">
                     <div class="container-15 item-7">
-                        <h3 class="grid-15 animation-7" style="color: #856404;">
-                            ⚠️ Approaching Limits
-                        </h3>
+                        <h3 class="grid-15 animation-7" style="color: #856404;">Approaching Limits</h3>
                         <div class="input-15 background-7">
-                            <p style="margin-bottom: 20px; color: #856404;">
-                                ${galleryLimit.remaining === 0 ? 'You\'ve reached your monthly gallery limit. ' : ''}
-                                ${storageLimit.usage_percent >= 90 ? 'Your storage is almost full. ' : ''}
-                                Upgrade to ${upgradePlanName} to get more resources.
+                            <p style="
+                                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                                font-size: 0.9375rem;
+                                color: #856404;
+                                margin-bottom: 20px;
+                            ">
+                                ${galleryLimit.remaining === 0 ? 'Gallery limit reached. ' : ''}
+                                ${storageLimit.usage_percent >= 90 ? 'Storage almost full. ' : ''}
+                                Upgrade to ${upgradePlanName} for more resources.
                             </p>
-                            <button onclick="upgradeFromWarning('${upgradePlan}')" class="item-5 idtTuz submit-btn" style="display: inline-block; background: linear-gradient(90deg, #0066CC, #0077FF); color: white; border: none; cursor: pointer;">
-                                <div class="main-6 jpIyal">
-                                    <span>Upgrade to ${upgradePlanName}</span>
+                            <a href="#plans-section" onclick="document.getElementById('plans-section').scrollIntoView({behavior: 'smooth'}); return false;" 
+                                class="image-18 nav-6 container-0" 
+                                style="display: inline-flex; background: #0066CC;">
+                                <div class="title-18 main-6">
+                                    <span>Upgrade to ${upgradePlanName}<span class="text-18 feature-7">
+                                        <svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="white">
+                                            <path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" 
+                                                stroke="currentColor" stroke-linecap="round"></path>
+                                            <path d="M1 7L16 7" stroke="currentColor" stroke-linecap="round"></path>
+                                        </svg>
+                                    </span></span>
                                 </div>
-                            </button>
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -465,71 +1130,33 @@ function displayUsage(usage) {
 
 // Display billing history
 function displayBillingHistory(history) {
-    console.log('🎨 displayBillingHistory called with:', history);
     const container = document.getElementById('billing-history');
-    console.log('🎨 Container element:', container);
-    
-    if (!container) {
-        console.error('❌ No billing-history container found!');
-        return;
-    }
+    if (!container) return;
     
     const invoices = history.invoices || [];
-    console.log('🎨 Number of invoices to display:', invoices.length);
     
     if (invoices.length === 0) {
-        console.log('⚠️  No invoices, showing empty message');
         container.innerHTML = `
             <div style="
                 padding: 48px 24px;
                 text-align: center;
             ">
                 <p style="
-                    margin: 0;
                     font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
                     font-size: 0.9375rem;
                     color: #86868B;
-                    font-weight: 400;
-                ">No billing history yet.</p>
+                    margin: 0;
+                ">No billing history.</p>
             </div>
         `;
         return;
     }
     
-    // Apple-style minimal design with subtle dividers
     let html = `
-        <style>
-            @media (max-width: 640px) {
-                .billing-invoice-card {
-                    grid-template-columns: 1fr !important;
-                    gap: 12px !important;
-                    padding: 16px 0 !important;
-                }
-                .billing-invoice-info {
-                    gap: 12px !important;
-                }
-                .billing-invoice-meta {
-                    flex-direction: column !important;
-                    align-items: flex-start !important;
-                    gap: 8px !important;
-                }
-                .billing-invoice-action {
-                    justify-content: flex-start !important;
-                }
-                .billing-download-icon {
-                    width: 36px !important;
-                    height: 36px !important;
-                }
-            }
-        </style>
-        <div style="
-            display: flex;
-            flex-direction: column;
-            margin-top: 24px;
-        ">
+        <div style="display: flex; flex-direction: column; gap: 0;">
     `;
     
-    invoices.forEach(invoice => {
+    invoices.forEach((invoice, index) => {
         const date = new Date(invoice.created_at).toLocaleDateString('en-US', { 
             month: 'short', 
             day: 'numeric', 
@@ -538,73 +1165,47 @@ function displayBillingHistory(history) {
         const invoiceNumber = invoice.invoice_number || invoice.stripe_invoice_id || 'N/A';
         const showButton = (invoice.status === 'paid' && invoice.stripe_invoice_id);
         
-        console.log(`📋 Invoice: status="${invoice.status}", stripe_invoice_id="${invoice.stripe_invoice_id}", showButton: ${showButton}`);
-        
         html += `
-            <div class="billing-invoice-card" style="
-                display: grid;
-                grid-template-columns: 1fr auto;
-                gap: 24px;
+            <div style="
+                display: flex;
                 align-items: center;
+                justify-content: space-between;
                 padding: 20px 0;
-                border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-                transition: all 0.15s ease;
-            "
-            onmouseover="this.style.background='rgba(0, 0, 0, 0.02)'; this.style.marginLeft='-24px'; this.style.marginRight='-24px'; this.style.paddingLeft='24px'; this.style.paddingRight='24px'; this.style.borderRadius='12px'"
-            onmouseout="this.style.background='transparent'; this.style.marginLeft='0'; this.style.marginRight='0'; this.style.paddingLeft='0'; this.style.paddingRight='0'; this.style.borderRadius='0'">
-                
-                <!-- Left side: Invoice info -->
-                <div class="billing-invoice-info" style="display: flex; flex-direction: column; gap: 6px; min-width: 0;">
-                    <!-- Invoice number and date -->
-                    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;">
-                        <span style="
-                            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                            font-size: 1.0625rem;
-                            font-weight: 600;
-                            color: #1D1D1F;
-                            letter-spacing: -0.015em;
-                        ">${invoiceNumber}</span>
-                        <span style="
-                            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                            font-size: 0.8125rem;
-                            color: #86868B;
-                            font-weight: 400;
-                        ">${date}</span>
-                    </div>
-                    
-                    <!-- Amount and status -->
-                    <div class="billing-invoice-meta" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
-                        <span style="
-                            font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
-                            font-size: 0.9375rem;
-                            font-weight: 400;
-                            color: #1D1D1F;
-                            letter-spacing: -0.01em;
-                        ">$${invoice.amount?.toFixed(2) || '0.00'}</span>
-                        
-                        <span style="
-                            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                            font-weight: 400;
-                            font-size: 0.8125rem;
-                            color: ${invoice.status === 'paid' ? '#34C759' : '#86868B'};
-                        ">${invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}</span>
+                ${index < invoices.length - 1 ? 'border-bottom: 1px solid rgba(0, 0, 0, 0.06);' : ''}
+            ">
+                <!-- Left: Invoice details -->
+                <div style="flex: 1; min-width: 0;">
+                    <div style="
+                        font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                        font-size: 1rem;
+                        font-weight: 600;
+                        color: #1D1D1F;
+                        margin-bottom: 4px;
+                    ">${invoiceNumber}</div>
+                    <div style="
+                        font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                        font-size: 0.875rem;
+                        color: #86868B;
+                    ">
+                        ${date} • $${invoice.amount?.toFixed(2) || '0.00'} • 
+                        <span style="color: ${invoice.status === 'paid' ? '#34C759' : '#86868B'};">
+                            ${invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
+                        </span>
                     </div>
                 </div>
                 
-                <!-- Right side: Action icon -->
-                <div class="billing-invoice-action" style="display: flex; align-items: center; justify-content: flex-end;">
+                <!-- Right: Download button -->
+                <div>
                     ${showButton ? `
                         <button 
-                            class="billing-download-icon"
                             onclick="downloadInvoice('${invoice.stripe_invoice_id}', '${invoiceNumber}')"
-                            aria-label="Download invoice PDF"
+                            aria-label="Download invoice"
                             style="
                                 display: inline-flex;
                                 align-items: center;
                                 justify-content: center;
                                 width: 40px;
                                 height: 40px;
-                                padding: 0;
                                 background: transparent;
                                 border: none;
                                 border-radius: 50%;
@@ -612,10 +1213,10 @@ function displayBillingHistory(history) {
                                 cursor: pointer;
                                 transition: all 0.15s ease;
                             "
-                            onmouseover="this.style.background='rgba(0, 102, 204, 0.1)'; this.style.transform='scale(1.05)'"
-                            onmouseout="this.style.background='transparent'; this.style.transform='scale(1)'"
+                            onmouseover="this.style.background='rgba(0, 102, 204, 0.1)'"
+                            onmouseout="this.style.background='transparent'"
                         >
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                 <polyline points="7 10 12 15 17 10"></polyline>
                                 <line x1="12" y1="15" x2="12" y2="3"></line>
@@ -628,8 +1229,6 @@ function displayBillingHistory(history) {
                             display: inline-flex;
                             align-items: center;
                             justify-content: center;
-                            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                            font-size: 1rem;
                             color: #D1D1D6;
                         ">—</span>
                     `}
@@ -655,12 +1254,12 @@ async function downloadInvoice(stripeInvoiceId, invoiceNumber) {
         
         console.log(`📄 Opening PDF URL: ${url}`);
         
-        // Open in new tab - backend will redirect to Stripe PDF
-        window.open(url, '_blank');
+        // Open in branded modal - backend will redirect to Stripe PDF
+        openInModal(url, `Invoice ${invoiceNumber}`);
         
     } catch (error) {
         console.error('❌ Error downloading invoice:', error);
-        alert('Failed to download invoice. Please try again or contact support.');
+        showError('Failed to download invoice. Please try again or contact support.', 'Download Failed');
     }
 }
 
@@ -705,7 +1304,7 @@ async function initBillingPage() {
                     loadUsage()
                 ]);
                 
-                displaySubscription(subscription);
+                await displaySubscription(subscription);
                 displayUsage(usage);
                 
                 // Update success message
@@ -750,7 +1349,7 @@ async function initBillingPage() {
         console.log('✅ Subscription loaded:', subscription);
         console.log('✅ Usage loaded:', usage);
         
-        displaySubscription(subscription);
+        await displaySubscription(subscription);
         displayUsage(usage);
         
         // Load billing history if on billing page
@@ -784,32 +1383,23 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
     const container = document.getElementById('plans-container');
     if (!container) return;
     
-    // Get pending_plan from subscription data if provided, otherwise load it
     let pendingPlan = null;
     if (subscriptionData) {
         pendingPlan = subscriptionData.pending_plan || null;
-    } else {
-        try {
-            const subscription = await loadSubscription();
-            pendingPlan = subscription.pending_plan || null;
-        } catch (error) {
-            console.error('Error loading subscription for display:', error);
-        }
     }
-    
-    // Debug logging
     
     const plans = [
         {
             id: 'free',
             name: 'Starter',
             price: 0,
+            description: 'Perfect for getting started.',
             features: [
                 '5 galleries per month',
                 '5 GB storage',
                 'Client downloads',
                 'Photo approval',
-                'Comments & feedback',
+                'Comments',
                 'Email notifications',
                 'Public profile',
                 'Basic analytics'
@@ -819,13 +1409,14 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
             id: 'plus',
             name: 'Plus',
             price: 12,
+            badge: 'BEST VALUE',
+            description: 'For growing photographers.',
             features: [
                 'Unlimited galleries',
                 '50 GB storage',
-                'Video support (30 min, up to HD)',
+                'Video support (30 min, HD)',
                 'Priority email support',
-                'All Starter features',
-                'Batch photo uploads',
+                'Batch uploads',
                 'Advanced analytics',
                 'Custom notifications'
             ]
@@ -834,13 +1425,13 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
             id: 'pro',
             name: 'Pro',
             price: 24,
+            description: 'For professionals.',
             features: [
                 'Unlimited galleries',
                 '200 GB storage',
-                'Video support (2 hours, up to 4K)',
+                'Video support (2 hours, 4K)',
                 'Priority support (12-24h)',
                 'Dedicated support',
-                'All Plus features',
                 'Custom email branding',
                 'Analytics exports',
                 'Gallery templates'
@@ -854,72 +1445,102 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
         const isCurrentPlan = plan.id === currentPlanId;
         const isFree = plan.id === 'free';
         
-        // Define plan pricing for upgrade/downgrade logic
         const planPrices = { 'free': 0, 'plus': 12, 'pro': 24 };
         const currentPrice = planPrices[currentPlanId] || 0;
         const targetPrice = planPrices[plan.id] || 0;
         
-        // Determine if upgrade or downgrade based on price
         const isUpgrade = !isCurrentPlan && !isFree && currentPlanId !== 'free' && targetPrice > currentPrice;
         const isDowngrade = !isCurrentPlan && currentPlanId !== 'free' && (targetPrice < currentPrice || plan.id === 'free');
         
-        // Check if this is a reactivation scenario (pending_plan='free' but user wants current plan)
-        const isReactivation = (
-            pendingPlan === 'free' && 
-            isCurrentPlan && 
-            (plan.id === 'plus' || plan.id === 'pro')
-        );
-        
-        // Debug logging for reactivation detection
-        if (isCurrentPlan && (plan.id === 'plus' || plan.id === 'pro')) {
-        }
+        const isReactivation = (pendingPlan === 'free' && isCurrentPlan && (plan.id === 'plus' || plan.id === 'pro'));
         
         let buttonText = '';
-        let buttonClass = 'item-5 idtTuz submit-btn change-plan-btn';
-        let buttonStyle = 'margin-top: 24px; width: 100%;';
+        let buttonClass = 'image-18 nav-6 container-0 change-plan-btn';
         
         if (isReactivation) {
-            // Show reactivate button instead of "Current Plan"
-            buttonText = `Reactivate ${plan.name}`;
-            buttonStyle += ' background: linear-gradient(90deg, #0066CC, #0077FF); color: white;';
+            buttonText = `Reactivate`;
         } else if (isCurrentPlan) {
             buttonText = 'Current Plan';
-            buttonStyle += ' background: #e5e7eb; color: #6b7280; cursor: not-allowed;';
-            buttonClass += ' current-plan-btn';
+            buttonClass = 'logo-18 list-5 current-plan-btn';
         } else if (isUpgrade || (currentPlanId === 'free' && !isFree)) {
-            buttonText = `Upgrade to ${plan.name}`;
-            buttonStyle += ' background: linear-gradient(90deg, #0066CC, #0077FF); color: white;';
+            buttonText = `Upgrade`;
         } else if (isDowngrade) {
-            buttonText = `Downgrade to ${plan.name}`;
-            buttonStyle += ' background: #f3f4f6; color: #374151;';
+            buttonText = `Downgrade`;
+            buttonClass = 'logo-18 list-5 change-plan-btn';
         }
         
         html += `
-            <div class="card-18 hero-10 animation-11 textarea-7" ${isCurrentPlan ? 'style="border: 2px solid #0066CC; box-shadow: 0 4px 12px rgba(0,102,204,0.15);"' : ''}>
+            <div class="card-18 hero-10 animation-11 textarea-7" ${isCurrentPlan ? 'style="border: 2px solid #0066CC; box-shadow: 0 4px 16px rgba(0, 102, 204, 0.1);"' : ''}>
                 <div class="button-18 list-7">
                     <div class="container-15 item-7">
-                        <h3 class="grid-15 animation-7">
-                            ${plan.name}
-                            ${isCurrentPlan ? '<span style="font-size: 14px; color: #0066CC; margin-left: 8px;">(Current)</span>' : ''}
-                        </h3>
+                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+                            <h3 class="grid-15 animation-7" style="margin: 0;">${plan.name}</h3>
+                            ${plan.badge ? `<span style="
+                                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                                font-size: 0.75rem;
+                                font-weight: 600;
+                                padding: 4px 12px;
+                                background: #0066CC;
+                                color: white;
+                                border-radius: 12px;
+                            ">${plan.badge}</span>` : ''}
+                            ${isCurrentPlan ? `<span style="
+                                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                                font-size: 0.75rem;
+                                font-weight: 600;
+                                color: #0066CC;
+                            ">(Current)</span>` : ''}
+                        </div>
                         <div class="input-15 background-7">
-                            <div style="display: flex; align-items: baseline; margin: 24px 0;">
-                                <span style="font-size: 48px; font-weight: 800; line-height: 1;">$${plan.price}</span>
-                                <span style="margin-left: 8px; opacity: 0.6;">${plan.price === 0 ? '' : '/month'}</span>
+                            <div style="display: flex; align-items: baseline; margin-bottom: 16px;">
+                                <span style="
+                                    font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                                    font-size: 3rem;
+                                    font-weight: 800;
+                                    line-height: 1;
+                                    color: #1D1D1F;
+                                ">$${plan.price}</span>
+                                ${plan.price > 0 ? `<span style="
+                                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                                    font-size: 1rem;
+                                    color: #86868B;
+                                    margin-left: 8px;
+                                ">/month</span>` : ''}
                             </div>
-                            <p style="margin-bottom: 32px;">
-                                ${plan.id === 'free' ? 'Perfect for getting started' : plan.id === 'plus' ? 'Everything you need to grow' : 'Built for teams and professionals'}
-                            </p>
-                            <ul style="list-style: none; padding: 0; margin: 24px 0;">
-                                ${plan.features.map(feature => `<li style="margin-bottom: 12px;">→ ${feature}</li>`).join('')}
+                            <p style="
+                                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                                font-size: 0.9375rem;
+                                color: #86868B;
+                                margin-bottom: 32px;
+                            ">${plan.description}</p>
+                            <ul style="list-style: none; padding: 0; margin: 32px 0;">
+                                ${plan.features.map(feature => `
+                                    <li style="
+                                        font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                                        font-size: 0.9375rem;
+                                        color: #1D1D1F;
+                                        margin-bottom: 12px;
+                                        display: flex;
+                                        align-items: center;
+                                    ">
+                                        <span style="color: #0066CC; margin-right: 12px; font-weight: 600;">✓</span>
+                                        ${feature}
+                                    </li>
+                                `).join('')}
                             </ul>
                             ${buttonText ? `
-                                <button type="button" class="${buttonClass}" data-plan="${plan.id}" 
-                                    style="${buttonStyle}" ${isCurrentPlan && !isReactivation ? 'disabled' : ''}>
-                                    <div class="main-6 jpIyal">
-                                        <span>${buttonText}</span>
+                                <a aria-label="${buttonText}" class="${buttonClass}" href="#" data-plan="${plan.id}" 
+                                    ${isCurrentPlan && !isReactivation ? 'onclick="return false;" style="pointer-events: none; opacity: 0.5;"' : ''}>
+                                    <div class="title-18 main-6">
+                                        <span>${buttonText}<span class="text-18 feature-7">
+                                            <svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="currentColor">
+                                                <path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" 
+                                                    stroke="currentColor" stroke-linecap="round"></path>
+                                                <path d="M1 7L16 7" stroke="currentColor" stroke-linecap="round"></path>
+                                            </svg>
+                                        </span></span>
                                     </div>
-                                </button>
+                                </a>
                             ` : ''}
                         </div>
                     </div>
@@ -929,8 +1550,6 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
     });
     
     container.innerHTML = html;
-    
-    // Setup event listeners for plan change buttons
     setupPlanChangeButtons();
 }
 
@@ -971,14 +1590,14 @@ function setupPlanChangeButtons() {
                     
                     const result = await changePlan(planId);
                     
-                    alert(`Subscription reactivated successfully! ${result.message || `Your ${planId} plan is now active again.`}`);
+                    await showSuccess(`Subscription reactivated successfully!\n\n${result.message || `Your ${planId} plan is now active again.`}`);
                     location.reload();
                     return;
                 } catch (error) {
                     console.error('Error reactivating subscription:', error);
                     const errorMessage = error.message || 'Unknown error';
                     const errorDetails = error.details?.message || '';
-                    alert(`Failed to reactivate subscription: ${errorMessage}${errorDetails ? '\n\n' + errorDetails : ''}`);
+                    await showError(`Failed to reactivate subscription:\n\n${errorMessage}${errorDetails ? '\n\n' + errorDetails : ''}`, 'Reactivation Failed');
                     button.disabled = false;
                     buttonText.textContent = originalText;
                     return;
@@ -997,24 +1616,30 @@ function setupPlanChangeButtons() {
                         return;
                     } else {
                         // Can downgrade without deletion
-                        if (!confirm('Are you sure you want to downgrade to Starter plan? You will be downgraded at the end of your current billing period. You will continue to have access to premium features until then. You can upgrade again anytime.')) {
+                        const confirmed = await showConfirm(
+                            'Are you sure you want to downgrade to Starter plan?\n\nYou will be downgraded at the end of your current billing period. You will continue to have access to premium features until then.\n\nYou can upgrade again anytime.',
+                            'Confirm Downgrade',
+                            'Downgrade',
+                            'Cancel'
+                        );
+                        if (!confirmed) {
                             return;
                         }
                         // Downgrade without deletion
                         try {
                             const result = await downgradeSubscription([]);
-                            alert(`Downgrade scheduled successfully! ${result.message || 'You will be downgraded to Starter plan at the end of your current billing period.'}`);
+                            await showSuccess(`Downgrade scheduled successfully!\n\n${result.message || 'You will be downgraded to Starter plan at the end of your current billing period.'}`);
                             location.reload();
                             return;
                         } catch (error) {
                             console.error('Error downgrading:', error);
-                            alert('Failed to downgrade: ' + error.message);
+                            showError('Failed to downgrade: ' + error.message, 'Downgrade Failed');
                             return;
                         }
                     }
                 } catch (error) {
                     console.error('Error checking downgrade limits:', error);
-                    alert('Failed to check downgrade requirements: ' + error.message);
+                    showError('Failed to check downgrade requirements: ' + error.message, 'Check Failed');
                     return;
                 }
             }
@@ -1065,7 +1690,7 @@ function setupPlanChangeButtons() {
                             }
                             warningMessage += `\n💡 Please delete some galleries or photos to free up resources, then try again.`;
                             
-                            alert(warningMessage);
+                            showAlert(warningMessage, 'Cannot Downgrade', '⚠️');
                             
                             button.disabled = false;
                             buttonText.textContent = originalText;
@@ -1074,7 +1699,13 @@ function setupPlanChangeButtons() {
                         
                         // Limits OK, confirm downgrade
                         const targetPlanName = checkResponse.target_plan_name || planId;
-                        if (!confirm(`Are you sure you want to downgrade to ${targetPlanName} plan?\n\nYou will be downgraded at the end of your current billing period. You will continue to have access to your current plan features until then.`)) {
+                        const confirmed = await showConfirm(
+                            `Are you sure you want to downgrade to ${targetPlanName} plan?\n\nYou will be downgraded at the end of your current billing period. You will continue to have access to your current plan features until then.`,
+                            'Confirm Downgrade',
+                            'Downgrade',
+                            'Cancel'
+                        );
+                        if (!confirmed) {
                             button.disabled = false;
                             buttonText.textContent = originalText;
                             return;
@@ -1083,7 +1714,7 @@ function setupPlanChangeButtons() {
                         buttonText.textContent = 'Processing...';
                     } catch (error) {
                         console.error('Error checking downgrade limits:', error);
-                        alert('Failed to check downgrade requirements. Please try again.');
+                        showError('Failed to check downgrade requirements. Please try again.', 'Check Failed');
                         button.disabled = false;
                         buttonText.textContent = originalText;
                         return;
@@ -1101,9 +1732,9 @@ function setupPlanChangeButtons() {
                     
                     // Check if this is a scheduled change (downgrade) or immediate (upgrade)
                     if (result.scheduled) {
-                        alert(`Plan change scheduled! ${result.message || `You will be downgraded to ${planId} at the end of your current billing period.`}`);
+                        await showSuccess(`Plan change scheduled!\n\n${result.message || `You will be downgraded to ${planId} at the end of your current billing period.`}`);
                     } else {
-                        alert(`Plan changed successfully! ${result.message || `Changed from ${currentPlanId} to ${planId}.`} ${result.prorated ? 'The difference has been prorated automatically.' : ''}`);
+                        await showSuccess(`Plan changed successfully!\n\n${result.message || `Changed from ${currentPlanId} to ${planId}.`}\n\n${result.prorated ? 'The difference has been prorated automatically.' : ''}`);
                     }
                     location.reload();
                     return;
@@ -1122,7 +1753,7 @@ function setupPlanChangeButtons() {
                         alertMessage += `\n\n💡 Tip: Delete some galleries or photos to free up resources.`;
                     }
                     
-                    alert(alertMessage);
+                    showAlert(alertMessage, 'Downgrade Limits Exceeded', '⚠️');
                     button.disabled = false;
                     buttonText.textContent = originalText;
                     return;
@@ -1146,11 +1777,11 @@ function setupPlanChangeButtons() {
                 
                 // Handle 409 Conflict (race condition)
                 if (error.status === 409) {
-                    alert('⚠️ Another subscription change is in progress.\n\nPlease wait a moment and try again.');
+                    showAlert('Another subscription change is in progress.\n\nPlease wait a moment and try again.', 'Operation in Progress', '⚠️');
                 } else {
                     const errorMessage = error.message || 'Unknown error';
                     const errorDetails = error.details?.message || '';
-                    alert(`Failed to change plan: ${errorMessage}${errorDetails ? '\n\n' + errorDetails : ''}`);
+                    showError(`Failed to change plan:\n\n${errorMessage}${errorDetails ? '\n\n' + errorDetails : ''}`, 'Plan Change Failed');
                 }
                 
                 button.disabled = false;
@@ -1185,7 +1816,7 @@ async function setupUpgradeButtons() {
                 console.error('Error creating checkout:', error);
                 const errorMessage = error.message || 'Unknown error';
                 const errorDetails = error.details?.message || '';
-                alert(`Failed to start checkout: ${errorMessage}${errorDetails ? '\n\n' + errorDetails : ''}`);
+                showError(`Failed to start checkout:\n\n${errorMessage}${errorDetails ? '\n\n' + errorDetails : ''}`, 'Checkout Failed');
                 button.disabled = false;
                 const buttonText = button.querySelector('.main-6 span') || button;
                 buttonText.textContent = buttonText.textContent.replace('Processing...', 'Upgrade');
@@ -1214,27 +1845,18 @@ window.displaySubscription = displaySubscription;
 window.displayUsage = displayUsage;
 window.displayBillingHistory = displayBillingHistory;
 
-// Refund functionality
+// Refund functionality - Show custom modal
 async function checkRefundEligibility() {
+    // Show loading state
+    const loadingModal = showLoadingModal('Checking refund eligibility...');
+    
     try {
         const result = await window.apiRequest('billing/refund/check');
+        loadingModal.remove();
         
         if (result.eligible) {
             const details = result.details || {};
-            const message = `✅ You are eligible for a refund!\n\n` +
-                `Purchase Date: ${new Date(details.purchase_date).toLocaleDateString()}\n` +
-                `Days since purchase: ${details.days_since_purchase} days\n` +
-                `Current usage: ${details.total_storage_gb} GB, ${details.galleries_since_purchase} galleries\n\n` +
-                `Would you like to submit a refund request?`;
-            
-            if (confirm(message)) {
-                const reason = prompt('Please provide a detailed reason for your refund request (minimum 10 characters):');
-                if (reason && reason.length >= 10) {
-                    await submitRefundRequest(reason);
-                } else if (reason !== null) {
-                    alert('❌ Please provide a reason with at least 10 characters.');
-                }
-            }
+            showRefundEligibleModal(details);
         } else {
             const details = result.details || {};
             let detailsText = '';
@@ -1248,12 +1870,469 @@ async function checkRefundEligibility() {
                 detailsText += `\n• Galleries created: ${details.galleries_since_purchase}`;
             }
             
-            alert(`❌ Not Eligible for Refund\n\n${result.reason}${detailsText}\n\nRefund Policy:\n• Available within 14 days of purchase\n• No refund if > 5GB or > 5 galleries used (Starter limits)\n• No refund if > 50GB used (Plus limits)`);
+            showRefundIneligibleModal(`${result.reason}${detailsText}`);
         }
     } catch (error) {
+        loadingModal.remove();
         console.error('Error checking refund eligibility:', error);
-        alert('Failed to check refund eligibility. Please try again later or contact support.');
+        showErrorModal('Failed to check refund eligibility. Please contact support at support@galerly.com');
     }
+}
+
+// Show loading modal
+function showLoadingModal(message) {
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease;
+    `;
+    
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 24px;
+        padding: 40px;
+        max-width: 400px;
+        width: 90%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        text-align: center;
+    `;
+    
+    modalContent.innerHTML = `
+        <div style="
+            width: 48px;
+            height: 48px;
+            border: 4px solid #F5F5F7;
+            border-top-color: #0066CC;
+            border-radius: 50%;
+            margin: 0 auto 24px;
+            animation: spin 1s linear infinite;
+        "></div>
+        <style>
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+        </style>
+        <p style="
+            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 1rem;
+            color: #6B6B6B;
+            margin: 0;
+        ">${message}</p>
+    `;
+    
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    return modal;
+}
+
+// Show refund eligible modal
+function showRefundEligibleModal(details) {
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease;
+    `;
+    
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 24px;
+        padding: 40px;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        animation: slideUp 0.3s ease;
+    `;
+    
+    modalContent.innerHTML = `
+        <div style="text-align: center; margin-bottom: 24px;">
+            <div style="font-size: 3rem; margin-bottom: 16px;">✓</div>
+            <h2 style="
+                font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 1.75rem;
+                font-weight: 600;
+                color: #1D1D1F;
+                margin: 0 0 16px 0;
+                letter-spacing: -0.02em;
+            ">You're Eligible for a Refund</h2>
+        </div>
+        
+        <div style="
+            background: #F5F5F7;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 24px;
+        ">
+            <div style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 0.875rem;
+                color: #6B6B6B;
+                line-height: 1.8;
+            ">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span>Purchase Date:</span>
+                    <strong style="color: #1D1D1F;">${new Date(details.purchase_date).toLocaleDateString()}</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span>Days Since Purchase:</span>
+                    <strong style="color: #1D1D1F;">${details.days_since_purchase} days</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span>Storage Used:</span>
+                    <strong style="color: #1D1D1F;">${details.total_storage_gb} GB</strong>
+                </div>
+                <div style="display: flex; justify-content: space-between;">
+                    <span>Galleries Created:</span>
+                    <strong style="color: #1D1D1F;">${details.galleries_since_purchase}</strong>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 24px;">
+            <label style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 0.875rem;
+                font-weight: 500;
+                color: #1D1D1F;
+                display: block;
+                margin-bottom: 8px;
+            ">Reason for refund request (minimum 10 characters):</label>
+            <textarea id="refund-reason-input" placeholder="Please tell us why you'd like a refund..." style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                width: 100%;
+                min-height: 120px;
+                padding: 12px;
+                border: 1px solid #D1D1D6;
+                border-radius: 12px;
+                font-size: 1rem;
+                resize: vertical;
+                box-sizing: border-box;
+            "></textarea>
+            <div id="reason-error" style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 0.875rem;
+                color: #FF3B30;
+                margin-top: 8px;
+                display: none;
+            ">Please provide at least 10 characters.</div>
+        </div>
+        
+        <div style="
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+        ">
+            <button id="refund-modal-cancel-btn" style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                padding: 12px 32px;
+                background: #F5F5F7;
+                color: #1D1D1F;
+                border: none;
+                border-radius: 980px;
+                cursor: pointer;
+                font-weight: 500;
+                font-size: 1rem;
+                transition: all 0.2s ease;
+            " onmouseover="this.style.background='#E8E8ED'" onmouseout="this.style.background='#F5F5F7'">
+                Cancel
+            </button>
+            <button id="refund-modal-submit-btn" style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                padding: 12px 32px;
+                background: #0066CC;
+                color: white;
+                border: none;
+                border-radius: 980px;
+                cursor: pointer;
+                font-weight: 500;
+                font-size: 1rem;
+                transition: all 0.2s ease;
+            " onmouseover="this.style.background='#0055AA'" onmouseout="this.style.background='#0066CC'">
+                Submit Request
+            </button>
+        </div>
+    `;
+    
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+    
+    // Cancel button
+    modalContent.querySelector('#refund-modal-cancel-btn').addEventListener('click', () => {
+        modal.remove();
+    });
+    
+    // Submit button
+    modalContent.querySelector('#refund-modal-submit-btn').addEventListener('click', async () => {
+        const reasonInput = modalContent.querySelector('#refund-reason-input');
+        const errorDiv = modalContent.querySelector('#reason-error');
+        const reason = reasonInput.value.trim();
+        
+        if (reason.length < 10) {
+            errorDiv.style.display = 'block';
+            reasonInput.style.borderColor = '#FF3B30';
+            return;
+        }
+        
+        const submitBtn = modalContent.querySelector('#refund-modal-submit-btn');
+        submitBtn.disabled = true;
+        submitBtn.textContent = 'Submitting...';
+        submitBtn.style.opacity = '0.6';
+        
+        try {
+            await submitRefundRequest(reason);
+            modal.remove();
+        } catch (error) {
+            submitBtn.disabled = false;
+            submitBtn.textContent = 'Submit Request';
+            submitBtn.style.opacity = '1';
+            errorDiv.textContent = error.message || 'Failed to submit request. Please try again.';
+            errorDiv.style.display = 'block';
+        }
+    });
+}
+
+// Show refund ineligible modal
+function showRefundIneligibleModal(detailsText) {
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease;
+    `;
+    
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 24px;
+        padding: 40px;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        animation: slideUp 0.3s ease;
+    `;
+    
+    modalContent.innerHTML = `
+        <div style="text-align: center; margin-bottom: 24px;">
+            <div style="font-size: 3rem; margin-bottom: 16px; color: #FF9500;">⚠</div>
+            <h2 style="
+                font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 1.75rem;
+                font-weight: 600;
+                color: #1D1D1F;
+                margin: 0 0 16px 0;
+                letter-spacing: -0.02em;
+            ">Not Eligible for Refund</h2>
+        </div>
+        
+        <div style="
+            background: #FFF8E1;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        ">
+            <p style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 0.875rem;
+                color: #6B6B6B;
+                line-height: 1.6;
+                margin: 0;
+                white-space: pre-line;
+            ">${detailsText}</p>
+        </div>
+        
+        <div style="
+            background: #F5F5F7;
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+        ">
+            <p style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 0.875rem;
+                font-weight: 600;
+                color: #1D1D1F;
+                margin: 0 0 8px 0;
+            ">Refund Policy:</p>
+            <ul style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 0.875rem;
+                color: #6B6B6B;
+                line-height: 1.8;
+                margin: 0;
+                padding-left: 20px;
+            ">
+                <li>Available within 14 days of purchase</li>
+                <li>No refund if > 5GB or > 5 galleries used (Starter limits)</li>
+                <li>No refund if > 50GB used (Plus limits)</li>
+            </ul>
+        </div>
+        
+        <p style="
+            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 0.875rem;
+            color: #86868B;
+            line-height: 1.6;
+            margin: 0 0 24px 0;
+            text-align: center;
+        ">
+            If you believe this is an error, please contact support at 
+            <a href="mailto:support@galerly.com" style="color: #0066CC; text-decoration: none;">support@galerly.com</a>
+        </p>
+        
+        <div style="text-align: center;">
+            <button onclick="this.closest('[style*=\\'position: fixed\\']').remove()" style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                padding: 12px 32px;
+                background: #F5F5F7;
+                color: #1D1D1F;
+                border: none;
+                border-radius: 980px;
+                cursor: pointer;
+                font-weight: 500;
+                font-size: 1rem;
+                transition: all 0.2s ease;
+            " onmouseover="this.style.background='#E8E8ED'" onmouseout="this.style.background='#F5F5F7'">
+                Close
+            </button>
+        </div>
+    `;
+    
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
+}
+
+// Show error modal
+function showErrorModal(message) {
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+        animation: fadeIn 0.2s ease;
+    `;
+    
+    const modalContent = document.createElement('div');
+    modalContent.style.cssText = `
+        background: rgba(255, 255, 255, 0.95);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-radius: 24px;
+        padding: 40px;
+        max-width: 500px;
+        width: 90%;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        animation: slideUp 0.3s ease;
+        text-align: center;
+    `;
+    
+    modalContent.innerHTML = `
+        <div style="font-size: 3rem; margin-bottom: 16px; color: #FF3B30;">✕</div>
+        <h2 style="
+            font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 1.75rem;
+            font-weight: 600;
+            color: #1D1D1F;
+            margin: 0 0 16px 0;
+            letter-spacing: -0.02em;
+        ">Error</h2>
+        <p style="
+            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+            font-size: 1rem;
+            color: #6B6B6B;
+            line-height: 1.6;
+            margin: 0 0 24px 0;
+        ">${message}</p>
+        <button onclick="this.closest('[style*=\\'position: fixed\\']').remove()" style="
+            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 12px 32px;
+            background: #F5F5F7;
+            color: #1D1D1F;
+            border: none;
+            border-radius: 980px;
+            cursor: pointer;
+            font-weight: 500;
+            font-size: 1rem;
+            transition: all 0.2s ease;
+        " onmouseover="this.style.background='#E8E8ED'" onmouseout="this.style.background='#F5F5F7'">
+            Close
+        </button>
+    `;
+    
+    modal.appendChild(modalContent);
+    document.body.appendChild(modal);
+    
+    // Close on background click
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            modal.remove();
+        }
+    });
 }
 
 async function submitRefundRequest(reason) {
@@ -1263,12 +2342,88 @@ async function submitRefundRequest(reason) {
             body: JSON.stringify({ reason })
         });
         
-        alert(`✅ Refund Request Submitted\n\n${result.message}\n\nReference ID: ${result.refund_id.substring(0, 8)}\n\nOur team will review your request and respond within 2-3 business days via email.`);
-        location.reload();
+        // Show success modal
+        const modal = document.createElement('div');
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            animation: fadeIn 0.2s ease;
+        `;
+        
+        const modalContent = document.createElement('div');
+        modalContent.style.cssText = `
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-radius: 24px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            text-align: center;
+        `;
+        
+        modalContent.innerHTML = `
+            <div style="font-size: 3rem; margin-bottom: 16px;">✓</div>
+            <h2 style="
+                font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 1.75rem;
+                font-weight: 600;
+                color: #1D1D1F;
+                margin: 0 0 16px 0;
+                letter-spacing: -0.02em;
+            ">Refund Request Submitted</h2>
+            <p style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 1rem;
+                color: #6B6B6B;
+                line-height: 1.6;
+                margin: 0 0 16px 0;
+            ">${result.message}</p>
+            <div style="
+                background: #F5F5F7;
+                border-radius: 12px;
+                padding: 16px;
+                margin-bottom: 24px;
+            ">
+                <p style="
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 0.875rem;
+                    color: #6B6B6B;
+                    margin: 0;
+                ">Reference ID: <strong style="color: #1D1D1F;">${result.refund_id.substring(0, 8)}</strong></p>
+            </div>
+            <p style="
+                font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                font-size: 0.875rem;
+                color: #86868B;
+                line-height: 1.6;
+                margin: 0;
+            ">Our team will review your request and respond within 2-3 business days via email.</p>
+        `;
+        
+        modal.appendChild(modalContent);
+        document.body.appendChild(modal);
+        
+        setTimeout(() => {
+            modal.remove();
+            location.reload();
+        }, 3000);
     } catch (error) {
         console.error('Error submitting refund request:', error);
         const errorMsg = error.message || error.error || 'Unknown error';
-        alert(`❌ Failed to submit refund request\n\n${errorMsg}\n\nPlease contact support if the problem persists.`);
+        throw new Error(errorMsg);
     }
 }
 
@@ -1313,7 +2468,7 @@ async function upgradeFromWarning(planId) {
         }
     } catch (error) {
         console.error('Error upgrading from warning:', error);
-        alert('Failed to start upgrade process. Please try again.');
+        showError('Failed to start upgrade process. Please try again.', 'Upgrade Failed');
     }
 }
 

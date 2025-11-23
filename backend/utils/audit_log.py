@@ -3,10 +3,10 @@ Subscription audit logging for compliance and dispute resolution
 """
 import uuid
 from datetime import datetime
-from utils.config import dynamodb
+from utils.config import dynamodb, get_required_env
 
 # Initialize audit log table
-audit_table = dynamodb.Table('galerly-audit-log')
+audit_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_AUDIT_LOG'))
 
 
 def log_subscription_change(user_id, action, from_plan, to_plan, effective_at=None, metadata=None):

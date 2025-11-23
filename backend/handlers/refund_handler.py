@@ -10,12 +10,13 @@ Refund rules:
 """
 import os
 from datetime import datetime, timedelta
+from decimal import Decimal
 from boto3.dynamodb.conditions import Key
-from utils.config import galleries_table, subscriptions_table, users_table, dynamodb
+from utils.config import galleries_table, subscriptions_table, users_table, dynamodb, get_required_env
 from utils.response import create_response
 
 # Initialize refunds table
-refunds_table = dynamodb.Table('galerly-refunds')
+refunds_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_REFUNDS'))
 
 
 def get_upgrade_path(user_id, subscription_created_at):
@@ -196,7 +197,7 @@ def check_refund_eligibility(user):
             'days_since_purchase': days_since_purchase,
             'purchase_date': created_at,
             'current_plan': current_plan,
-            'total_storage_gb': round(total_storage_gb, 2),
+            'total_storage_gb': Decimal(str(round(total_storage_gb, 2))),
             'galleries_since_purchase': galleries_since_purchase,
             'total_galleries': len(all_galleries),
             'upgrade_path': upgrade_path
@@ -284,6 +285,51 @@ def handle_check_refund_eligibility(user):
     return create_response(200, result)
 
 
+def handle_get_refund_status(user):
+    """
+    Check if user has a pending or approved refund request
+    """
+    try:
+        print(f"🔍 Checking refund status for user: {user['id']}")
+        response = refunds_table.query(
+            IndexName='UserIdIndex',
+            KeyConditionExpression='user_id = :uid',
+            FilterExpression='#status IN (:pending, :approved)',
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={
+                ':uid': user['id'],
+                ':pending': 'pending',
+                ':approved': 'approved'
+            },
+            ScanIndexForward=False,
+            Limit=1
+        )
+        
+        refunds = response.get('Items', [])
+        print(f"📋 Found {len(refunds)} pending/approved refunds")
+        
+        if refunds:
+            refund = refunds[0]
+            print(f"✅ Refund found: {refund.get('id')} - Status: {refund.get('status')}")
+            return create_response(200, {
+                'has_pending_refund': True,
+                'refund_id': refund.get('id'),
+                'status': refund.get('status'),
+                'created_at': refund.get('created_at'),
+                'reason': refund.get('reason')
+            })
+        
+        print(f"ℹ️  No pending/approved refunds found for user {user['id']}")
+        return create_response(200, {
+            'has_pending_refund': False
+        })
+    except Exception as e:
+        print(f"❌ Error getting refund status: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': 'Failed to get refund status'})
+
+
 def handle_request_refund(user, body):
     """
     Submit a refund request
@@ -325,10 +371,13 @@ def handle_request_refund(user, body):
         existing_refunds = refunds_table.query(
             IndexName='UserIdIndex',
             KeyConditionExpression='user_id = :uid',
-            ExpressionAttributeValues={':uid': user['id']},
             FilterExpression='#status IN (:pending, :approved)',
             ExpressionAttributeNames={'#status': 'status'},
-            ExpressionAttributeValues2={':pending': 'pending', ':approved': 'approved'}
+            ExpressionAttributeValues={
+                ':uid': user['id'],
+                ':pending': 'pending',
+                ':approved': 'approved'
+            }
         )
         
         if existing_refunds.get('Items'):
@@ -395,37 +444,4 @@ def handle_request_refund(user, body):
         import traceback
         traceback.print_exc()
         return create_response(500, {'error': 'Failed to submit refund request'})
-
-
-def handle_get_refund_status(user):
-    """Get user's refund request status"""
-    try:
-        response = refunds_table.query(
-            IndexName='UserIdIndex',
-            KeyConditionExpression='user_id = :uid',
-            ExpressionAttributeValues={':uid': user['id']},
-            ScanIndexForward=False,
-            Limit=10
-        )
-        
-        refunds = response.get('Items', [])
-        
-        # Format for frontend
-        formatted_refunds = []
-        for refund in refunds:
-            formatted_refunds.append({
-                'id': refund.get('id'),
-                'plan': refund.get('plan'),
-                'reason': refund.get('reason'),
-                'status': refund.get('status'),
-                'created_at': refund.get('created_at'),
-                'updated_at': refund.get('updated_at'),
-                'admin_notes': refund.get('admin_notes', '')
-            })
-        
-        return create_response(200, {'refunds': formatted_refunds})
-        
-    except Exception as e:
-        print(f"❌ Error getting refund status: {str(e)}")
-        return create_response(200, {'refunds': []})
 
