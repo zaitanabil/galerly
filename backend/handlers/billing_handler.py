@@ -240,8 +240,16 @@ def handle_change_plan(user, body):
         if not stripe_subscription_id:
             return create_response(400, {'error': 'No Stripe subscription found'})
         
-        # Validate transition before proceeding
+        # Get current plan - use subscription record if canceled, otherwise use user's plan
+        # This ensures reactivation works correctly (canceled users have plan='free' in user record,
+        # but their subscription record still has the original plan)
         current_plan = user.get('plan', user.get('subscription', 'free'))
+        if subscription.get('cancel_at_period_end'):
+            subscription_plan = subscription.get('plan', current_plan)
+            print(f"⚠️  Subscription is canceled. Using subscription plan '{subscription_plan}' instead of user plan '{current_plan}'")
+            current_plan = subscription_plan
+        
+        # Validate transition before proceeding
         normalized_current = SubscriptionValidator.normalize_plan(current_plan)
         normalized_target = SubscriptionValidator.normalize_plan(plan_id)
         
@@ -249,8 +257,14 @@ def handle_change_plan(user, body):
         current_level = SubscriptionValidator.get_plan_level(normalized_current)
         target_level = SubscriptionValidator.get_plan_level(normalized_target)
         
+        print(f"🔍 Plan Change Validation:")
+        print(f"   Current plan: {current_plan} (normalized: {normalized_current}, level: {current_level})")
+        print(f"   Target plan: {plan_id} (normalized: {normalized_target}, level: {target_level})")
+        print(f"   Cancel at period end: {subscription.get('cancel_at_period_end')}")
+        
         if target_level > current_level:
             # Upgrade
+            print(f"   Action: UPGRADE")
             validation_error = validate_and_execute(
                 user, 
                 'upgrade', 
@@ -259,6 +273,7 @@ def handle_change_plan(user, body):
             )
         elif target_level < current_level:
             # Downgrade
+            print(f"   Action: DOWNGRADE")
             validation_error = validate_and_execute(
                 user, 
                 'downgrade', 
@@ -268,12 +283,14 @@ def handle_change_plan(user, body):
         else:
             # Same level - reactivation or no-op
             if subscription.get('cancel_at_period_end'):
+                print(f"   Action: REACTIVATE (same plan, cancel_at_period_end=True)")
                 validation_error = validate_and_execute(
                     user, 
                     'reactivate',
                     subscription_data=subscription
                 )
             else:
+                print(f"   Action: ERROR - Already on this plan")
                 return create_response(400, {'error': f'Already subscribed to {plan_id}'})
         
         if validation_error:
@@ -308,33 +325,45 @@ def handle_change_plan(user, body):
             raise
         
         try:
-            # Get current plan from user
+            # Get current plan from user (for reactivation checks)
             user_email = user.get('email')
             if user_email:
                 user_response = users_table.get_item(Key={'email': user_email})
                 if 'Item' in user_response:
                     # Use 'plan' field (new), fallback to 'subscription' (legacy)
-                    current_plan = user_response['Item'].get('plan', user_response['Item'].get('subscription', 'free'))
+                    user_plan = user_response['Item'].get('plan', user_response['Item'].get('subscription', 'free'))
                 else:
-                    current_plan = user.get('plan', user.get('subscription', 'free'))
+                    user_plan = user.get('plan', user.get('subscription', 'free'))
             else:
-                current_plan = user.get('plan', user.get('subscription', 'free'))
+                user_plan = user.get('plan', user.get('subscription', 'free'))
             
             # Check for pending plan change
             pending_plan = subscription.get('pending_plan')
+            cancel_at_period_end = subscription.get('cancel_at_period_end', False)
             
-            # Special case: If user has pending_plan='free' (canceled) but wants to return to their current plan
-            # This is a "reactivation" - allow it even if current_plan == plan_id
+            # Special case: If subscription is canceled (cancel_at_period_end=True or pending_plan='free')
+            # and user wants to return to their current plan, this is a "reactivation"
             is_reactivation = (
-                pending_plan == 'free' and 
-                current_plan == plan_id and 
-                current_plan in ['professional', 'business', 'plus', 'pro']  # Support both legacy and new plan names
+                (pending_plan == 'free' or cancel_at_period_end) and 
+                user_plan == plan_id and 
+                user_plan in ['professional', 'business', 'plus', 'pro']  # Support both legacy and new plan names
             )
+            
+            print(f"🔍 Reactivation Check:")
+            print(f"   pending_plan: {pending_plan}")
+            print(f"   cancel_at_period_end: {cancel_at_period_end}")
+            print(f"   user_plan: {user_plan}")
+            print(f"   plan_id: {plan_id}")
+            print(f"   current_plan (used for validation): {current_plan}")
+            print(f"   is_reactivation: {is_reactivation}")
             
             # Check if it's actually a change (not same plan)
             # If there's a pending_plan, check against that instead of current_plan
             # This allows users to change from a scheduled downgrade to another plan
             effective_plan = pending_plan if pending_plan else current_plan
+            
+            print(f"   effective_plan: {effective_plan}")
+            print(f"   effective_plan == plan_id: {effective_plan == plan_id}")
             
             # Allow reactivation (returning to current plan after cancellation)
             if effective_plan == plan_id and not is_reactivation:
@@ -372,7 +401,8 @@ def handle_change_plan(user, body):
             # Check if Stripe price matches the requested plan
             # But also check if Stripe price matches current plan - if not, allow change
             # This handles cases where Stripe was modified but user plan wasn't updated yet
-            if current_price_id == new_price_id:
+            # Skip this check during reactivation (user is resuming a canceled subscription)
+            if current_price_id == new_price_id and not is_reactivation:
                 # Price matches requested plan, but check if it also matches current plan
                 # If current plan price doesn't match Stripe price, allow change (Stripe was modified)
                 if current_plan_price_id and current_price_id == current_plan_price_id:
@@ -1092,9 +1122,9 @@ def handle_get_subscription(user):
         # Determine status based on actual user plan and cancellation status
         if current_plan == 'free':
             status = 'free'
-        elif current_plan in ['professional', 'business']:
+        elif current_plan in ['plus', 'pro', 'professional', 'business']:
             # If there's a pending plan change to another paid plan, status is 'active' (plan change, not cancellation)
-            if pending_plan and pending_plan in ['professional', 'business']:
+            if pending_plan and pending_plan in ['plus', 'pro', 'professional', 'business']:
                 status = 'active'  # Plan change scheduled, not cancellation
             else:
                 # Check if subscription is scheduled to cancel at period end
@@ -1114,6 +1144,7 @@ def handle_get_subscription(user):
                             if cancel_at_period_end:
                                 subscription['cancel_at_period_end'] = True
                                 subscriptions_table.put_item(Item=subscription)
+                                print(f"✅ Updated subscription record with cancel_at_period_end=True")
                         except Exception as e:
                             print(f"⚠️  Error retrieving Stripe subscription: {str(e)}")
                 
@@ -1271,6 +1302,49 @@ def handle_downgrade_subscription(user, body):
         if response.get('Items'):
             subscription = response['Items'][0]
             
+            # Get the actual plan from the subscription record (source of truth)
+            # The user object might be stale from the auth token
+            subscription_plan = subscription.get('plan', 'free')
+            user_current_plan = user.get('plan', user.get('subscription', 'free'))
+            
+            print(f"🔍 Cancel Debug - User: {user.get('email')}")
+            print(f"   User plan field: {user.get('plan')}")
+            print(f"   User subscription field: {user.get('subscription')}")
+            print(f"   Resolved from user object: {user_current_plan}")
+            print(f"   Subscription record plan: {subscription_plan}")
+            
+            # Use subscription record as source of truth
+            if subscription_plan == 'free':
+                return create_response(400, {
+                    'error': 'Cannot cancel free plan (no subscription to cancel)'
+                })
+            
+            # If user object is stale, sync it with subscription record
+            if user_current_plan != subscription_plan:
+                print(f"⚠️  User plan mismatch detected! User object: {user_current_plan}, Subscription: {subscription_plan}")
+                print(f"   Using subscription record as source of truth: {subscription_plan}")
+                # Update the user object for validation
+                user['plan'] = subscription_plan
+                user['subscription'] = subscription_plan
+                
+                # Also update the user record in DynamoDB to fix the inconsistency
+                try:
+                    user_email = user.get('email')
+                    if user_email:
+                        users_table.update_item(
+                            Key={'email': user_email},
+                            UpdateExpression='SET #plan = :plan_val, subscription = :plan_val, updated_at = :now',
+                            ExpressionAttributeNames={'#plan': 'plan'},
+                            ExpressionAttributeValues={
+                                ':plan_val': subscription_plan,
+                                ':now': datetime.utcnow().isoformat() + 'Z'
+                            }
+                        )
+                        print(f"✅ Synced user record with subscription plan: {subscription_plan}")
+                except Exception as e:
+                    print(f"⚠️  Error syncing user plan: {str(e)}")
+            
+            
             # Validate cancellation before proceeding
             validation_error = validate_and_execute(
                 user, 
@@ -1278,6 +1352,7 @@ def handle_downgrade_subscription(user, body):
                 subscription_data=subscription
             )
             if validation_error:
+                print(f"❌ Validation error: {validation_error}")
                 return validation_error
             
             stripe_subscription_id = subscription.get('stripe_subscription_id')
@@ -1430,6 +1505,40 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
             customer_id = data.get('customer')
             
             if user_id and plan and customer_email:
+                # Check for existing subscriptions and cancel any active/canceled ones
+                try:
+                    existing_subs = subscriptions_table.query(
+                        IndexName='UserIdIndex',
+                        KeyConditionExpression='user_id = :uid',
+                        ExpressionAttributeValues={':uid': user_id},
+                        ScanIndexForward=False
+                    )
+                    
+                    for old_sub in existing_subs.get('Items', []):
+                        old_stripe_sub_id = old_sub.get('stripe_subscription_id')
+                        old_sub_status = old_sub.get('status', 'active')
+                        
+                        # If there's an old Stripe subscription, cancel it immediately
+                        if old_stripe_sub_id and stripe and old_sub_status != 'canceled':
+                            try:
+                                stripe.Subscription.cancel(old_stripe_sub_id)
+                                print(f"✅ Canceled old subscription {old_stripe_sub_id} for user {user_id}")
+                            except Exception as e:
+                                print(f"⚠️  Error canceling old Stripe subscription: {str(e)}")
+                        
+                        # Mark old subscription as canceled in our database
+                        try:
+                            old_sub['status'] = 'canceled'
+                            old_sub['cancel_at_period_end'] = False
+                            old_sub['canceled_at'] = datetime.utcnow().isoformat() + 'Z'
+                            old_sub['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+                            subscriptions_table.put_item(Item=old_sub)
+                            print(f"✅ Marked old subscription record as canceled for user {user_id}")
+                        except Exception as e:
+                            print(f"⚠️  Error updating old subscription record: {str(e)}")
+                except Exception as e:
+                    print(f"⚠️  Error checking for existing subscriptions: {str(e)}")
+                
                 # Update user subscription
                 try:
                     users_table.update_item(

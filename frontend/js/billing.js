@@ -350,6 +350,33 @@ async function changePlan(planId) {
     }
 }
 
+// Cancel pending downgrade (reactivate current plan)
+async function cancelPendingDowngrade(currentPlanId) {
+    try {
+        const confirmed = await showConfirm(
+            `Cancel the scheduled downgrade and keep your ${currentPlanId.charAt(0).toUpperCase() + currentPlanId.slice(1)} plan?`,
+            'Cancel Downgrade'
+        );
+        
+        if (!confirmed) return;
+        
+        // Call changePlan to reactivate the current plan
+        const result = await changePlan(currentPlanId);
+        
+        await showSuccess(`Downgrade canceled successfully!\n\n${result.message || `Your ${currentPlanId} plan will continue.`}`);
+        location.reload();
+    } catch (error) {
+        console.error('Error canceling downgrade:', error);
+        const errorMessage = error.message || 'Unknown error';
+        const errorDetails = error.details?.message || '';
+        await showError(`Failed to cancel downgrade:\n\n${errorMessage}${errorDetails ? '\n\n' + errorDetails : ''}`, 'Error');
+    }
+}
+
+// Make functions globally accessible for onclick handlers
+window.changePlan = changePlan;
+window.cancelPendingDowngrade = cancelPendingDowngrade;
+
 // Create checkout session
 async function createCheckoutSession(planId) {
     try {
@@ -916,11 +943,20 @@ async function displaySubscription(subscription) {
     }
     
     // Action buttons
-    if (status === 'active' && subscription.subscription && currentPlan !== 'free') {
+    // Show refund and cancel buttons when subscription is active OR canceled (but still within the paid period)
+    if ((status === 'active' || status === 'canceled') && subscription.subscription && currentPlan !== 'free') {
         // Responsive button text
         const isVerySmall = window.innerWidth < 360;
         const isSmall = window.innerWidth < 400;
         const buttonGap = isSmall ? '8px' : '10px';
+        
+        // Determine cancel button behavior
+        // If there's a pending downgrade, "Cancel" should cancel that downgrade (reactivate current plan)
+        // If no pending downgrade, "Cancel" should cancel the subscription (schedule downgrade to Starter)
+        const hasPendingDowngrade = pendingPlan && pendingPlan !== currentPlan;
+        const cancelButtonText = hasPendingDowngrade ? 'Keep Plan' : 'Cancel';
+        const cancelButtonAction = hasPendingDowngrade ? `cancelPendingDowngrade('${currentPlan}')` : 'cancelSubscription()';
+        const cancelAriaLabel = hasPendingDowngrade ? 'Keep Current Plan' : 'Cancel Subscription';
         
         html += `
             <div style="
@@ -948,7 +984,7 @@ async function displaySubscription(subscription) {
                         </span></span>
                     </div>
                 </a>
-                <a href="#" onclick="cancelSubscription(); return false;" aria-label="Cancel Subscription" 
+                <a href="#" onclick="${cancelButtonAction}; return false;" aria-label="${cancelAriaLabel}" 
                     class="logo-18 list-5"
                     style="width: 100%; min-width: 0;">
                     <div class="title-18 main-6" style="min-width: 0;">
@@ -958,7 +994,7 @@ async function displaySubscription(subscription) {
                             font-weight: 500;
                             color: var(--text-on-button-secondary);
                             white-space: nowrap;
-                        ">Cancel<span class="text-18 feature-7">
+                        ">${cancelButtonText}<span class="text-18 feature-7">
                             <svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="var(--text-on-button-secondary)">
                                 <path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" 
                                     stroke="currentColor" stroke-linecap="round"></path>
@@ -1410,8 +1446,10 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
     if (!container) return;
     
     let pendingPlan = null;
+    let isCanceled = false;
     if (subscriptionData) {
         pendingPlan = subscriptionData.pending_plan || null;
+        isCanceled = subscriptionData.status === 'canceled';
     }
     
     const plans = [
@@ -1488,16 +1526,26 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
         const isUpgrade = !isCurrentPlan && !isFree && currentPlanId !== 'free' && targetPrice > currentPrice;
         const isDowngrade = !isCurrentPlan && currentPlanId !== 'free' && (targetPrice < currentPrice || plan.id === 'free');
         
-        const isReactivation = (pendingPlan === 'free' && isCurrentPlan && (plan.id === 'plus' || plan.id === 'pro'));
+        const isReactivation = (isCanceled && isCurrentPlan && (plan.id === 'plus' || plan.id === 'pro'));
         
         let buttonText = '';
         let buttonClass = 'image-18 nav-6 container-0 change-plan-btn';
         
         if (isReactivation) {
+            // Reactivate current plan after cancellation
             buttonText = `Reactivate`;
+            buttonClass = 'image-18 nav-6 container-0 change-plan-btn';
         } else if (isCurrentPlan) {
             buttonText = 'Current Plan';
             buttonClass = 'logo-18 list-5 current-plan-btn';
+        } else if (isCanceled) {
+            // When subscription is canceled, allow switching to any other paid plan
+            if (!isFree) {
+                // Paid plans show "Switch to [Plan]" - will create new subscription via Stripe
+                buttonText = `Switch to ${plan.name}`;
+                buttonClass = 'image-18 nav-6 container-0 change-plan-btn';
+            }
+            // Don't show button for free plan when canceled (they'll downgrade to free at period end anyway)
         } else if (isUpgrade || (currentPlanId === 'free' && !isFree)) {
             buttonText = `Upgrade`;
         } else if (isDowngrade) {
@@ -1603,17 +1651,47 @@ function setupPlanChangeButtons() {
             // Get current plan and pending plan from subscription
             let currentPlanId = 'free';
             let pendingPlan = null;
+            let isCanceled = false;
             try {
                 const subscription = await loadSubscription();
                 currentPlanId = subscription.plan || 'free';
                 pendingPlan = subscription.pending_plan || null;
+                isCanceled = subscription.status === 'canceled';
             } catch (error) {
                 console.error('Error loading subscription:', error);
             }
             
-            // Check if this is a reactivation (user has pending_plan='free' but wants to return to current plan)
+            // If subscription is canceled and user wants to switch to a different paid plan,
+            // create a new subscription via Stripe checkout
+            // BUT if they want to reactivate the SAME plan, use the reactivation flow below
+            if (isCanceled && planId !== 'free' && planId !== currentPlanId) {
+                try {
+                    button.disabled = true;
+                    buttonText.textContent = 'Redirecting...';
+                    
+                    // Create Stripe checkout session for new subscription
+                    const session = await createCheckoutSession(planId);
+                    
+                    if (session && session.url) {
+                        // Redirect to Stripe checkout
+                        window.location.href = session.url;
+                    } else {
+                        throw new Error('No checkout URL returned');
+                    }
+                    return;
+                } catch (error) {
+                    console.error('Error creating checkout session:', error);
+                    const errorMessage = error.message || 'Unknown error';
+                    await showError(`Failed to create checkout session:\n\n${errorMessage}`, 'Checkout Failed');
+                    button.disabled = false;
+                    buttonText.textContent = originalText;
+                    return;
+                }
+            }
+            
+            // Check if this is a reactivation (user wants to return to current plan after cancellation)
             const isReactivation = (
-                pendingPlan === 'free' && 
+                isCanceled && 
                 currentPlanId === planId && 
                 (planId === 'plus' || planId === 'pro')
             );
