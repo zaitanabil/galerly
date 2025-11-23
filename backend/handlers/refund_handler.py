@@ -98,10 +98,38 @@ def get_upgrade_path(user_id, subscription_created_at):
 def check_refund_eligibility(user):
     """
     Check if user is eligible for refund based on:
-    1. Time since initial purchase (14 days)
-    2. Usage limits based on upgrade path
+    1. No existing pending or approved refund
+    2. Time since initial purchase (14 days)
+    3. Usage limits based on upgrade path
     """
     try:
+        # Check if user already has a pending or approved refund
+        existing_refunds = refunds_table.query(
+            IndexName='UserIdIndex',
+            KeyConditionExpression='user_id = :uid',
+            FilterExpression='#status IN (:pending, :approved)',
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={
+                ':uid': user['id'],
+                ':pending': 'pending',
+                ':approved': 'approved'
+            },
+            ScanIndexForward=False,
+            Limit=1
+        )
+        
+        if existing_refunds.get('Items'):
+            existing_refund = existing_refunds['Items'][0]
+            return {
+                'eligible': False,
+                'reason': f'You already have a {existing_refund.get("status", "pending")} refund request',
+                'details': {
+                    'refund_id': existing_refund.get('id'),
+                    'status': existing_refund.get('status'),
+                    'created_at': existing_refund.get('created_at')
+                }
+            }
+        
         # Get current subscription
         response = subscriptions_table.query(
             IndexName='UserIdIndex',

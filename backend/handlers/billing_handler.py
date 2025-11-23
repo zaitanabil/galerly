@@ -4,6 +4,7 @@ Billing and payment handlers - Stripe integration
 import os
 import uuid
 from datetime import datetime
+from decimal import Decimal
 from utils.config import users_table, billing_table, subscriptions_table
 from utils.response import create_response
 
@@ -1555,7 +1556,7 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                             'id': str(uuid.uuid4()),
                             'user_id': user_id,
                             'stripe_invoice_id': invoice_id,
-                            'amount': amount_paid / 100,  # Convert cents to dollars
+                            'amount': Decimal(str(amount_paid / 100)),  # Convert cents to dollars, then to Decimal
                             'currency': data.get('currency', 'usd'),
                             'status': 'paid',
                             'plan': data.get('subscription_details', {}).get('metadata', {}).get('plan') or 'professional',

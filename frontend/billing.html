@@ -7,8 +7,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#F5F5F7" />
   <title>Billing & Subscription | Galerly</title>
-  <meta name="description"
-    content="Manage your Galerly subscription. View usage, billing history, and change plans." />
+  <meta name="description" content="Manage your subscription. View usage and billing history." />
   <meta name="robots" content="noindex, nofollow" />
   <meta name="msapplication-TileColor" content="#F5F5F7" />
   <link rel="canonical" href="billing" />
@@ -34,6 +33,65 @@
   <link rel="stylesheet" href="css/style.css" />
   <link rel="stylesheet" href="css/custom.css" />
   <link rel="stylesheet" href="css/gallery.css" />
+  <style>
+    /* Responsive billing page styles */
+    @media (max-width: 900px) {
+      .item-11.input-7 {
+        grid-template-columns: 1fr !important;
+      }
+    }
+    
+    @media (max-width: 768px) {
+      .form-18.list-11.feature-0.input-0 .item-11.input-7 {
+        grid-template-columns: 1fr !important;
+        gap: 20px !important;
+      }
+      
+      .card-18.hero-10.animation-11.textarea-7 {
+        margin-bottom: 16px !important;
+      }
+      
+      .container-15.item-7 {
+        padding: 16px !important;
+      }
+    }
+    
+    @media (max-width: 480px) {
+      .button-17.textarea-0.image-0 .subtitle-17.item-6 {
+        padding: 32px 20px !important;
+      }
+      
+      .form-18.image-17.feature-0.animation-6 {
+        gap: 24px !important;
+      }
+      
+      .grid-17.main-7 {
+        font-size: 2rem !important;
+      }
+      
+      .input-17.card-7 h1 {
+        font-size: 2rem !important;
+      }
+      
+      .card-18.hero-10.animation-11.textarea-7 {
+        padding: 16px !important;
+      }
+      
+      .input-15.background-7 {
+        padding: 16px !important;
+      }
+    }
+    
+    @media (max-width: 400px) {
+      .grid-15.animation-7 {
+        font-size: 1.25rem !important;
+      }
+      
+      .form-18.list-11.feature-0.input-0 .item-11.input-7 {
+        gap: 16px !important;
+      }
+    }
+  </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
   <script src="https://unpkg.com/split-type"></script>
 </head>
@@ -50,6 +108,8 @@
         </div>
         <div class="grid-0"></div>
         <div class="nav-12 textarea-6 form-0"></div>
+        
+        <!-- Header -->
         <header class="container-16 section-7 grid-7 text-9">
           <div class="form-18 grid-16 feature-0 nav-8">
             <div class="item-16 logo-8">
@@ -82,7 +142,6 @@
                   </ul>
                 </div>
               </nav>
-              <!-- Desktop Auth Button (hidden on mobile) -->
               <a href="auth" aria-label="Sign In" class="logo-18 header-0" id="desktop-auth-button"
                 style="display: none; background: var(--color-blue); color: var(--color-white);">
                 <div class="title-18 main-6">
@@ -94,6 +153,8 @@
             </div>
           </div>
         </header>
+        
+        <!-- Mobile Menu -->
         <div class="icon-15 hero-6 animation-9">
           <div class="link-15 feature-6">
             <a href="/">
@@ -136,13 +197,13 @@
                     </p>
                     <div class="grid-17 main-7">
                       <span class="form-17 card-0"></span>
-                      <p> Your subscription • Billing history • Change plans anytime </p>
+                      <p> Your subscription </p>
                     </div>
                   </div>
                   <div class="input-17 card-7">
-                    <h1> Your subscription </h1>
+                    <h1> Manage your plan </h1>
                     <div class="text-17 button-7">
-                      <p> Change plans anytime. No hidden fees. </p>
+                      <p> Change anytime. No contracts. </p>
                     </div>
                   </div>
                 </div>
@@ -161,7 +222,7 @@
                       <h3 class="grid-15 animation-7"> Current Plan </h3>
                       <div class="input-15 background-7" id="subscription-info">
                         <div style="text-align: center; padding: 40px;">
-                          <p>Loading...</p>
+                          <p style="font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 0.9375rem; color: #86868B;">Loading...</p>
                         </div>
                       </div>
                     </div>
@@ -169,11 +230,7 @@
                 </div>
                 
                 <!-- Usage -->
-                <div id="usage-info">
-                  <div style="text-align: center; padding: 40px;">
-                    <p>Loading usage...</p>
-                  </div>
-                </div>
+                <div id="usage-info"></div>
                 
                 <!-- Billing History -->
                 <div class="card-18 hero-10 animation-11 textarea-7">
@@ -182,7 +239,7 @@
                       <h3 class="grid-15 animation-7"> Billing History </h3>
                       <div class="input-15 background-7" id="billing-history">
                         <div style="text-align: center; padding: 40px;">
-                          <p>Loading billing history...</p>
+                          <p style="font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif; font-size: 0.9375rem; color: #86868B;">Loading...</p>
                         </div>
                       </div>
                     </div>
@@ -190,7 +247,7 @@
                 </div>
               </div>
               
-              <!-- All Plans -->
+              <!-- Plans -->
               <div style="margin-top: 120px;" id="plans-section">
                 <div class="header-14 logo-7">
                   <h2 class="link-13 image-7">
@@ -202,14 +259,10 @@
                     <span>— CHOOSE YOUR PLAN</span>
                   </h2>
                   <div class="feature-17 nav-14 container-7 form-7">
-                    <p> Change anytime. No contracts. </p>
+                    <p> Change anytime. </p>
                   </div>
                 </div>
-                <div class="item-11 input-7" id="plans-container">
-                  <div style="text-align: center; padding: 40px;">
-                    <p>Loading plans...</p>
-                  </div>
-                </div>
+                <div class="item-11 input-7" id="plans-container"></div>
               </div>
             </div>
           </section>
@@ -298,7 +351,7 @@
                           </svg>
                         </a>
                         <a class="grid-10 logo-5" href="https://www.tiktok.com/@withgalerly" rel="noopener noreferrer"
-                          target="_blank" title="Instagram"> Tiktok <svg class="container-10 main-0" fill="none"
+                          target="_blank" title="Tiktok"> Tiktok <svg class="container-10 main-0" fill="none"
                             height="12" viewbox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">
                             <path
                               d="M11.0435 9.88557L9.48515 9.89576V3.43836L1.12313 11.8004L0.00276604 10.68L8.36478 2.318L1.91758 2.32818V0.759669H11.0435V9.88557Z"
@@ -323,6 +376,8 @@
           <div class="grid-0"></div>
         </footer>
       </div>
+      
+      <!-- Cookie Consent -->
       <div class="main-16 grid-5 animation-9" style="
             pointer-events: none;
             border-radius: 48px;
@@ -359,21 +414,19 @@
         </div>
       </div>
     </div>
+    
+    <!-- Scripts -->
     <script src="js/main.js"></script>
     <script src="js/rbac.js"></script>
     <script src="js/auth-check.js"></script>
-    <!-- Configuration -->
     <script src="js/env-production.js"></script>
     <script src="config.env.js"></script>
     <script src="js/config.js"></script>
-    <!-- Billing -->
     <script>
-        // Force reload billing.js with timestamp
         const timestamp = Date.now();
         const script = document.createElement('script');
         script.src = `js/billing.js?t=${timestamp}`;
         document.head.appendChild(script);
-        console.log(`🔄 Loading billing.js?t=${timestamp}`);
     </script>
     <script src="js/cookie-consent.js"></script>
     <script src="js/visitor-tracking.js"></script>

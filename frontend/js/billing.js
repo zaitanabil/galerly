@@ -747,34 +747,39 @@ async function displaySubscription(subscription) {
     const pendingPlanChangeAt = subscription.pending_plan_change_at;
     const pendingPlanName = pendingPlan ? (pendingPlan === 'free' ? 'Starter' : pendingPlan === 'plus' ? 'Plus' : 'Pro') : null;
     
+    // Responsive font sizes
+    const isSmallMobile = window.innerWidth < 400;
+    const titleSize = isSmallMobile ? '2rem' : '3rem';
+    
     let html = `
         <div style="
             display: flex;
             align-items: baseline;
-            gap: 16px;
-            margin-bottom: 24px;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 20px;
         ">
             <h2 style="
                 font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
-                font-size: 3rem;
+                font-size: ${titleSize};
                 font-weight: 800;
-                line-height: 1;
+                line-height: 1.1;
                 color: #1D1D1F;
                 margin: 0;
                 letter-spacing: -0.02em;
             ">${plan.name || (currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1))}</h2>
             ${pendingPlan ? `<span style="
                 font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                font-size: 1rem;
+                font-size: 0.875rem;
                 color: #86868B;
                 font-weight: 500;
             ">→ ${pendingPlanName}</span>` : ''}
         </div>
         <p style="
             font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-            font-size: 0.9375rem;
+            font-size: 0.875rem;
             color: #86868B;
-            margin-bottom: 32px;
+            margin-bottom: 24px;
         ">
             <span style="color: ${status === 'active' ? '#34C759' : status === 'canceled' ? '#FF6F61' : '#86868B'}; font-weight: 500;">
                 ${status === 'free' ? 'Starter Plan' : status.charAt(0).toUpperCase() + status.slice(1)}
@@ -788,31 +793,32 @@ async function displaySubscription(subscription) {
         
         if (refundStatus && refundStatus.has_pending_refund) {
             html += `
-                <div style="
-                    background: #FFF9E6;
-                    border: 1px solid #FFE082;
-                    border-radius: 16px;
-                    padding: 20px;
-                    margin-bottom: 32px;
+            <div style="
+                background: #FFF9E6;
+                border: 1px solid #FFE082;
+                border-radius: 12px;
+                padding: 16px;
+                margin-bottom: 24px;
+            ">
+                <p style="
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 0.875rem;
+                    color: #856404;
+                    margin: 0 0 6px 0;
+                    font-weight: 600;
+                ">Refund Request ${refundStatus.status === 'approved' ? 'Approved' : 'Pending'}</p>
+                <p style="
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 0.8125rem;
+                    color: #856404;
+                    margin: 0;
+                    line-height: 1.5;
+                    word-break: break-word;
                 ">
-                    <p style="
-                        font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                        font-size: 0.9375rem;
-                        color: #856404;
-                        margin: 0 0 8px 0;
-                        font-weight: 600;
-                    ">Refund Request ${refundStatus.status === 'approved' ? 'Approved' : 'Pending'}</p>
-                    <p style="
-                        font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                        font-size: 0.875rem;
-                        color: #856404;
-                        margin: 0;
-                        line-height: 1.6;
-                    ">
-                        Reference: <strong>${refundStatus.refund_id ? refundStatus.refund_id.substring(0, 8) : 'N/A'}</strong> • 
-                        ${refundStatus.created_at ? new Date(refundStatus.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
-                    </p>
-                </div>
+                    Reference: <strong>${refundStatus.refund_id ? refundStatus.refund_id.substring(0, 8) : 'N/A'}</strong><br>
+                    ${refundStatus.created_at ? new Date(refundStatus.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A'}
+                </p>
+            </div>
             `;
         }
     } catch (error) {
@@ -828,24 +834,24 @@ async function displaySubscription(subscription) {
         html += `
             <div style="
                 background: #FFF9E6;
-                border-left: 3px solid #FFE082;
+                border: 1px solid #FFE082;
                 border-radius: 12px;
-                padding: 20px;
-                margin-bottom: 32px;
+                padding: 16px;
+                margin-bottom: 24px;
             ">
-                <p style="
-                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                    font-size: 0.9375rem;
-                    color: #856404;
-                    margin: 0 0 8px 0;
-                    font-weight: 600;
-                ">Subscription Canceled</p>
                 <p style="
                     font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
                     font-size: 0.875rem;
                     color: #856404;
+                    margin: 0 0 6px 0;
+                    font-weight: 600;
+                ">Subscription Canceled</p>
+                <p style="
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 0.8125rem;
+                    color: #856404;
                     margin: 0;
-                    line-height: 1.6;
+                    line-height: 1.5;
                 ">
                     ${changeDate ? `Ends ${changeDate}. ` : ''}Access continues until then.
                 </p>
@@ -859,24 +865,24 @@ async function displaySubscription(subscription) {
         html += `
             <div style="
                 background: #E8F4FD;
-                border-left: 3px solid #0066CC;
+                border: 1px solid #0066CC;
                 border-radius: 12px;
-                padding: 20px;
-                margin-bottom: 32px;
+                padding: 16px;
+                margin-bottom: 24px;
             ">
-                <p style="
-                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                    font-size: 0.9375rem;
-                    color: #0055AA;
-                    margin: 0 0 8px 0;
-                    font-weight: 600;
-                ">Plan Change Scheduled</p>
                 <p style="
                     font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
                     font-size: 0.875rem;
                     color: #0055AA;
+                    margin: 0 0 6px 0;
+                    font-weight: 600;
+                ">Plan Change Scheduled</p>
+                <p style="
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 0.8125rem;
+                    color: #0055AA;
                     margin: 0;
-                    line-height: 1.6;
+                    line-height: 1.5;
                 ">
                     Switching to ${pendingPlanName} on ${changeDate}.
                 </p>
@@ -889,20 +895,20 @@ async function displaySubscription(subscription) {
         html += `<ul style="
             list-style: none;
             padding: 0;
-            margin: 32px 0;
+            margin: 24px 0;
         ">`;
         plan.features.forEach(feature => {
             html += `
                 <li style="
                     font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                    font-size: 0.9375rem;
+                    font-size: 0.875rem;
                     color: #1D1D1F;
-                    margin-bottom: 12px;
+                    margin-bottom: 10px;
                     display: flex;
-                    align-items: center;
+                    align-items: flex-start;
                 ">
-                    <span style="color: #0066CC; margin-right: 12px; font-weight: 600;">✓</span>
-                    ${feature}
+                    <span style="color: #0066CC; margin-right: 10px; font-weight: 600; flex-shrink: 0;">•</span>
+                    <span style="flex: 1;">${feature}</span>
                 </li>
             `;
         });
@@ -911,18 +917,29 @@ async function displaySubscription(subscription) {
     
     // Action buttons
     if (status === 'active' && subscription.subscription && currentPlan !== 'free') {
+        // Responsive button text
+        const isVerySmall = window.innerWidth < 360;
+        const isSmall = window.innerWidth < 400;
+        const buttonGap = isSmall ? '8px' : '10px';
+        
         html += `
             <div style="
                 display: grid; 
                 grid-template-columns: 1fr 1fr; 
-                gap: 12px;
-                margin-top: 32px;
+                gap: ${buttonGap};
+                margin-top: 24px;
             ">
                 <a href="#" onclick="checkRefundEligibility(); return false;" aria-label="Request Refund" 
                     class="image-18 nav-6 container-0" 
-                    style="background: #FF6F61; width: 100%;">
-                    <div class="title-18 main-6">
-                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Request Refund<span class="text-18 feature-7">
+                    style="background: #FF6F61; width: 100%; min-width: 0;">
+                    <div class="title-18 main-6" style="min-width: 0;">
+                        <span style="
+                            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                            font-size: ${isVerySmall ? '0.8125rem' : isSmall ? '0.875rem' : '0.9375rem'};
+                            font-weight: 500;
+                            color: white;
+                            white-space: nowrap;
+                        ">Refund<span class="text-18 feature-7">
                             <svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="white">
                                 <path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" 
                                     stroke="currentColor" stroke-linecap="round"></path>
@@ -933,9 +950,15 @@ async function displaySubscription(subscription) {
                 </a>
                 <a href="#" onclick="cancelSubscription(); return false;" aria-label="Cancel Subscription" 
                     class="logo-18 list-5"
-                    style="width: 100%;">
-                    <div class="title-18 main-6">
-                        <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Cancel<span class="text-18 feature-7">
+                    style="width: 100%; min-width: 0;">
+                    <div class="title-18 main-6" style="min-width: 0;">
+                        <span style="
+                            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                            font-size: ${isVerySmall ? '0.8125rem' : isSmall ? '0.875rem' : '0.9375rem'};
+                            font-weight: 500;
+                            color: var(--text-on-button-secondary);
+                            white-space: nowrap;
+                        ">Cancel<span class="text-18 feature-7">
                             <svg width="17" height="14" viewBox="0 0 17 14" fill="none" color="var(--text-on-button-secondary)">
                                 <path d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896" 
                                     stroke="currentColor" stroke-linecap="round"></path>
@@ -966,6 +989,10 @@ function displayUsage(usage) {
     const galleryLimitText = galleryLimit.limit === -1 ? 'Unlimited' : galleryLimit.limit;
     const storageLimitText = storageLimit.limit_gb === -1 ? 'Unlimited' : `${storageLimit.limit_gb} GB`;
     
+    // Responsive font size
+    const isSmallMobile = window.innerWidth < 400;
+    const numberSize = isSmallMobile ? '2.5rem' : '3rem';
+    
     let html = `
         <!-- Gallery Limit -->
         <div class="card-18 hero-10 animation-11 textarea-7">
@@ -976,20 +1003,20 @@ function displayUsage(usage) {
                         <div style="
                             display: flex;
                             align-items: baseline;
-                            margin: 24px 0;
+                            margin: 20px 0;
                         ">
                             <span style="
                                 font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
-                                font-size: 3rem;
+                                font-size: ${numberSize};
                                 font-weight: 800;
                                 line-height: 1;
                                 color: #1D1D1F;
                             ">${galleryLimit.used || 0}</span>
                             <span style="
                                 font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                                font-size: 1rem;
+                                font-size: 0.875rem;
                                 color: #86868B;
-                                margin-left: 8px;
+                                margin-left: 6px;
                             ">/ ${galleryLimitText}</span>
                         </div>
                         ${galleryLimit.limit !== -1 ? `
@@ -998,7 +1025,7 @@ function displayUsage(usage) {
                                 background: rgba(0, 0, 0, 0.06);
                                 border-radius: 3px;
                                 overflow: hidden;
-                                margin-top: 16px;
+                                margin-top: 12px;
                             ">
                                 <div style="
                                     height: 100%;
@@ -1011,9 +1038,9 @@ function displayUsage(usage) {
                         ` : ''}
                         <p style="
                             font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                            font-size: 0.875rem;
+                            font-size: 0.8125rem;
                             color: #86868B;
-                            margin-top: 16px;
+                            margin-top: 12px;
                             margin-bottom: 0;
                         ">
                             ${galleryLimit.limit === -1 ? 'Unlimited galleries' : `${galleryLimit.remaining || 0} remaining`}
@@ -1032,20 +1059,20 @@ function displayUsage(usage) {
                         <div style="
                             display: flex;
                             align-items: baseline;
-                            margin: 24px 0;
+                            margin: 20px 0;
                         ">
                             <span style="
                                 font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
-                                font-size: 3rem;
+                                font-size: ${numberSize};
                                 font-weight: 800;
                                 line-height: 1;
                                 color: #1D1D1F;
                             ">${(storageLimit.used_gb || 0).toFixed(1)}</span>
                             <span style="
                                 font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                                font-size: 1rem;
+                                font-size: 0.875rem;
                                 color: #86868B;
-                                margin-left: 8px;
+                                margin-left: 6px;
                             ">GB / ${storageLimitText}</span>
                         </div>
                         ${storageLimit.limit_gb !== -1 ? `
@@ -1054,7 +1081,7 @@ function displayUsage(usage) {
                                 background: rgba(0, 0, 0, 0.06);
                                 border-radius: 3px;
                                 overflow: hidden;
-                                margin-top: 16px;
+                                margin-top: 12px;
                             ">
                                 <div style="
                                     height: 100%;
@@ -1067,9 +1094,9 @@ function displayUsage(usage) {
                         ` : ''}
                         <p style="
                             font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                            font-size: 0.875rem;
+                            font-size: 0.8125rem;
                             color: #86868B;
-                            margin-top: 16px;
+                            margin-top: 12px;
                             margin-bottom: 0;
                         ">
                             ${storageLimit.limit_gb === -1 ? 'Unlimited storage' : `${((storageLimit.limit_gb || 0) - (storageLimit.used_gb || 0)).toFixed(1)} GB available`}
@@ -1138,12 +1165,12 @@ function displayBillingHistory(history) {
     if (invoices.length === 0) {
         container.innerHTML = `
             <div style="
-                padding: 48px 24px;
+                padding: 40px 20px;
                 text-align: center;
             ">
                 <p style="
                     font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                    font-size: 0.9375rem;
+                    font-size: 0.875rem;
                     color: #86868B;
                     margin: 0;
                 ">No billing history.</p>
@@ -1164,38 +1191,43 @@ function displayBillingHistory(history) {
         });
         const invoiceNumber = invoice.invoice_number || invoice.stripe_invoice_id || 'N/A';
         const showButton = (invoice.status === 'paid' && invoice.stripe_invoice_id);
+        const isSmallMobile = window.innerWidth < 400;
         
         html += `
             <div style="
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                padding: 20px 0;
+                padding: ${isSmallMobile ? '16px 0' : '20px 0'};
+                gap: ${isSmallMobile ? '12px' : '16px'};
                 ${index < invoices.length - 1 ? 'border-bottom: 1px solid rgba(0, 0, 0, 0.06);' : ''}
             ">
-                <!-- Left: Invoice details -->
-                <div style="flex: 1; min-width: 0;">
+                <div style="flex: 1; min-width: 0; overflow: hidden;">
                     <div style="
                         font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                        font-size: 1rem;
+                        font-size: ${isSmallMobile ? '0.875rem' : '0.9375rem'};
                         font-weight: 600;
                         color: #1D1D1F;
                         margin-bottom: 4px;
+                        overflow: hidden;
+                        text-overflow: ellipsis;
+                        white-space: nowrap;
                     ">${invoiceNumber}</div>
                     <div style="
                         font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                        font-size: 0.875rem;
+                        font-size: 0.8125rem;
                         color: #86868B;
+                        line-height: 1.4;
                     ">
-                        ${date} • $${invoice.amount?.toFixed(2) || '0.00'} • 
+                        ${date}<br>
+                        $${invoice.amount?.toFixed(2) || '0.00'} • 
                         <span style="color: ${invoice.status === 'paid' ? '#34C759' : '#86868B'};">
                             ${invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}
                         </span>
                     </div>
                 </div>
                 
-                <!-- Right: Download button -->
-                <div>
+                <div style="flex-shrink: 0;">
                     ${showButton ? `
                         <button 
                             onclick="downloadInvoice('${invoice.stripe_invoice_id}', '${invoiceNumber}')"
@@ -1204,33 +1236,27 @@ function displayBillingHistory(history) {
                                 display: inline-flex;
                                 align-items: center;
                                 justify-content: center;
-                                width: 40px;
-                                height: 40px;
+                                width: ${isSmallMobile ? '36px' : '40px'};
+                                height: ${isSmallMobile ? '36px' : '40px'};
                                 background: transparent;
                                 border: none;
                                 border-radius: 50%;
                                 color: #0066CC;
                                 cursor: pointer;
                                 transition: all 0.15s ease;
+                                padding: 0;
                             "
                             onmouseover="this.style.background='rgba(0, 102, 204, 0.1)'"
                             onmouseout="this.style.background='transparent'"
                         >
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <svg width="${isSmallMobile ? '18' : '20'}" height="${isSmallMobile ? '18' : '20'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
                                 <polyline points="7 10 12 15 17 10"></polyline>
                                 <line x1="12" y1="15" x2="12" y2="3"></line>
                             </svg>
                         </button>
                     ` : `
-                        <span style="
-                            width: 40px;
-                            height: 40px;
-                            display: inline-flex;
-                            align-items: center;
-                            justify-content: center;
-                            color: #D1D1D6;
-                        ">—</span>
+                        <div style="width: ${isSmallMobile ? '36px' : '40px'}; height: ${isSmallMobile ? '36px' : '40px'};"></div>
                     `}
                 </div>
             </div>
@@ -1441,6 +1467,11 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
     
     let html = '';
     
+    // Responsive sizing
+    const isSmallMobile = window.innerWidth < 400;
+    const priceSize = isSmallMobile ? '2.5rem' : '3rem';
+    const featureSize = isSmallMobile ? '0.875rem' : '0.9375rem';
+    
     plans.forEach(plan => {
         const isCurrentPlan = plan.id === currentPlanId;
         const isFree = plan.id === 'free';
@@ -1473,58 +1504,58 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
             <div class="card-18 hero-10 animation-11 textarea-7" ${isCurrentPlan ? 'style="border: 2px solid #0066CC; box-shadow: 0 4px 16px rgba(0, 102, 204, 0.1);"' : ''}>
                 <div class="button-18 list-7">
                     <div class="container-15 item-7">
-                        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 24px;">
+                        <div style="display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 20px;">
                             <h3 class="grid-15 animation-7" style="margin: 0;">${plan.name}</h3>
                             ${plan.badge ? `<span style="
                                 font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                                font-size: 0.75rem;
+                                font-size: 0.6875rem;
                                 font-weight: 600;
-                                padding: 4px 12px;
+                                padding: 3px 10px;
                                 background: #0066CC;
                                 color: white;
-                                border-radius: 12px;
+                                border-radius: 10px;
                             ">${plan.badge}</span>` : ''}
                             ${isCurrentPlan ? `<span style="
                                 font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                                font-size: 0.75rem;
+                                font-size: 0.6875rem;
                                 font-weight: 600;
                                 color: #0066CC;
                             ">(Current)</span>` : ''}
                         </div>
                         <div class="input-15 background-7">
-                            <div style="display: flex; align-items: baseline; margin-bottom: 16px;">
+                            <div style="display: flex; align-items: baseline; margin-bottom: 12px;">
                                 <span style="
                                     font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
-                                    font-size: 3rem;
+                                    font-size: ${priceSize};
                                     font-weight: 800;
                                     line-height: 1;
                                     color: #1D1D1F;
                                 ">$${plan.price}</span>
                                 ${plan.price > 0 ? `<span style="
                                     font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                                    font-size: 1rem;
+                                    font-size: 0.875rem;
                                     color: #86868B;
-                                    margin-left: 8px;
+                                    margin-left: 6px;
                                 ">/month</span>` : ''}
                             </div>
                             <p style="
                                 font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                                font-size: 0.9375rem;
+                                font-size: 0.875rem;
                                 color: #86868B;
-                                margin-bottom: 32px;
+                                margin-bottom: 24px;
                             ">${plan.description}</p>
-                            <ul style="list-style: none; padding: 0; margin: 32px 0;">
+                            <ul style="list-style: none; padding: 0; margin: 24px 0;">
                                 ${plan.features.map(feature => `
                                     <li style="
                                         font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
-                                        font-size: 0.9375rem;
+                                        font-size: ${featureSize};
                                         color: #1D1D1F;
-                                        margin-bottom: 12px;
+                                        margin-bottom: 10px;
                                         display: flex;
-                                        align-items: center;
+                                        align-items: flex-start;
                                     ">
-                                        <span style="color: #0066CC; margin-right: 12px; font-weight: 600;">✓</span>
-                                        ${feature}
+                                        <span style="color: #0066CC; margin-right: 10px; font-weight: 600; flex-shrink: 0;">•</span>
+                                        <span style="flex: 1;">${feature}</span>
                                     </li>
                                 `).join('')}
                             </ul>
@@ -2471,6 +2502,6 @@ async function upgradeFromWarning(planId) {
         showError('Failed to start upgrade process. Please try again.', 'Upgrade Failed');
     }
 }
-
 window.upgradeFromWarning = upgradeFromWarning;
+
 
