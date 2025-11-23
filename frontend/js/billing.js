@@ -907,7 +907,7 @@ async function displaySubscription(subscription) {
                     display: flex;
                     align-items: flex-start;
                 ">
-                    <span style="color: #0066CC; margin-right: 10px; font-weight: 600; flex-shrink: 0;">•</span>
+                    <img src="/img/checkmark.svg" alt="checkmark" style="width: 16px; height: 16px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;" />
                     <span style="flex: 1;">${feature}</span>
                 </li>
             `;
@@ -1618,8 +1618,31 @@ function setupPlanChangeButtons() {
                 (planId === 'plus' || planId === 'pro')
             );
             
-            // If reactivation, use changePlan endpoint
+            // If reactivation, check for pending refund and confirm
             if (isReactivation) {
+                // Check if user has pending refund
+                let hasPendingRefund = false;
+                try {
+                    const refundStatus = await window.apiRequest('billing/refund/status');
+                    hasPendingRefund = refundStatus?.has_pending_refund || false;
+                } catch (error) {
+                    console.error('Error checking refund status:', error);
+                }
+                
+                // If pending refund, show warning
+                if (hasPendingRefund) {
+                    const confirmed = await showConfirm(
+                        'You have a pending refund request.\n\n' +
+                        'Reactivating your subscription will automatically cancel your refund request.\n\n' +
+                        'Do you want to continue?',
+                        'Refund Request Will Be Canceled'
+                    );
+                    
+                    if (!confirmed) {
+                        return; // User canceled
+                    }
+                }
+                
                 try {
                     button.disabled = true;
                     buttonText.textContent = 'Reactivating...';

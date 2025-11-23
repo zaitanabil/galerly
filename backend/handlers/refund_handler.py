@@ -313,6 +313,107 @@ def handle_check_refund_eligibility(user):
     return create_response(200, result)
 
 
+def cancel_pending_refunds(user_id):
+    """
+    Cancel any pending refund requests for a user (called during reactivation)
+    
+    Args:
+        user_id: User ID
+    
+    Returns:
+        Number of refunds cancelled
+    """
+    try:
+        # Find all pending refunds for user
+        response = refunds_table.query(
+            IndexName='UserIdIndex',
+            KeyConditionExpression='user_id = :uid',
+            FilterExpression='#status = :pending',
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={
+                ':uid': user_id,
+                ':pending': 'pending'
+            }
+        )
+        
+        refunds = response.get('Items', [])
+        cancelled_count = 0
+        
+        for refund in refunds:
+            try:
+                # Update refund status to cancelled
+                refunds_table.update_item(
+                    Key={'id': refund['id']},
+                    UpdateExpression='SET #status = :cancelled, updated_at = :now, cancellation_reason = :reason',
+                    ExpressionAttributeNames={'#status': 'status'},
+                    ExpressionAttributeValues={
+                        ':cancelled': 'cancelled',
+                        ':now': datetime.utcnow().isoformat() + 'Z',
+                        ':reason': 'User reactivated subscription'
+                    }
+                )
+                print(f"✅ Cancelled refund {refund['id']} due to subscription reactivation")
+                cancelled_count += 1
+                
+                # Log the cancellation
+                try:
+                    from utils.audit_log import log_audit
+                    log_audit(
+                        user_id=user_id,
+                        action='refund_cancelled',
+                        details={
+                            'refund_id': refund['id'],
+                            'reason': 'User reactivated subscription',
+                            'original_amount': str(refund.get('amount', 0))
+                        }
+                    )
+                except Exception as e:
+                    print(f"⚠️  Error logging refund cancellation: {str(e)}")
+                    
+            except Exception as e:
+                print(f"⚠️  Error cancelling refund {refund.get('id')}: {str(e)}")
+        
+        return cancelled_count
+        
+    except Exception as e:
+        print(f"❌ Error in cancel_pending_refunds: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return 0
+
+
+def has_pending_or_approved_refund(user_id):
+    """
+    Check if user has a pending or approved refund request (internal helper)
+    
+    Args:
+        user_id: User ID to check
+    
+    Returns:
+        Boolean indicating if user has pending/approved refund
+    """
+    try:
+        response = refunds_table.query(
+            IndexName='UserIdIndex',
+            KeyConditionExpression='user_id = :uid',
+            FilterExpression='#status IN (:pending, :approved)',
+            ExpressionAttributeNames={'#status': 'status'},
+            ExpressionAttributeValues={
+                ':uid': user_id,
+                ':pending': 'pending',
+                ':approved': 'approved'
+            },
+            ScanIndexForward=False,
+            Limit=1
+        )
+        
+        refunds = response.get('Items', [])
+        return len(refunds) > 0
+    except Exception as e:
+        print(f"⚠️  Error checking refund status for user {user_id}: {str(e)}")
+        return False
+
+
 def handle_get_refund_status(user):
     """
     Check if user has a pending or approved refund request

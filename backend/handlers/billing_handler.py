@@ -7,6 +7,9 @@ from datetime import datetime
 from decimal import Decimal
 from utils.config import users_table, billing_table, subscriptions_table
 from utils.response import create_response
+from utils.subscription_validator import (
+    SubscriptionValidator, SubscriptionState, ValidationResult
+)
 
 # Initialize Stripe
 stripe = None
@@ -123,6 +126,80 @@ PLANS = {
     }
 }
 
+def create_subscription_state(user, subscription_data=None):
+    """
+    Helper to create SubscriptionState for validation
+    
+    Args:
+        user: User dict from auth
+        subscription_data: Optional subscription dict, will be fetched if not provided
+    
+    Returns:
+        SubscriptionState instance
+    """
+    if subscription_data is None:
+        # Fetch subscription if not provided
+        try:
+            response = subscriptions_table.query(
+                IndexName='UserIdIndex',
+                KeyConditionExpression='user_id = :uid',
+                ExpressionAttributeValues={':uid': user['id']},
+                ScanIndexForward=False,
+                Limit=1
+            )
+            subscription_data = response['Items'][0] if response.get('Items') else {}
+        except Exception as e:
+            print(f"⚠️  Error fetching subscription for validation: {str(e)}")
+            subscription_data = {}
+    
+    # Check for pending refund
+    try:
+        from handlers.refund_handler import has_pending_or_approved_refund
+        has_refund = has_pending_or_approved_refund(user['id'])
+        subscription_data['has_pending_refund'] = has_refund
+    except Exception as e:
+        print(f"⚠️  Error checking refund status: {str(e)}")
+        subscription_data['has_pending_refund'] = False
+    
+    return SubscriptionState(subscription_data, user)
+
+
+def validate_and_execute(user, action, target_plan=None, **kwargs):
+    """
+    Validate subscription transition and return error if invalid
+    
+    Args:
+        user: User dict from auth
+        action: Action to perform
+        target_plan: Target plan for upgrades/downgrades
+        **kwargs: Additional context
+    
+    Returns:
+        None if valid, error response dict if invalid
+    """
+    state = create_subscription_state(user, kwargs.get('subscription_data'))
+    result = SubscriptionValidator.validate_transition(state, action, target_plan, **kwargs)
+    
+    if not result.valid:
+        print(f"❌ Validation failed: {action} to {target_plan} - {result.reason}")
+        status_code = 400
+        if result.error_code == 'PROCESSING_CHANGE':
+            status_code = 409  # Conflict
+        elif result.error_code in ['REFUND_PENDING', 'SUBSCRIPTION_CANCELED']:
+            status_code = 409  # Conflict
+        elif result.error_code == 'ALREADY_SUBSCRIBED':
+            status_code = 409  # Conflict
+        
+        return create_response(status_code, {
+            'error': result.reason,
+            'error_code': result.error_code,
+            'current_plan': state.current_plan,
+            'action': action
+        })
+    
+    return None  # Valid
+
+
 def handle_change_plan(user, body):
     """Change subscription plan between paid plans (Plus <-> Pro)"""
     plan_id = body.get('plan', 'plus')
@@ -162,6 +239,45 @@ def handle_change_plan(user, body):
         
         if not stripe_subscription_id:
             return create_response(400, {'error': 'No Stripe subscription found'})
+        
+        # Validate transition before proceeding
+        current_plan = user.get('plan', user.get('subscription', 'free'))
+        normalized_current = SubscriptionValidator.normalize_plan(current_plan)
+        normalized_target = SubscriptionValidator.normalize_plan(plan_id)
+        
+        # Determine if upgrade or downgrade
+        current_level = SubscriptionValidator.get_plan_level(normalized_current)
+        target_level = SubscriptionValidator.get_plan_level(normalized_target)
+        
+        if target_level > current_level:
+            # Upgrade
+            validation_error = validate_and_execute(
+                user, 
+                'upgrade', 
+                plan_id,
+                subscription_data=subscription
+            )
+        elif target_level < current_level:
+            # Downgrade
+            validation_error = validate_and_execute(
+                user, 
+                'downgrade', 
+                plan_id,
+                subscription_data=subscription
+            )
+        else:
+            # Same level - reactivation or no-op
+            if subscription.get('cancel_at_period_end'):
+                validation_error = validate_and_execute(
+                    user, 
+                    'reactivate',
+                    subscription_data=subscription
+                )
+            else:
+                return create_response(400, {'error': f'Already subscribed to {plan_id}'})
+        
+        if validation_error:
+            return validation_error
         
         # Check if subscription is processing a change (race condition prevention)
         if subscription.get('processing_change', False):
@@ -281,6 +397,16 @@ def handle_change_plan(user, body):
             # This avoids currency mismatch errors by not changing the price
             if is_reactivation:
                 print(f"🔄 Reactivating subscription: returning to {plan_id} plan (canceling scheduled downgrade to Starter)")
+                
+                # Cancel any pending refund requests
+                try:
+                    from handlers.refund_handler import cancel_pending_refunds
+                    cancelled_refunds = cancel_pending_refunds(user['id'])
+                    if cancelled_refunds > 0:
+                        print(f"✅ Cancelled {cancelled_refunds} pending refund request(s) due to reactivation")
+                except Exception as e:
+                    print(f"⚠️  Error canceling pending refunds: {str(e)}")
+                    # Continue with reactivation even if refund cancellation fails
                 
                 # Clear pending plan change
                 subscription['pending_plan'] = None
@@ -600,6 +726,7 @@ def handle_create_checkout_session(user, body):
         return create_response(400, {'error': 'Free plan does not require payment'})
     
     # Check if user already has a paid subscription - if so, use plan change instead
+    subscription_data = None
     try:
         response = subscriptions_table.query(
             IndexName='UserIdIndex',
@@ -611,6 +738,7 @@ def handle_create_checkout_session(user, body):
         
         if response.get('Items'):
             subscription = response['Items'][0]
+            subscription_data = subscription
             stripe_subscription_id = subscription.get('stripe_subscription_id')
             
             # Get current plan
@@ -634,6 +762,16 @@ def handle_create_checkout_session(user, body):
     except Exception as e:
         print(f"⚠️  Error checking existing subscription: {str(e)}")
         # Continue with checkout creation if check fails
+    
+    # Validate transition using new validation system
+    validation_error = validate_and_execute(
+        user, 
+        'subscribe', 
+        plan_id,
+        subscription_data=subscription_data
+    )
+    if validation_error:
+        return validation_error
     
     # Debug: Log environment variables
     professional_price = os.environ.get('STRIPE_PRICE_PROFESSIONAL', '')
@@ -1132,6 +1270,16 @@ def handle_downgrade_subscription(user, body):
         subscription = None
         if response.get('Items'):
             subscription = response['Items'][0]
+            
+            # Validate cancellation before proceeding
+            validation_error = validate_and_execute(
+                user, 
+                'cancel',
+                subscription_data=subscription
+            )
+            if validation_error:
+                return validation_error
+            
             stripe_subscription_id = subscription.get('stripe_subscription_id')
             
             # Cancel Stripe subscription
