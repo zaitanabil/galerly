@@ -1438,6 +1438,9 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
             badge: 'BEST VALUE',
             description: 'For growing photographers.',
             features: [
+                // All Starter features
+                'All Starter features',
+                // Plus-specific features
                 'Unlimited galleries',
                 '50 GB storage',
                 'Video support (30 min, HD)',
@@ -1453,7 +1456,9 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
             price: 24,
             description: 'For professionals.',
             features: [
-                'Unlimited galleries',
+                // All Plus features
+                'All Plus features',
+                // Pro-specific features
                 '200 GB storage',
                 'Video support (2 hours, 4K)',
                 'Priority support (12-24h)',
@@ -1554,7 +1559,7 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
                                         display: flex;
                                         align-items: flex-start;
                                     ">
-                                        <span style="color: #0066CC; margin-right: 10px; font-weight: 600; flex-shrink: 0;">•</span>
+                                        <img src="/img/checkmark.svg" alt="checkmark" style="width: 16px; height: 16px; margin-right: 10px; flex-shrink: 0; margin-top: 2px;" />
                                         <span style="flex: 1;">${feature}</span>
                                     </li>
                                 `).join('')}
