@@ -57,3 +57,7 @@ marketing/
 *.ai
 *.sketch
 *.fig
+
+
+# localstack data
+localstack_data/
