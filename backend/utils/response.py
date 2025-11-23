@@ -2,14 +2,24 @@
 API Response utilities
 """
 import json
+import os
+
+def get_required_env(key):
+    """Get required environment variable or raise error"""
+    value = os.environ.get(key)
+    if value is None:
+        raise ValueError(f"Required environment variable '{key}' is not set")
+    return value
 
 def create_response(status_code, body):
     """Create API Gateway response with CORS headers (supports credentials) and CSP"""
+    frontend_url = get_required_env('FRONTEND_URL')
+    
     return {
         'statusCode': status_code,
         'headers': {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': 'https://galerly.com',  # Must be specific origin when using credentials
+            'Access-Control-Allow-Origin': frontend_url,
             'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type,Authorization,Cookie',
             'Access-Control-Allow-Credentials': 'true',
@@ -23,6 +33,7 @@ def create_response(status_code, body):
         },
         'body': json.dumps(body, default=str)
     }
+
 
 
 

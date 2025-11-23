@@ -1,228 +1,437 @@
 """
-Gallery Expiration Check Handler
-Run this via AWS EventBridge (daily scheduled Lambda)
-Checks for galleries expiring soon and sends email notifications
+Gallery Expiration & Cleanup Handler
+Automatically archives expired galleries and deletes galleries archived for 30+ days
 """
 import os
 from datetime import datetime, timedelta
 from decimal import Decimal
-from boto3.dynamodb.conditions import Key
-from utils.config import galleries_table, users_table
+from boto3.dynamodb.conditions import Attr, Key
+from utils.config import galleries_table, photos_table, s3_client, S3_BUCKET, S3_RENDITIONS_BUCKET
 from utils.response import create_response
-from handlers.notification_handler import notify_gallery_expiring
+from utils.email import send_gallery_expiration_notice, send_gallery_deletion_notice
 
-def handle_check_expiring_galleries(event, context):
+
+def check_and_archive_expired_galleries(event=None, context=None):
     """
-    Check all galleries for upcoming expiration
-    Send notifications to clients for galleries expiring in 7 days or less
-    
-    This function should be triggered daily via AWS EventBridge
-    
-    Usage:
-        - Set up EventBridge rule: rate(1 day)
-        - Target: This Lambda function
-        - No input needed
+    Check all galleries and archive those that have expired
+    This should run daily via CloudWatch Events (cron)
     """
-    print("🔔 CHECKING EXPIRING GALLERIES")
-    
     try:
-        # Scan all galleries (consider using GSI if table is large)
-        response = galleries_table.scan()
-        all_galleries = response.get('Items', [])
+        print("🕐 Starting gallery expiration check...")
+        today = datetime.utcnow().date()
+        archived_count = 0
         
-        # Handle pagination if there are many galleries
-        while 'LastEvaluatedKey' in response:
-            response = galleries_table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+        # Scan all galleries (across all users) with pagination
+        all_galleries = []
+        last_key = None
+        
+        while True:
+            if last_key:
+                response = galleries_table.scan(ExclusiveStartKey=last_key)
+            else:
+                response = galleries_table.scan()
+            
             all_galleries.extend(response.get('Items', []))
-        
-        print(f"Found {len(all_galleries)} total galleries")
-        
-        current_time = datetime.utcnow()
-        notifications_sent = 0
-        already_notified = 0
-        no_expiry = 0
+            
+            # Check if there are more pages
+            last_key = response.get('LastEvaluatedKey')
+            if not last_key:
+                break
         
         for gallery in all_galleries:
+            # Skip if already archived
+            if gallery.get('archived', False):
+                continue
+            
+            # Skip if expiry is "never"
+            expiry_days = gallery.get('expiry_days')
+            if not expiry_days or expiry_days == 'never':
+                continue
+            
+            # Calculate expiration date
+            created_at = gallery.get('created_at')
+            if not created_at:
+                continue
+            
             try:
-                # Skip galleries without expiration
-                expiry_days = gallery.get('expiry_days')
-                if not expiry_days or expiry_days == 'never' or expiry_days == '':
-                    no_expiry += 1
-                    continue
+                created_date = datetime.fromisoformat(created_at.replace('Z', '+00:00')).date()
+                expiry_days_int = int(expiry_days)
+                expiration_date = created_date + timedelta(days=expiry_days_int)
                 
-                # Calculate expiration date
-                created_at_str = gallery.get('created_at', '')
-                if not created_at_str:
-                    continue
-                
-                try:
-                    created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
-                except:
-                    # Try parsing without timezone
-                    created_at = datetime.strptime(created_at_str.split('.')[0], '%Y-%m-%dT%H:%M:%S')
-                
-                # Calculate expiry date
-                expiry_date = created_at + timedelta(days=int(expiry_days))
-                days_until_expiry = (expiry_date - current_time).days
-                
-                # Only notify if expiring in 7 days or less and not already notified
-                if 0 <= days_until_expiry <= 7:
-                    # Check if already notified (to avoid spam)
-                    last_notified = gallery.get('expiry_notification_sent_at')
-                    if last_notified:
-                        # If already notified in the last 24 hours, skip
-                        try:
-                            last_notified_dt = datetime.fromisoformat(last_notified.replace('Z', '+00:00'))
-                            if (current_time - last_notified_dt).days < 1:
-                                already_notified += 1
-                                continue
-                        except:
-                            pass  # If parsing fails, proceed with notification
+                # Check if expired
+                if today > expiration_date:
+                    print(f"📦 Archiving expired gallery: {gallery.get('name')} (ID: {gallery.get('id')})")
                     
-                    # Get photographer details
-                    photographer_id = gallery.get('user_id')
-                    client_emails = gallery.get('client_emails', [])
-                    
-                    if not photographer_id or not client_emails:
-                        continue
-                    
-                    # Get photographer info
-                    photographer_response = users_table.get_item(Key={'id': photographer_id})
-                    if 'Item' not in photographer_response:
-                        continue
-                    
-                    photographer = photographer_response['Item']
-                    photographer_name = photographer.get('name') or photographer.get('username', 'Your photographer')
-                    
-                    # Send notification to ALL clients
-                    gallery_name = gallery.get('name', 'Your gallery')
-                    gallery_url = gallery.get('share_url', '')
-                    client_name = gallery.get('client_name', 'Client')
-                    
-                    for client_email in client_emails:
-                        try:
-                            # Send notification (checks preferences internally)
-                            notify_gallery_expiring(
-                                user_id=photographer_id,
-                                gallery_id=gallery['id'],
-                                client_email=client_email,
-                                client_name=client_name,
-                                photographer_name=photographer_name,
-                                gallery_url=gallery_url,
-                                days_remaining=days_until_expiry
-                            )
-                            print(f"✅ Sent expiry notification to {client_email} (Gallery: {gallery_name}, Days: {days_until_expiry})")
-                        except Exception as email_error:
-                            print(f"❌ Failed to send to {client_email}: {str(email_error)}")
-                    
-                    # Mark as notified to avoid duplicate notifications
+                    # Archive the gallery
                     galleries_table.update_item(
-                        Key={'user_id': photographer_id, 'id': gallery['id']},
-                        UpdateExpression="SET expiry_notification_sent_at = :ts",
+                        Key={
+                            'user_id': gallery['user_id'],
+                            'id': gallery['id']
+                        },
+                        UpdateExpression='SET archived = :archived, archived_at = :archived_at, archived_reason = :reason',
                         ExpressionAttributeValues={
-                            ':ts': current_time.isoformat() + 'Z'
+                            ':archived': True,
+                            ':archived_at': datetime.utcnow().isoformat() + 'Z',
+                            ':reason': 'expired'
                         }
                     )
                     
-                    notifications_sent += 1
+                    # Send expiration notice to photographer
+                    try:
+                        send_gallery_expiration_notice(
+                            photographer_email=gallery.get('photographer_email'),
+                            gallery_name=gallery.get('name'),
+                            gallery_id=gallery.get('id')
+                        )
+                    except Exception as email_error:
+                        print(f"⚠️ Failed to send expiration notice: {email_error}")
                     
-            except Exception as gallery_error:
-                print(f"❌ Error processing gallery {gallery.get('id')}: {str(gallery_error)}")
+                    archived_count += 1
+                    
+            except (ValueError, TypeError) as e:
+                print(f"⚠️ Error processing gallery {gallery.get('id')}: {e}")
                 continue
         
-        summary = {
-            'success': True,
-            'total_galleries': len(all_galleries),
-            'notifications_sent': notifications_sent,
-            'already_notified': already_notified,
-            'no_expiry_set': no_expiry,
-            'timestamp': current_time.isoformat() + 'Z'
-        }
+        print(f"✅ Archived {archived_count} expired galleries")
         
-        print(f"✅ Expiry check complete: {summary}")
-        return create_response(200, summary)
+        return create_response(200, {
+            'message': f'Successfully archived {archived_count} expired galleries',
+            'archived_count': archived_count
+        })
+        
+    except Exception as e:
+        print(f"❌ Error checking expired galleries: {str(e)}")
+        return create_response(500, {'error': f'Failed to check expired galleries: {str(e)}'})
+
+
+def delete_old_archived_galleries(event=None, context=None):
+    """
+    Permanently delete galleries that have been archived for 30+ days
+    This should run daily via CloudWatch Events (cron)
+    """
+    try:
+        print("🗑️ Starting old archived gallery cleanup...")
+        today = datetime.utcnow().date()
+        deleted_count = 0
+        
+        # Scan all galleries with pagination
+        all_galleries = []
+        last_key = None
+        
+        while True:
+            if last_key:
+                response = galleries_table.scan(ExclusiveStartKey=last_key)
+            else:
+                response = galleries_table.scan()
+            
+            all_galleries.extend(response.get('Items', []))
+            
+            # Check if there are more pages
+            last_key = response.get('LastEvaluatedKey')
+            if not last_key:
+                break
+        
+        for gallery in all_galleries:
+            # Only process archived galleries
+            if not gallery.get('archived', False):
+                continue
+            
+            archived_at = gallery.get('archived_at')
+            if not archived_at:
+                continue
+            
+            try:
+                archived_date = datetime.fromisoformat(archived_at.replace('Z', '+00:00')).date()
+                days_archived = (today - archived_date).days
+                
+                # Delete if archived for 30+ days
+                if days_archived >= 30:
+                    gallery_id = gallery['id']
+                    user_id = gallery['user_id']
+                    gallery_name = gallery.get('name', 'Untitled')
+                    
+                    print(f"🗑️ Deleting gallery archived for {days_archived} days: {gallery_name} (ID: {gallery_id})")
+                    
+                    # 1. Delete all photos in S3 (originals and renditions)
+                    try:
+                        # Query all photos for this gallery
+                        photos_response = photos_table.query(
+                            IndexName='GalleryIdIndex',
+                            KeyConditionExpression=Key('gallery_id').eq(gallery_id)
+                        )
+                        
+                        photos = photos_response.get('Items', [])
+                        
+                        for photo in photos:
+                            # Delete from S3 photos bucket
+                            s3_key = photo.get('s3_key')
+                            if s3_key:
+                                try:
+                                    s3_client.delete_object(Bucket=S3_BUCKET, Key=s3_key)
+                                    print(f"  ✓ Deleted S3 object: {s3_key}")
+                                except Exception as s3_error:
+                                    print(f"  ⚠️ Failed to delete S3 object {s3_key}: {s3_error}")
+                            
+                            # Delete original file if it exists
+                            original_s3_key = photo.get('original_s3_key')
+                            if original_s3_key:
+                                try:
+                                    s3_client.delete_object(Bucket=S3_BUCKET, Key=original_s3_key)
+                                    print(f"  ✓ Deleted original S3 object: {original_s3_key}")
+                                except Exception as s3_error:
+                                    print(f"  ⚠️ Failed to delete original S3 object {original_s3_key}: {s3_error}")
+                            
+                            # Delete renditions from S3 renditions bucket
+                            rendition_keys = [
+                                photo.get('thumbnail_key'),
+                                photo.get('small_key'),
+                                photo.get('medium_key'),
+                                photo.get('large_key')
+                            ]
+                            
+                            for rendition_key in rendition_keys:
+                                if rendition_key:
+                                    try:
+                                        s3_client.delete_object(Bucket=S3_RENDITIONS_BUCKET, Key=rendition_key)
+                                        print(f"  ✓ Deleted rendition: {rendition_key}")
+                                    except Exception as s3_error:
+                                        print(f"  ⚠️ Failed to delete rendition {rendition_key}: {s3_error}")
+                            
+                            # Delete photo from DynamoDB
+                            try:
+                                photos_table.delete_item(
+                                    Key={
+                                        'user_id': user_id,
+                                        'id': photo['id']
+                                    }
+                                )
+                                print(f"  ✓ Deleted photo record: {photo['id']}")
+                            except Exception as db_error:
+                                print(f"  ⚠️ Failed to delete photo record {photo['id']}: {db_error}")
+                        
+                        print(f"  ✓ Deleted {len(photos)} photos")
+                        
+                    except Exception as photos_error:
+                        print(f"  ⚠️ Error deleting photos: {photos_error}")
+                    
+                    # 2. Delete the gallery from DynamoDB
+                    try:
+                        galleries_table.delete_item(
+                            Key={
+                                'user_id': user_id,
+                                'id': gallery_id
+                            }
+                        )
+                        print(f"  ✓ Deleted gallery record: {gallery_id}")
+                    except Exception as db_error:
+                        print(f"  ⚠️ Failed to delete gallery record: {db_error}")
+                    
+                    # 3. Send deletion notice to photographer
+                    try:
+                        send_gallery_deletion_notice(
+                            photographer_email=gallery.get('photographer_email'),
+                            gallery_name=gallery_name,
+                            archived_days=days_archived
+                        )
+                    except Exception as email_error:
+                        print(f"  ⚠️ Failed to send deletion notice: {email_error}")
+                    
+                    deleted_count += 1
+                    
+            except (ValueError, TypeError) as e:
+                print(f"⚠️ Error processing archived gallery {gallery.get('id')}: {e}")
+                continue
+        
+        print(f"✅ Permanently deleted {deleted_count} old archived galleries")
+        
+        return create_response(200, {
+            'message': f'Successfully deleted {deleted_count} old archived galleries',
+            'deleted_count': deleted_count
+        })
+        
+    except Exception as e:
+        print(f"❌ Error deleting old archived galleries: {str(e)}")
+        return create_response(500, {'error': f'Failed to delete old archived galleries: {str(e)}'})
+
+
+def run_daily_cleanup(event=None, context=None):
+    """
+    Combined daily cleanup job:
+    1. Archive expired galleries
+    2. Delete galleries archived for 30+ days
+    """
+    try:
+        print("🔄 Running daily gallery cleanup...")
+        
+        # Step 1: Archive expired galleries
+        archive_result = check_and_archive_expired_galleries()
+        
+        # Step 2: Delete old archived galleries
+        delete_result = delete_old_archived_galleries()
+        
+        # Extract counts from results
+        import json
+        archived_count = 0
+        deleted_count = 0
+        
+        if isinstance(archive_result, dict) and 'body' in archive_result:
+            body_str = archive_result['body']
+            if isinstance(body_str, str):
+                archive_data = json.loads(body_str)
+                archived_count = archive_data.get('archived_count', 0)
+            elif isinstance(body_str, dict):
+                archived_count = body_str.get('archived_count', 0)
+        
+        if isinstance(delete_result, dict) and 'body' in delete_result:
+            body_str = delete_result['body']
+            if isinstance(body_str, str):
+                delete_data = json.loads(body_str)
+                deleted_count = delete_data.get('deleted_count', 0)
+            elif isinstance(body_str, dict):
+                deleted_count = body_str.get('deleted_count', 0)
+        
+        return create_response(200, {
+            'message': 'Daily cleanup completed successfully',
+            'archived': archived_count,
+            'deleted': deleted_count
+        })
+        
+    except Exception as e:
+        print(f"❌ Error running daily cleanup: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': f'Failed to run daily cleanup: {str(e)}'})
+
+
+def handle_check_expiring_galleries(event=None, context=None):
+    """
+    Check for galleries that are expiring soon (within 7 days)
+    Returns a list of expiring galleries for notification purposes
+    """
+    try:
+        print("🔔 Checking for expiring galleries...")
+        today = datetime.utcnow().date()
+        seven_days_from_now = today + timedelta(days=7)
+        expiring_galleries = []
+        
+        # Scan all galleries
+        response = galleries_table.scan()
+        all_galleries = response.get('Items', [])
+        
+        for gallery in all_galleries:
+            # Skip archived galleries
+            if gallery.get('archived', False):
+                continue
+            
+            # Skip galleries that never expire
+            expiry_days = gallery.get('expiry_days')
+            if not expiry_days or expiry_days == 'never':
+                continue
+            
+            # Calculate expiration date
+            created_at = gallery.get('created_at')
+            if not created_at:
+                continue
+            
+            try:
+                created_date = datetime.fromisoformat(created_at.replace('Z', '+00:00')).date()
+                expiry_days_int = int(expiry_days)
+                expiration_date = created_date + timedelta(days=expiry_days_int)
+                
+                # Check if expiring within 7 days (include galleries expiring today)
+                if today <= expiration_date <= seven_days_from_now:
+                    days_until_expiry = (expiration_date - today).days
+                    expiring_galleries.append({
+                        'gallery_id': gallery.get('id'),
+                        'gallery_name': gallery.get('name'),
+                        'user_id': gallery.get('user_id'),
+                        'photographer_email': gallery.get('photographer_email'),
+                        'expiration_date': expiration_date.isoformat(),
+                        'days_until_expiry': days_until_expiry
+                    })
+                    print(f"⚠️ Gallery expiring in {days_until_expiry} days: {gallery.get('name')}")
+                    
+            except (ValueError, TypeError) as e:
+                print(f"⚠️ Error processing gallery {gallery.get('id')}: {e}")
+                continue
+        
+        print(f"✅ Found {len(expiring_galleries)} galleries expiring within 7 days")
+        
+        return create_response(200, {
+            'message': f'Found {len(expiring_galleries)} expiring galleries',
+            'expiring_galleries': expiring_galleries,
+            'count': len(expiring_galleries)
+        })
         
     except Exception as e:
         print(f"❌ Error checking expiring galleries: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return create_response(500, {'error': str(e)})
+        return create_response(500, {'error': f'Failed to check expiring galleries: {str(e)}'})
 
 
 def handle_manual_expiry_check(user):
     """
-    Manual trigger for testing (photographer can trigger this)
-    Only checks galleries owned by the requesting photographer
+    Manual expiry check for a photographer's galleries
+    Returns galleries that will expire soon
     """
-    print(f"🔔 MANUAL EXPIRY CHECK: user_id={user['id']}")
-    
     try:
-        # Get only this photographer's galleries
+        user_id = user.get('id')
+        print(f"🔍 Manual expiry check for user: {user_id}")
+        
+        today = datetime.utcnow().date()
+        seven_days_from_now = today + timedelta(days=7)
+        expiring_galleries = []
+        
+        # Query this user's galleries
+        from boto3.dynamodb.conditions import Key
         response = galleries_table.query(
-            KeyConditionExpression=Key('user_id').eq(user['id'])
+            KeyConditionExpression=Key('user_id').eq(user_id)
         )
-        photographer_galleries = response.get('Items', [])
         
-        print(f"Found {len(photographer_galleries)} galleries for photographer {user['id']}")
+        user_galleries = response.get('Items', [])
         
-        current_time = datetime.utcnow()
-        notifications_sent = 0
-        
-        for gallery in photographer_galleries:
+        for gallery in user_galleries:
+            # Skip archived galleries
+            if gallery.get('archived', False):
+                continue
+            
+            # Skip galleries that never expire
+            expiry_days = gallery.get('expiry_days')
+            if not expiry_days or expiry_days == 'never':
+                continue
+            
+            # Calculate expiration date
+            created_at = gallery.get('created_at')
+            if not created_at:
+                continue
+            
             try:
-                # Skip galleries without expiration
-                expiry_days = gallery.get('expiry_days')
-                if not expiry_days or expiry_days == 'never' or expiry_days == '':
-                    continue
+                created_date = datetime.fromisoformat(created_at.replace('Z', '+00:00')).date()
+                expiry_days_int = int(expiry_days)
+                expiration_date = created_date + timedelta(days=expiry_days_int)
                 
-                # Calculate expiration date
-                created_at_str = gallery.get('created_at', '')
-                if not created_at_str:
-                    continue
-                
-                try:
-                    created_at = datetime.fromisoformat(created_at_str.replace('Z', '+00:00'))
-                except:
-                    created_at = datetime.strptime(created_at_str.split('.')[0], '%Y-%m-%dT%H:%M:%S')
-                
-                # Calculate expiry date
-                expiry_date = created_at + timedelta(days=int(expiry_days))
-                days_until_expiry = (expiry_date - current_time).days
-                
-                # Only notify if expiring in 7 days or less
-                if 0 <= days_until_expiry <= 7:
-                    # Send to all clients
-                    client_emails = gallery.get('client_emails', [])
-                    photographer_name = user.get('name') or user.get('username', 'Your photographer')
+                # Check if expiring within 7 days or already expired
+                if expiration_date <= seven_days_from_now:
+                    days_until_expiry = (expiration_date - today).days
+                    status = 'expired' if days_until_expiry < 0 else 'expiring_soon'
                     
-                    for client_email in client_emails:
-                        try:
-                            notify_gallery_expiring(
-                                user_id=user['id'],
-                                gallery_id=gallery['id'],
-                                client_email=client_email,
-                                client_name=gallery.get('client_name', 'Client'),
-                                photographer_name=photographer_name,
-                                gallery_url=gallery.get('share_url', ''),
-                                days_remaining=days_until_expiry
-                            )
-                            notifications_sent += 1
-                        except Exception as email_error:
-                            print(f"❌ Failed to send to {client_email}: {str(email_error)}")
-                
-            except Exception as gallery_error:
-                print(f"❌ Error processing gallery: {str(gallery_error)}")
+                    expiring_galleries.append({
+                        'gallery_id': gallery.get('id'),
+                        'gallery_name': gallery.get('name'),
+                        'expiration_date': expiration_date.isoformat(),
+                        'days_until_expiry': days_until_expiry,
+                        'status': status
+                    })
+                    
+            except (ValueError, TypeError) as e:
+                print(f"⚠️ Error processing gallery {gallery.get('id')}: {e}")
                 continue
         
         return create_response(200, {
-            'success': True,
-            'notifications_sent': notifications_sent,
-            'message': f'Sent {notifications_sent} expiry notification(s)'
+            'message': f'Found {len(expiring_galleries)} galleries expiring within 7 days',
+            'expiring_galleries': expiring_galleries,
+            'count': len(expiring_galleries)
         })
         
     except Exception as e:
-        print(f"❌ Error in manual expiry check: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return create_response(500, {'error': str(e)})
-
+        print(f"❌ Error checking user galleries: {str(e)}")
+        return create_response(500, {'error': f'Failed to check galleries: {str(e)}'})

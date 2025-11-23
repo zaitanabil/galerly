@@ -67,6 +67,7 @@ PLANS = {
         'features': [
             'Unlimited galleries',
             '50 GB storage',
+            'Video support (30 min, up to HD)',
             'Priority email support',
             'All Starter features',
             'Batch photo uploads',
@@ -83,6 +84,7 @@ PLANS = {
         'features': [
             'Unlimited galleries',
             '200 GB storage',
+            'Video support (2 hours, up to 4K)',
             'Priority support (12-24h)',
             'Phone/video support',
             'All Plus features',
@@ -121,8 +123,8 @@ PLANS = {
 }
 
 def handle_change_plan(user, body):
-    """Change subscription plan between paid plans (Business <-> Professional)"""
-    plan_id = body.get('plan', 'professional')
+    """Change subscription plan between paid plans (Plus <-> Pro)"""
+    plan_id = body.get('plan', 'plus')
     
     if plan_id not in PLANS:
         return create_response(400, {'error': 'Invalid plan'})
@@ -194,11 +196,12 @@ def handle_change_plan(user, body):
             if user_email:
                 user_response = users_table.get_item(Key={'email': user_email})
                 if 'Item' in user_response:
-                    current_plan = user_response['Item'].get('subscription', 'free')
+                    # Use 'plan' field (new), fallback to 'subscription' (legacy)
+                    current_plan = user_response['Item'].get('plan', user_response['Item'].get('subscription', 'free'))
                 else:
-                    current_plan = user.get('subscription', 'free')
+                    current_plan = user.get('plan', user.get('subscription', 'free'))
             else:
-                current_plan = user.get('subscription', 'free')
+                current_plan = user.get('plan', user.get('subscription', 'free'))
             
             # Check for pending plan change
             pending_plan = subscription.get('pending_plan')
@@ -208,7 +211,7 @@ def handle_change_plan(user, body):
             is_reactivation = (
                 pending_plan == 'free' and 
                 current_plan == plan_id and 
-                current_plan in ['professional', 'business', 'plus', 'pro']
+                current_plan in ['professional', 'business', 'plus', 'pro']  # Support both legacy and new plan names
             )
             
             # Check if it's actually a change (not same plan)
@@ -305,9 +308,10 @@ def handle_change_plan(user, body):
                         if user_email:
                             users_table.update_item(
                                 Key={'email': user_email},
-                                UpdateExpression='SET subscription = :plan, updated_at = :now',
+                                UpdateExpression='SET #plan = :plan_val, subscription = :plan_val, updated_at = :now',
+                                ExpressionAttributeNames={'#plan': 'plan'},
                                 ExpressionAttributeValues={
-                                    ':plan': plan_id,
+                                    ':plan_val': plan_id,
                                     ':now': datetime.utcnow().isoformat() + 'Z'
                                 }
                             )
@@ -502,13 +506,14 @@ def handle_change_plan(user, body):
                     if user_email:
                         users_table.update_item(
                             Key={'email': user_email},
-                            UpdateExpression='SET subscription = :plan, updated_at = :now',
+                            UpdateExpression='SET #plan = :plan_val, subscription = :plan_val, updated_at = :now',
+                            ExpressionAttributeNames={'#plan': 'plan'},
                             ExpressionAttributeValues={
-                                ':plan': plan_id,
+                                ':plan_val': plan_id,
                                 ':now': datetime.utcnow().isoformat() + 'Z'
                             }
                         )
-                        print(f"✅ Updated user {user_email} to plan {plan_id}")
+                        print(f"✅ Updated user {user_email} to plan {plan_id} (immediate upgrade)")
                 except Exception as e:
                     print(f"⚠️  Error updating user plan: {str(e)}")
                 
@@ -583,7 +588,7 @@ def handle_change_plan(user, body):
 
 def handle_create_checkout_session(user, body):
     """Create Stripe checkout session for subscription"""
-    plan_id = body.get('plan', 'professional')
+    plan_id = body.get('plan', 'plus')
     
     if plan_id not in PLANS:
         return create_response(400, {'error': 'Invalid plan'})
@@ -612,14 +617,16 @@ def handle_create_checkout_session(user, body):
             if user_email:
                 user_response = users_table.get_item(Key={'email': user_email})
                 if 'Item' in user_response:
-                    current_plan = user_response['Item'].get('subscription', 'free')
+                    # Use 'plan' field (new), fallback to 'subscription' (legacy)
+                    current_plan = user_response['Item'].get('plan', user_response['Item'].get('subscription', 'free'))
                 else:
-                    current_plan = user.get('subscription', 'free')
+                    current_plan = user.get('plan', user.get('subscription', 'free'))
             else:
-                current_plan = user.get('subscription', 'free')
+                current_plan = user.get('plan', user.get('subscription', 'free'))
             
             # If user has a paid plan and wants to change to another paid plan, use plan change
-            if current_plan in ['professional', 'business'] and plan_id in ['professional', 'business']:
+            # Support both legacy (professional/business) and new (plus/pro) plan names
+            if current_plan in ['professional', 'business', 'plus', 'pro'] and plan_id in ['professional', 'business', 'plus', 'pro']:
                 if current_plan != plan_id:
                     print(f"🔄 User has {current_plan} plan, changing to {plan_id} via subscription modification")
                     return handle_change_plan(user, body)
@@ -792,7 +799,9 @@ def handle_get_billing_history(user):
                 'currency': invoice.get('currency', 'usd'),
                 'status': invoice.get('status', 'paid'),
                 'plan': invoice.get('plan'),
-                'created_at': invoice.get('created_at')
+                'created_at': invoice.get('created_at'),
+                'invoice_pdf': invoice.get('invoice_pdf'),  # Stripe-generated PDF URL
+                'invoice_number': invoice.get('invoice_number')  # Human-readable invoice number
             })
         
         return create_response(200, {'invoices': formatted_invoices})
@@ -801,6 +810,98 @@ def handle_get_billing_history(user):
         import traceback
         traceback.print_exc()
         return create_response(200, {'invoices': []})
+
+
+def handle_get_invoice_pdf(user, invoice_id):
+    """
+    Get invoice PDF URL - either from stored DynamoDB record or fetch from Stripe.
+    For testing/LocalStack, we can use the invoice_pdf field stored in DynamoDB.
+    For production, we fetch from Stripe.
+    """
+    try:
+        print(f"📄 Fetching invoice PDF for stripe_invoice_id {invoice_id}, user {user['id']}")
+        
+        # Query billing table by user_id and filter by stripe_invoice_id
+        # Using UserIdIndex GSI
+        response = billing_table.query(
+            IndexName='UserIdIndex',
+            KeyConditionExpression='user_id = :uid',
+            FilterExpression='stripe_invoice_id = :sid',
+            ExpressionAttributeValues={
+                ':uid': user['id'],
+                ':sid': invoice_id
+            },
+            Limit=1
+        )
+        
+        if not response.get('Items'):
+            print(f"❌ Invoice {invoice_id} not found for user {user['id']}")
+            return create_response(404, {'error': 'Invoice not found'})
+        
+        invoice = response['Items'][0]
+        print(f"✅ Found invoice: {invoice.get('id')}")
+        
+        # Check if we have a stored PDF URL in DynamoDB (for test invoices or cached URLs)
+        stored_pdf_url = invoice.get('invoice_pdf')
+        if stored_pdf_url:
+            print(f"✅ Using stored PDF URL from DynamoDB")
+            # For test/demo invoices, return a mock PDF URL or the stored one
+            return create_response(200, {
+                'pdf_url': stored_pdf_url,
+                'invoice_number': invoice.get('invoice_number', invoice.get('stripe_invoice_id')),
+                'amount': float(invoice.get('amount', 0)),
+                'currency': invoice.get('currency', 'usd').upper(),
+                'created': invoice.get('created_at'),
+                'status': invoice.get('status', 'paid')
+            })
+        
+        # If no stored PDF URL, fetch from Stripe
+        stripe_invoice_id = invoice.get('stripe_invoice_id')
+        if not stripe_invoice_id:
+            return create_response(404, {'error': 'Stripe invoice ID not found'})
+        
+        # Fetch invoice from Stripe to get PDF URL
+        if stripe:
+            try:
+                stripe_invoice = stripe.Invoice.retrieve(stripe_invoice_id)
+                pdf_url = stripe_invoice.get('invoice_pdf')
+                
+                if pdf_url:
+                    # Cache the PDF URL in DynamoDB for future requests
+                    try:
+                        billing_table.update_item(
+                            Key={'id': invoice['id']},
+                            UpdateExpression='SET invoice_pdf = :pdf, invoice_number = :num',
+                            ExpressionAttributeValues={
+                                ':pdf': pdf_url,
+                                ':num': stripe_invoice.get('number')
+                            }
+                        )
+                        print(f"✅ Cached PDF URL in DynamoDB for invoice {invoice_id}")
+                    except Exception as cache_error:
+                        print(f"⚠️  Error caching PDF URL: {str(cache_error)}")
+                    
+                    return create_response(200, {
+                        'pdf_url': pdf_url,
+                        'invoice_number': stripe_invoice.get('number'),
+                        'amount': stripe_invoice.get('amount_paid') / 100,  # Convert from cents
+                        'currency': stripe_invoice.get('currency', 'usd').upper(),
+                        'created': stripe_invoice.get('created'),
+                        'status': stripe_invoice.get('status')
+                    })
+                else:
+                    return create_response(404, {'error': 'PDF URL not available'})
+            except stripe.error.StripeError as e:
+                print(f"❌ Stripe error retrieving invoice: {str(e)}")
+                return create_response(500, {'error': 'Failed to retrieve invoice from Stripe'})
+        else:
+            return create_response(500, {'error': 'Stripe not configured'})
+            
+    except Exception as e:
+        print(f"❌ Error getting invoice PDF: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': 'Failed to retrieve invoice PDF'})
 
 
 def handle_get_subscription(user):
@@ -827,17 +928,18 @@ def handle_get_subscription(user):
                 user_response = users_table.get_item(Key={'email': user_email})
                 if 'Item' in user_response:
                     db_user = user_response['Item']
-                    current_plan = db_user.get('subscription', 'free')
+                    # Use 'plan' field (new), fallback to 'subscription' (legacy)
+                    current_plan = db_user.get('plan', db_user.get('subscription', 'free'))
                     print(f"📋 User {user_email} plan from DB: {current_plan}")
                 else:
-                    current_plan = user.get('subscription', 'free')
+                    current_plan = user.get('plan', user.get('subscription', 'free'))
                     print(f"⚠️  User not found in DB, using session plan: {current_plan}")
             else:
-                current_plan = user.get('subscription', 'free')
+                current_plan = user.get('plan', user.get('subscription', 'free'))
                 print(f"⚠️  No email in user object, using session plan: {current_plan}")
         except Exception as e:
             print(f"⚠️  Error fetching user from DB: {str(e)}, using session plan")
-            current_plan = user.get('subscription', 'free')
+            current_plan = user.get('plan', user.get('subscription', 'free'))
         
         plan_details = PLANS.get(current_plan, PLANS['free'])
         
@@ -898,7 +1000,8 @@ def handle_get_subscription(user):
         print(f"Error getting subscription: {str(e)}")
         import traceback
         traceback.print_exc()
-        current_plan = user.get('subscription', 'free')
+        # Use 'plan' field (new), fallback to 'subscription' (legacy)
+        current_plan = user.get('plan', user.get('subscription', 'free'))
         return create_response(200, {
             'subscription': None,
             'plan': current_plan,
@@ -1305,13 +1408,14 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                             if user_email:
                                 users_table.update_item(
                                     Key={'email': user_email},
-                                    UpdateExpression='SET subscription = :plan, updated_at = :now',
+                                    UpdateExpression='SET #plan = :plan_val, subscription = :plan_val, updated_at = :now',
+                                    ExpressionAttributeNames={'#plan': 'plan'},
                                     ExpressionAttributeValues={
-                                        ':plan': pending_plan,
+                                        ':plan_val': pending_plan,
                                         ':now': datetime.utcnow().isoformat() + 'Z'
                                     }
                                 )
-                                print(f"✅ Updated user {user_email} to plan {pending_plan} at period end")
+                                print(f"✅ Updated user {user_email} to plan {pending_plan} at period end (downgrade applied)")
                         except Exception as e:
                             print(f"⚠️  Error updating user plan via webhook: {str(e)}")
                 
@@ -1326,13 +1430,14 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                             if user_email:
                                 users_table.update_item(
                                     Key={'email': user_email},
-                                    UpdateExpression='SET subscription = :plan, updated_at = :now',
+                                    UpdateExpression='SET #plan = :plan_val, subscription = :plan_val, updated_at = :now',
+                                    ExpressionAttributeNames={'#plan': 'plan'},
                                     ExpressionAttributeValues={
-                                        ':plan': plan,
+                                        ':plan_val': plan,
                                         ':now': datetime.utcnow().isoformat() + 'Z'
                                     }
                                 )
-                                print(f"✅ Updated user {user_email} to plan {plan} via webhook")
+                                print(f"✅ Updated user {user_email} to plan {plan} via webhook (immediate upgrade)")
                         except Exception as e:
                             print(f"⚠️  Error updating user plan via webhook: {str(e)}")
                 
@@ -1378,9 +1483,10 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                     try:
                         users_table.update_item(
                             Key={'email': user_email},
-                            UpdateExpression='SET subscription = :plan, updated_at = :now',
+                            UpdateExpression='SET #plan = :plan_val, subscription = :plan_val, updated_at = :now',
+                            ExpressionAttributeNames={'#plan': 'plan'},
                             ExpressionAttributeValues={
-                                ':plan': plan_to_set,
+                                ':plan_val': plan_to_set,
                                 ':now': datetime.utcnow().isoformat() + 'Z'
                             }
                         )

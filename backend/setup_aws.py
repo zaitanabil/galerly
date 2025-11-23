@@ -135,6 +135,27 @@ def enable_api_gateway_cors():
     print(f"API ID: {API_GATEWAY_ID}")
     print("")
     
+    # Check if API Gateway ID is set
+    if not API_GATEWAY_ID or len(API_GATEWAY_ID) < 10:
+        print("⚠️  API_GATEWAY_ID not set or invalid in environment")
+        print("   Skipping API Gateway CORS configuration")
+        print("   Set API_GATEWAY_ID environment variable to configure")
+        return False
+    
+    # Check if API exists
+    try:
+        apigateway.get_rest_api(restApiId=API_GATEWAY_ID)
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        if error_code == 'NotFoundException':
+            print(f"⚠️  API Gateway not found: {API_GATEWAY_ID}")
+            print("   API may not be created yet")
+            print("   Deploy API Lambda first, then run this script")
+            return False
+        else:
+            print(f"❌ Error checking API: {str(e)}")
+            return False
+    
     resources = get_api_resources()
     if not resources:
         print("❌ No resources found")
@@ -175,6 +196,64 @@ def enable_s3_cors():
     print("🔧 Configuring S3 CORS...")
     print(f"Bucket: {S3_BUCKET_NAME}")
     print("")
+    
+    # Check if bucket exists, create if not
+    try:
+        s3.head_bucket(Bucket=S3_BUCKET_NAME)
+        print(f"✅ Bucket exists: {S3_BUCKET_NAME}\n")
+    except ClientError as e:
+        error_code = e.response['Error']['Code']
+        if error_code == '404':
+            print(f"📦 Bucket not found, creating: {S3_BUCKET_NAME}")
+            try:
+                if REGION == 'us-east-1':
+                    s3.create_bucket(Bucket=S3_BUCKET_NAME)
+                else:
+                    s3.create_bucket(
+                        Bucket=S3_BUCKET_NAME,
+                        CreateBucketConfiguration={'LocationConstraint': REGION}
+                    )
+                print(f"✅ Bucket created: {S3_BUCKET_NAME}")
+                
+                # Enable versioning
+                s3.put_bucket_versioning(
+                    Bucket=S3_BUCKET_NAME,
+                    VersioningConfiguration={'Status': 'Enabled'}
+                )
+                print(f"✅ Versioning enabled")
+                
+                # Enable encryption
+                s3.put_bucket_encryption(
+                    Bucket=S3_BUCKET_NAME,
+                    ServerSideEncryptionConfiguration={
+                        'Rules': [{
+                            'ApplyServerSideEncryptionByDefault': {
+                                'SSEAlgorithm': 'AES256'
+                            },
+                            'BucketKeyEnabled': True
+                        }]
+                    }
+                )
+                print(f"✅ Encryption enabled")
+                
+                # Block public access
+                s3.put_public_access_block(
+                    Bucket=S3_BUCKET_NAME,
+                    PublicAccessBlockConfiguration={
+                        'BlockPublicAcls': True,
+                        'IgnorePublicAcls': True,
+                        'BlockPublicPolicy': True,
+                        'RestrictPublicBuckets': True
+                    }
+                )
+                print(f"✅ Public access blocked\n")
+                
+            except ClientError as create_error:
+                print(f"❌ Failed to create bucket: {str(create_error)}")
+                return False
+        else:
+            print(f"❌ Error checking bucket: {str(e)}")
+            return False
     
     # CORS configuration
     cors_config = {

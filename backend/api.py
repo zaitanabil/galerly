@@ -10,7 +10,7 @@ from utils.response import create_response
 from utils.auth import get_user_from_token
 
 # Import handlers
-from handlers.auth_handler import handle_register, handle_login, handle_logout, handle_get_me, handle_request_password_reset, handle_reset_password, handle_request_verification_code, handle_verify_code
+from handlers.auth_handler import handle_register, handle_login, handle_logout, handle_get_me, handle_request_password_reset, handle_reset_password, handle_request_verification_code, handle_verify_code, handle_delete_account
 from handlers.city_handler import handle_city_search
 from handlers.profile_handler import handle_update_profile
 from handlers.gallery_handler import (
@@ -35,7 +35,8 @@ from handlers.photo_handler import (
 )
 from handlers.photo_upload_presigned import (
     handle_get_upload_url,
-    handle_confirm_upload
+    handle_confirm_upload,
+    handle_direct_upload
 )
 from handlers.multipart_upload_handler import (
     handle_initialize_multipart_upload,
@@ -50,6 +51,7 @@ from handlers.contact_handler import handle_contact_submit
 from handlers.billing_handler import (
     handle_create_checkout_session,
     handle_get_billing_history,
+    handle_get_invoice_pdf,
     handle_get_subscription,
     handle_cancel_subscription,
     handle_stripe_webhook,
@@ -70,7 +72,9 @@ from handlers.analytics_handler import (
     handle_track_photo_view,
     handle_track_photo_download,
     handle_track_gallery_share,
-    handle_track_photo_share
+    handle_track_photo_share,
+    handle_track_bulk_download,
+    handle_get_bulk_downloads
 )
 from handlers.client_favorites_handler import (
     handle_add_favorite,
@@ -178,6 +182,13 @@ def handler(event, context):
         
         if path == '/v1/auth/logout' and method == 'POST':
             return handle_logout(event)
+        
+        if path == '/v1/auth/delete-account' and method == 'DELETE':
+            # Requires authentication
+            user = get_user_from_token(event)
+            if not user:
+                return create_response(401, {'error': 'Authentication required'})
+            return handle_delete_account(user)
         
         if path == '/v1/auth/forgot-password' and method == 'POST':
             return handle_request_password_reset(body)
@@ -293,6 +304,19 @@ def handler(event, context):
             user = get_user_from_token(event)
             return handle_track_photo_share(photo_id, platform, user, metadata)
         
+        # Bulk download tracking endpoint (PUBLIC - tracks downloads from all users)
+        if path.startswith('/v1/analytics/track/bulk-download/') and method == 'POST':
+            gallery_id = path.split('/')[-1]
+            metadata = body.get('metadata', {})
+            # Get user from token if available (for analytics)
+            user = get_user_from_token(event)
+            viewer_user_id = user.get('id') if user else None
+            # Extract IP address from request
+            request_context = event.get('requestContext', {})
+            identity = request_context.get('identity', {})
+            client_ip = identity.get('sourceIp', 'unknown')
+            return handle_track_bulk_download(gallery_id, viewer_user_id, metadata, client_ip)
+        
         # Visitor tracking endpoints (PUBLIC - tracks ALL visitors for UX improvement)
         # These are mandatory for understanding user behavior and improving UX
         if path == '/v1/visitor/track/visit' and method == 'POST':
@@ -370,6 +394,9 @@ def handler(event, context):
             if '/upload-url' in path and method == 'POST':
                 return handle_get_upload_url(gallery_id, user, event)
             
+            if '/direct-upload' in path and method == 'POST':
+                return handle_direct_upload(gallery_id, user, event)
+            
             if '/confirm-upload' in path and method == 'POST':
                 return handle_confirm_upload(gallery_id, user, event)
             
@@ -391,12 +418,14 @@ def handler(event, context):
             if '/delete' in path and method == 'DELETE':
                 return handle_delete_photos(gallery_id, user, event)
             
-            # Bulk download endpoint (authenticated photographers/clients)
-            if '/download-bulk' in path and method == 'POST':
-                return handle_bulk_download(gallery_id, user, event)
-            
             if method == 'POST':
                 return handle_upload_photo(gallery_id, user, event)
+        
+        # Bulk download endpoint (authenticated photographers/clients) - OUTSIDE photos section
+        if path.startswith('/v1/galleries/') and '/download-bulk' in path and method == 'POST':
+            parts = path.split('/')
+            gallery_id = parts[parts.index('galleries') + 1]
+            return handle_bulk_download(gallery_id, user, event)
         
         # Batch email notification endpoint
         if path.startswith('/v1/galleries/') and '/notify-clients' in path and method == 'POST':
@@ -489,6 +518,11 @@ def handler(event, context):
         if path == '/v1/billing/history' and method == 'GET':
             return handle_get_billing_history(user)
         
+        if path.startswith('/v1/billing/invoice/') and path.endswith('/pdf') and method == 'GET':
+            # Extract invoice_id from path: /v1/billing/invoice/{invoice_id}/pdf
+            invoice_id = path.split('/')[-2]
+            return handle_get_invoice_pdf(user, invoice_id)
+        
         if path == '/v1/billing/subscription' and method == 'GET':
             return handle_get_subscription(user)
         
@@ -523,6 +557,9 @@ def handler(event, context):
         # Analytics endpoints
         if path == '/v1/analytics' and method == 'GET':
             return handle_get_overall_analytics(user)
+        
+        if path == '/v1/analytics/bulk-downloads' and method == 'GET':
+            return handle_get_bulk_downloads(user)
         
         if path.startswith('/v1/analytics/galleries/') and method == 'GET':
             gallery_id = path.split('/')[-1]
@@ -563,6 +600,15 @@ def handler(event, context):
             return handle_manual_expiry_check(user)
         
         # ================================================================
+        # ADMIN/SYSTEM ENDPOINTS
+        # ================================================================
+        
+        # Gallery cleanup (automated job - can be triggered manually)
+        if path == '/v1/admin/cleanup/galleries' and method == 'POST':
+            from handlers.gallery_expiration_handler import run_daily_cleanup
+            return run_daily_cleanup()
+        
+        # ================================================================
         # 404 - Endpoint not found
         # ================================================================
         return create_response(404, {
@@ -584,3 +630,88 @@ def handler(event, context):
             'path': path,
             'method': method
         })
+
+# For local development - run Flask directly
+if __name__ == '__main__':
+    import os
+    from flask import Flask, request
+    from flask_cors import CORS
+    
+    def get_required_env(key):
+        """Get required environment variable or raise error"""
+        value = os.environ.get(key)
+        if value is None:
+            raise ValueError(f"Required environment variable '{key}' is not set")
+        return value
+    
+    app = Flask(__name__)
+    
+    # Get CORS origins from environment - REQUIRED
+    frontend_url = get_required_env('FRONTEND_URL')
+    allowed_origins = [frontend_url]
+    
+    # Add additional CORS origins from environment if specified
+    additional_origins = os.environ.get('CORS_ADDITIONAL_ORIGINS')
+    if additional_origins:
+        allowed_origins.extend([origin.strip() for origin in additional_origins.split(',')])
+    
+    # Enable CORS for local development
+    CORS(app, resources={
+        r"/*": {
+            "origins": allowed_origins,
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization", "Cookie"],
+            "supports_credentials": True,
+            "expose_headers": ["Set-Cookie"]
+        }
+    })
+    
+    @app.route('/', defaults={'path': ''}, methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+    @app.route('/<path:path>', methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'])
+    def catch_all(path):
+        """Route all requests to the Lambda handler"""
+        # Get client IP address (support both direct and proxied requests)
+        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        if client_ip and ',' in client_ip:
+            # X-Forwarded-For can contain multiple IPs, take the first one
+            client_ip = client_ip.split(',')[0].strip()
+        
+        event = {
+            'httpMethod': request.method,
+            'path': '/' + path if path else '/',
+            'headers': dict(request.headers),
+            'body': request.get_data(as_text=True) if request.data else None,
+            'queryStringParameters': dict(request.args) if request.args else None,
+            'requestContext': {
+                'identity': {
+                    'sourceIp': client_ip
+                }
+            }
+        }
+        
+        response = handler(event, None)
+        
+        # Convert Lambda response to Flask response
+        from flask import Response
+        return Response(
+            response.get('body', ''),
+            status=response.get('statusCode', 200),
+            headers=response.get('headers', {})
+        )
+    
+    # Get Flask configuration from environment - REQUIRED
+    port = int(get_required_env('PORT'))
+    host = get_required_env('FLASK_HOST')
+    debug_str = get_required_env('FLASK_DEBUG').lower()
+    debug = debug_str == 'true'
+    
+    # Get values for logging
+    environment = get_required_env('ENVIRONMENT')
+    aws_endpoint = os.environ.get('AWS_ENDPOINT_URL')
+    
+    print(f"🚀 Starting Galerly API on {host}:{port}")
+    print(f"   Environment: {environment}")
+    print(f"   LocalStack: {aws_endpoint if aws_endpoint else 'not configured'}")
+    print(f"   CORS enabled for: {', '.join(allowed_origins)}")
+    
+    app.run(host=host, port=port, debug=debug)

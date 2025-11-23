@@ -3,7 +3,7 @@ Bulk Download Handler - Server-Side ZIP Generation
 Provides fast ZIP downloads by streaming directly from S3
 """
 from boto3.dynamodb.conditions import Key
-from utils.config import s3_client, S3_BUCKET, photos_table, galleries_table
+from utils.config import s3_client, S3_RENDITIONS_BUCKET, photos_table, galleries_table
 from utils.response import create_response
 
 
@@ -39,15 +39,15 @@ def handle_bulk_download(gallery_id, user, event):
         if not (is_owner or is_client):
             return create_response(403, {'error': 'Access denied'})
         
-        # Get pre-generated ZIP URL from S3
+        # Get pre-generated ZIP URL from S3 renditions bucket
         zip_s3_key = f"{gallery_id}/gallery-all-photos.zip"
         
         # Check if ZIP exists in S3
         try:
-            s3_client.head_object(Bucket=S3_BUCKET, Key=zip_s3_key)
-            # ZIP exists - generate CloudFront URL
-            from utils.cdn_urls import CDN_DOMAIN
-            zip_url = f"https://{CDN_DOMAIN}/{zip_s3_key}"
+            s3_client.head_object(Bucket=S3_RENDITIONS_BUCKET, Key=zip_s3_key)
+            # ZIP exists - generate URL
+            from utils.cdn_urls import get_zip_url
+            zip_url = get_zip_url(gallery_id)
             
             gallery_name = gallery.get('name', 'gallery').replace(' ', '-').lower()
             photo_count = gallery.get('photo_count', 0)
@@ -114,17 +114,40 @@ def handle_bulk_download_by_token(event):
         gallery = galleries[0]
         gallery_id = gallery.get('id')
         
+        # Check if gallery owner's account is deleted
+        photographer_id = gallery.get('user_id')
+        if photographer_id:
+            try:
+                from utils.config import users_table
+                photographer_response = users_table.scan(
+                    FilterExpression='id = :id',
+                    ExpressionAttributeValues={':id': photographer_id}
+                )
+                
+                if photographer_response.get('Items'):
+                    photographer = photographer_response['Items'][0]
+                    account_status = photographer.get('account_status', 'ACTIVE')
+                    
+                    if account_status == 'PENDING_DELETION':
+                        return create_response(410, {
+                            'error': 'Download unavailable',
+                            'message': 'This gallery is no longer available. The photographer\'s account has been deactivated.'
+                        })
+            except Exception as e:
+                print(f"⚠️  Error checking photographer status: {e}")
+                # Continue if check fails - don't block download
+        
         print(f"📦 Token-based bulk download for gallery {gallery_id}")
         
-        # Get pre-generated ZIP URL from S3
+        # Get pre-generated ZIP URL from S3 renditions bucket
         zip_s3_key = f"{gallery_id}/gallery-all-photos.zip"
         
         # Check if ZIP exists in S3
         try:
-            s3_client.head_object(Bucket=S3_BUCKET, Key=zip_s3_key)
-            # ZIP exists - generate CloudFront URL
-            from utils.cdn_urls import CDN_DOMAIN
-            zip_url = f"https://{CDN_DOMAIN}/{zip_s3_key}"
+            s3_client.head_object(Bucket=S3_RENDITIONS_BUCKET, Key=zip_s3_key)
+            # ZIP exists - generate URL
+            from utils.cdn_urls import get_zip_url
+            zip_url = get_zip_url(gallery_id)
             
             gallery_name = gallery.get('name', 'gallery').replace(' ', '-').lower()
             photo_count = gallery.get('photo_count', 0)

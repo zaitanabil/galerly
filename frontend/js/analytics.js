@@ -2,6 +2,9 @@
  * Analytics and Insights
  */
 
+// Version check for cache-busting
+console.log('📊 analytics.js v2.2 loaded - Enhanced tracking debugging');
+
 let activityChart = null;
 
 // Load overall analytics
@@ -65,6 +68,29 @@ async function trackPhotoDownload(photoId, galleryId, metadata = {}) {
     }
 }
 
+// Track bulk download
+async function trackBulkDownload(galleryId, metadata = {}) {
+    console.log('🎯 trackBulkDownload called with:', { galleryId, metadata });
+    try {
+        const url = `analytics/track/bulk-download/${galleryId}`;
+        console.log('🎯 Making request to:', url);
+        console.log('🎯 window.apiRequest available?', typeof window.apiRequest);
+        
+        const result = await window.apiRequest(url, {
+            method: 'POST',
+            body: JSON.stringify({ metadata })
+        });
+        
+        console.log('🎯 trackBulkDownload result:', result);
+        return result;
+    } catch (error) {
+        console.error('❌ trackBulkDownload error:', error);
+        console.error('❌ Error message:', error.message);
+        console.error('❌ Error stack:', error.stack);
+        // Don't throw - tracking failures shouldn't break the app
+    }
+}
+
 // Track gallery share
 async function trackGalleryShare(galleryId, platform, metadata = {}) {
     try {
@@ -97,6 +123,7 @@ function displayOverallAnalytics(analytics) {
     const totalViewsEl = document.getElementById('total-views');
     const totalPhotoViewsEl = document.getElementById('total-photo-views');
     const totalDownloadsEl = document.getElementById('total-downloads');
+    const totalBulkDownloadsEl = document.getElementById('total-bulk-downloads');
     
     if (totalViewsEl) {
         totalViewsEl.textContent = analytics.total_views || 0;
@@ -108,6 +135,10 @@ function displayOverallAnalytics(analytics) {
     
     if (totalDownloadsEl) {
         totalDownloadsEl.textContent = analytics.total_downloads || 0;
+    }
+    
+    if (totalBulkDownloadsEl) {
+        totalBulkDownloadsEl.textContent = analytics.total_bulk_downloads || 0;
     }
     
     // Display top galleries
@@ -164,6 +195,12 @@ function displayTopGalleries(galleryStats) {
                                     </div>
                                     <p style="opacity: 0.7; font-size: 14px; margin: 0;">Downloads</p>
                                 </div>
+                                <div>
+                                    <div style="display: flex; align-items: baseline; margin-bottom: 8px;">
+                                        <span style="font-size: 36px; font-weight: 800; line-height: 1;">${gallery.bulk_downloads || 0}</span>
+                                    </div>
+                                    <p style="opacity: 0.7; font-size: 14px; margin: 0;">Bulk Downloads</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -189,11 +226,12 @@ function createActivityChart(analytics) {
     // In the future, we can add daily_stats from individual galleries
     const ctx = canvas.getContext('2d');
     
-    const labels = ['Gallery Views', 'Photo Views', 'Downloads'];
+    const labels = ['Gallery Views', 'Photo Views', 'Downloads', 'Bulk Downloads'];
     const data = [
         analytics.total_views || 0,
         analytics.total_photo_views || 0,
-        analytics.total_downloads || 0
+        analytics.total_downloads || 0,
+        analytics.total_bulk_downloads || 0
     ];
     
     activityChart = new Chart(ctx, {
@@ -206,12 +244,14 @@ function createActivityChart(analytics) {
                 backgroundColor: [
                     'rgba(0, 102, 204, 0.8)',
                     'rgba(0, 119, 255, 0.8)',
-                    'rgba(0, 136, 255, 0.8)'
+                    'rgba(0, 136, 255, 0.8)',
+                    'rgba(0, 153, 255, 0.8)'
                 ],
                 borderColor: [
                     'rgba(0, 102, 204, 1)',
                     'rgba(0, 119, 255, 1)',
-                    'rgba(0, 136, 255, 1)'
+                    'rgba(0, 136, 255, 1)',
+                    'rgba(0, 153, 255, 1)'
                 ],
                 borderWidth: 2,
                 borderRadius: 8,
@@ -348,9 +388,267 @@ window.loadGalleryAnalytics = loadGalleryAnalytics;
 window.trackGalleryView = trackGalleryView;
 window.trackPhotoView = trackPhotoView;
 window.trackPhotoDownload = trackPhotoDownload;
+window.trackBulkDownload = trackBulkDownload;
 window.trackGalleryShare = trackGalleryShare;
 window.trackPhotoShare = trackPhotoShare;
 window.displayOverallAnalytics = displayOverallAnalytics;
+
+
+// Bulk download modal functionality
+async function openBulkDownloadModal() {
+    const modal = document.getElementById('bulkDownloadModal');
+    const body = document.body;
+    
+    // Show modal with animation
+    modal.style.display = 'flex';
+    body.style.overflow = 'hidden'; // Prevent background scrolling
+    
+    // Load logs
+    await loadBulkDownloadLogs();
+}
+
+function closeBulkDownloadModal() {
+    const modal = document.getElementById('bulkDownloadModal');
+    const body = document.body;
+    
+    modal.style.display = 'none';
+    body.style.overflow = ''; // Restore scrolling
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        closeBulkDownloadModal();
+    }
+});
+
+async function loadBulkDownloadLogs() {
+    const modalBody = document.getElementById('bulkDownloadModalBody');
+    
+    try {
+        modalBody.innerHTML = `
+            <div style="text-align: center; padding: 60px 20px;">
+                <div style="
+                    width: 60px;
+                    height: 60px;
+                    margin: 0 auto 24px;
+                    border-radius: 50%;
+                    background: rgba(0, 102, 204, 0.1);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    animation: pulse 2s infinite;
+                ">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0066CC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                </div>
+                <p style="
+                    font-family: 'SF Pro Text', -apple-system, sans-serif;
+                    font-size: 16px;
+                    color: #86868B;
+                    margin: 0;
+                ">Loading download history...</p>
+            </div>
+        `;
+        
+        // Fetch bulk download events from analytics
+        const response = await window.apiRequest('analytics/bulk-downloads');
+        
+        if (!response || !response.events || response.events.length === 0) {
+            modalBody.innerHTML = `
+                <div style="text-align: center; padding: 80px 40px;">
+                    <div style="
+                        width: 80px;
+                        height: 80px;
+                        margin: 0 auto 24px;
+                        border-radius: 50%;
+                        background: rgba(0, 0, 0, 0.03);
+                        display: flex;
+                        align-items: center;
+                        justify-content: center;
+                    ">
+                        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#86868B" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                    </div>
+                    <h3 style="
+                        font-family: 'SF Pro Display', -apple-system, sans-serif;
+                        font-size: 24px;
+                        font-weight: 300;
+                        color: #1D1D1F;
+                        margin: 0 0 12px 0;
+                        letter-spacing: -0.3px;
+                    ">No Downloads Yet</h3>
+                    <p style="
+                        font-family: 'SF Pro Text', -apple-system, sans-serif;
+                        font-size: 16px;
+                        color: #86868B;
+                        margin: 0;
+                        line-height: 1.5;
+                    ">Download history will appear here when someone<br>downloads all photos from your galleries</p>
+                </div>
+            `;
+            return;
+        }
+        
+        // Display logs with simple, clean cards
+        let html = '';
+        
+        // Simple statistics summary
+        if (response.statistics) {
+            const stats = response.statistics;
+            html += `
+                <div style="
+                    display: flex;
+                    gap: 32px;
+                    padding: 24px 0;
+                    margin-bottom: 32px;
+                    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+                ">
+                    <div>
+                        <p style="
+                            font-family: 'SF Pro Display', -apple-system, sans-serif;
+                            font-size: 32px;
+                            font-weight: 300;
+                            color: #1D1D1F;
+                            margin: 0 0 4px 0;
+                            line-height: 1;
+                        ">${stats.total_downloads}</p>
+                        <p style="
+                            font-family: 'SF Pro Text', -apple-system, sans-serif;
+                            font-size: 14px;
+                            color: #86868B;
+                            margin: 0;
+                        ">Downloads</p>
+                    </div>
+                    <div>
+                        <p style="
+                            font-family: 'SF Pro Display', -apple-system, sans-serif;
+                            font-size: 32px;
+                            font-weight: 300;
+                            color: #1D1D1F;
+                            margin: 0 0 4px 0;
+                            line-height: 1;
+                        ">${stats.unique_visitors}</p>
+                        <p style="
+                            font-family: 'SF Pro Text', -apple-system, sans-serif;
+                            font-size: 14px;
+                            color: #86868B;
+                            margin: 0;
+                        ">Unique visitors</p>
+                    </div>
+                </div>
+            `;
+        }
+        
+        // Group events by visitor
+        const visitorGroups = {};
+        response.events.forEach(event => {
+            const visitorId = event.visitor_id || 'unknown';
+            if (!visitorGroups[visitorId]) {
+                visitorGroups[visitorId] = [];
+            }
+            visitorGroups[visitorId].push(event);
+        });
+        
+        // Display one entry per unique visitor (showing most recent download)
+        Object.values(visitorGroups).forEach(events => {
+            // Take the most recent event (first in array since sorted by newest)
+            const event = events[0];
+            const date = new Date(event.timestamp);
+            const timeAgo = getTimeAgo(event.timestamp);
+            const metadata = event.metadata || {};
+            
+            const downloaderName = metadata.downloader_name || 'Unknown';
+            const downloaderType = metadata.downloader_type || 'viewer';
+            const isOwner = metadata.is_owner_download || false;
+            const photoCount = metadata.photo_count || 0;
+            const galleryName = event.gallery_name || 'Unknown Gallery';
+            const downloadCount = event.visitor_download_count || 1;
+            const isRepeatVisitor = downloadCount > 1;
+            
+            html += `
+                <div style="
+                    padding: 20px 0;
+                    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;">
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                <p style="
+                                    font-family: 'SF Pro Text', -apple-system, sans-serif;
+                                    font-size: 16px;
+                                    font-weight: 500;
+                                    color: #1D1D1F;
+                                    margin: 0;
+                                ">${escapeHtml(downloaderName)}</p>
+                                ${isOwner ? `<span style="
+                                    font-size: 10px;
+                                    color: #0066CC;
+                                    font-weight: 600;
+                                    letter-spacing: 0.3px;
+                                ">YOU</span>` : ''}
+                            </div>
+                            <p style="
+                                font-family: 'SF Pro Text', -apple-system, sans-serif;
+                                font-size: 14px;
+                                color: #86868B;
+                                margin: 0;
+                            ">${escapeHtml(galleryName)} • ${isRepeatVisitor ? `${downloadCount} downloads` : `${photoCount} photos`}</p>
+                        </div>
+                        <p style="
+                            font-family: 'SF Pro Text', -apple-system, sans-serif;
+                            font-size: 13px;
+                            color: #86868B;
+                            margin: 0;
+                            flex-shrink: 0;
+                        ">${timeAgo}</p>
+                    </div>
+                </div>
+            `;
+        });
+        
+        modalBody.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error loading bulk download logs:', error);
+        modalBody.innerHTML = `
+            <div style="text-align: center; padding: 60px 40px;">
+                <div style="
+                    width: 60px;
+                    height: 60px;
+                    margin: 0 auto 24px;
+                    border-radius: 50%;
+                    background: rgba(239, 68, 68, 0.1);
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                ">
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"></circle>
+                        <line x1="15" y1="9" x2="9" y2="15"></line>
+                        <line x1="9" y1="9" x2="15" y2="15"></line>
+                    </svg>
+                </div>
+                <p style="
+                    font-family: 'SF Pro Text', -apple-system, sans-serif;
+                    font-size: 16px;
+                    color: #ef4444;
+                    margin: 0;
+                ">Failed to load download history</p>
+            </div>
+        `;
+    }
+}
+
+// Export modal functions
+window.openBulkDownloadModal = openBulkDownloadModal;
+window.closeBulkDownloadModal = closeBulkDownloadModal;
 
 
 

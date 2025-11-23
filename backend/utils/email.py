@@ -8,13 +8,20 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
-# SMTP Configuration
-SMTP_HOST = os.environ.get('SMTP_HOST', 'mail.privateemail.com')  # Namecheap SMTP
-SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))  # TLS port
-SMTP_USER = os.environ.get('SMTP_USER', 'noreply@galerly.com')
-SMTP_PASSWORD = os.environ.get('SMTP_PASSWORD', '')  # Set this in environment
-FROM_EMAIL = os.environ.get('FROM_EMAIL', 'noreply@galerly.com')
-FROM_NAME = os.environ.get('FROM_NAME', 'Galerly')
+def get_required_env(key):
+    """Get required environment variable or raise error"""
+    value = os.environ.get(key)
+    if value is None:
+        raise ValueError(f"Required environment variable '{key}' is not set")
+    return value
+
+# SMTP Configuration - ALL REQUIRED
+SMTP_HOST = get_required_env('SMTP_HOST')
+SMTP_PORT = int(get_required_env('SMTP_PORT'))
+SMTP_USER = get_required_env('SMTP_USER')
+SMTP_PASSWORD = get_required_env('SMTP_PASSWORD')
+FROM_EMAIL = get_required_env('FROM_EMAIL')
+FROM_NAME = get_required_env('FROM_NAME')
 
 # Import branded email templates
 from .email_templates_branded import BRANDED_EMAIL_TEMPLATES
@@ -102,7 +109,7 @@ def send_welcome_email(user_email, user_name):
         'welcome',
         {
             'name': user_name or 'there',
-            'dashboard_url': os.environ.get('FRONTEND_URL', 'https://galerly.com') + '/dashboard'
+            'dashboard_url': get_required_env('FRONTEND_URL') + '/dashboard'
         }
     )
 
@@ -133,7 +140,7 @@ def send_gallery_shared_email(client_email, client_name, photographer_name, gall
     else:
         template_name = 'gallery_shared_no_account'
     
-    signup_url = f"{os.environ.get('FRONTEND_URL', 'https://galerly.com')}/auth?email={client_email}&redirect=client-gallery"
+    signup_url = f"{get_required_env('FRONTEND_URL')}/auth?email={client_email}&redirect=client-gallery"
     
     return send_email(
         client_email,
@@ -152,7 +159,7 @@ def send_gallery_shared_email(client_email, client_name, photographer_name, gall
 
 def send_password_reset_email(user_email, user_name, reset_token):
     """Send password reset email"""
-    reset_url = f"{os.environ.get('FRONTEND_URL', 'https://galerly.com')}/reset-password?token={reset_token}"
+    reset_url = f"{get_required_env('FRONTEND_URL')}/reset-password?token={reset_token}"
     return send_email(
         user_email,
         'password_reset',
@@ -331,7 +338,7 @@ def send_refund_request_confirmation_email(user_email, user_name, refund_id):
 def send_admin_refund_request_notification(refund_id, user_email, user_name, plan, reason, eligibility_details):
     """Send notification to admin when a refund is requested"""
     # Use SMTP_USER (support@galerly.com) as admin email
-    admin_email = os.environ.get('SMTP_USER', 'support@galerly.com')
+    admin_email = get_required_env('SMTP_USER')
     
     # Format eligibility details
     details_str = '\n'.join([f"{k}: {v}" for k, v in eligibility_details.items()])
@@ -346,7 +353,7 @@ def send_admin_refund_request_notification(refund_id, user_email, user_name, pla
             'plan': plan,
             'reason': reason,
             'details': details_str,
-            'admin_url': f"{os.environ.get('FRONTEND_URL', 'https://galerly.com')}/admin/refunds/{refund_id}"
+            'admin_url': f"{get_required_env('FRONTEND_URL')}/admin/refunds/{refund_id}"
         }
     )
 
@@ -364,4 +371,36 @@ def send_refund_status_update_email(user_email, user_name, refund_id, status, ad
             'support_email': 'support@galerly.com'
         }
     )
+
+
+def send_gallery_expiration_notice(photographer_email, gallery_name, gallery_id):
+    """Send notification to photographer when their gallery has expired and been archived"""
+    frontend_url = get_required_env('FRONTEND_URL')
+    support_email = get_required_env('SMTP_USER')  # Support email
+    return send_email(
+        photographer_email,
+        'gallery_expired',
+        {
+            'gallery_name': gallery_name,
+            'gallery_id': gallery_id,
+            'gallery_url': f"{frontend_url}/gallery?id={gallery_id}",
+            'support_email': support_email,
+            'frontend_url': frontend_url
+        }
+    )
+
+
+def send_gallery_deletion_notice(photographer_email, gallery_name, archived_days):
+    """Send notification to photographer when their archived gallery is permanently deleted"""
+    support_email = get_required_env('SMTP_USER')  # Support email
+    return send_email(
+        photographer_email,
+        'gallery_deleted',
+        {
+            'gallery_name': gallery_name,
+            'archived_days': archived_days,
+            'support_email': support_email
+        }
+    )
+
 

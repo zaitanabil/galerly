@@ -277,7 +277,7 @@ function displaySubscription(subscription) {
     // Check for pending plan change
     const pendingPlan = subscription.pending_plan;
     const pendingPlanChangeAt = subscription.pending_plan_change_at;
-    const pendingPlanName = pendingPlan ? (pendingPlan === 'free' ? 'Starter' : pendingPlan === 'professional' ? 'Professional' : 'Business') : null;
+    const pendingPlanName = pendingPlan ? (pendingPlan === 'free' ? 'Starter' : pendingPlan === 'plus' ? 'Plus' : 'Pro') : null;
     
     let html = `
         <div style="display: flex; align-items: baseline; margin: 24px 0;">
@@ -429,7 +429,7 @@ function displayUsage(usage) {
         let upgradePlan = 'plus'; // Default: Starter → Plus
         let upgradePlanName = 'Plus';
         
-        if (currentPlan === 'plus' || currentPlan === 'professional') {
+        if (currentPlan === 'plus' || currentPlan === 'pro') {
             // Plus user approaching limits → upgrade to Pro
             upgradePlan = 'pro';
             upgradePlanName = 'Pro';
@@ -465,55 +465,215 @@ function displayUsage(usage) {
 
 // Display billing history
 function displayBillingHistory(history) {
+    console.log('🎨 displayBillingHistory called with:', history);
     const container = document.getElementById('billing-history');
-    if (!container) return;
+    console.log('🎨 Container element:', container);
     
-    const invoices = history.invoices || [];
-    
-    if (invoices.length === 0) {
-        container.innerHTML = '<p style="opacity: 0.7;">No billing history available.</p>';
+    if (!container) {
+        console.error('❌ No billing-history container found!');
         return;
     }
     
+    const invoices = history.invoices || [];
+    console.log('🎨 Number of invoices to display:', invoices.length);
+    
+    if (invoices.length === 0) {
+        console.log('⚠️  No invoices, showing empty message');
+        container.innerHTML = `
+            <div style="
+                padding: 48px 24px;
+                text-align: center;
+            ">
+                <p style="
+                    margin: 0;
+                    font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                    font-size: 0.9375rem;
+                    color: #86868B;
+                    font-weight: 400;
+                ">No billing history yet.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Apple-style minimal design with subtle dividers
     let html = `
-        <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
-            <thead>
-                <tr>
-                    <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #374151;">Date</th>
-                    <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #374151;">Amount</th>
-                    <th style="padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; font-weight: 600; color: #374151;">Status</th>
-                </tr>
-            </thead>
-            <tbody>
+        <style>
+            @media (max-width: 640px) {
+                .billing-invoice-card {
+                    grid-template-columns: 1fr !important;
+                    gap: 12px !important;
+                    padding: 16px 0 !important;
+                }
+                .billing-invoice-info {
+                    gap: 12px !important;
+                }
+                .billing-invoice-meta {
+                    flex-direction: column !important;
+                    align-items: flex-start !important;
+                    gap: 8px !important;
+                }
+                .billing-invoice-action {
+                    justify-content: flex-start !important;
+                }
+                .billing-download-icon {
+                    width: 36px !important;
+                    height: 36px !important;
+                }
+            }
+        </style>
+        <div style="
+            display: flex;
+            flex-direction: column;
+            margin-top: 24px;
+        ">
     `;
     
     invoices.forEach(invoice => {
-        const date = new Date(invoice.created_at).toLocaleDateString();
-        const statusClass = invoice.status === 'paid' ? 'status-paid' : '';
+        const date = new Date(invoice.created_at).toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+        });
+        const invoiceNumber = invoice.invoice_number || invoice.stripe_invoice_id || 'N/A';
+        const showButton = (invoice.status === 'paid' && invoice.stripe_invoice_id);
+        
+        console.log(`📋 Invoice: status="${invoice.status}", stripe_invoice_id="${invoice.stripe_invoice_id}", showButton: ${showButton}`);
+        
         html += `
-            <tr>
-                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">${date}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">$${invoice.amount?.toFixed(2) || '0.00'} ${invoice.currency?.toUpperCase() || 'USD'}</td>
-                <td style="padding: 12px; border-bottom: 1px solid #e5e7eb;">
-                    <span style="color: ${invoice.status === 'paid' ? '#10b981' : '#6b7280'}; font-weight: 600;">${invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}</span>
-                </td>
-            </tr>
+            <div class="billing-invoice-card" style="
+                display: grid;
+                grid-template-columns: 1fr auto;
+                gap: 24px;
+                align-items: center;
+                padding: 20px 0;
+                border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+                transition: all 0.15s ease;
+            "
+            onmouseover="this.style.background='rgba(0, 0, 0, 0.02)'; this.style.marginLeft='-24px'; this.style.marginRight='-24px'; this.style.paddingLeft='24px'; this.style.paddingRight='24px'; this.style.borderRadius='12px'"
+            onmouseout="this.style.background='transparent'; this.style.marginLeft='0'; this.style.marginRight='0'; this.style.paddingLeft='0'; this.style.paddingRight='0'; this.style.borderRadius='0'">
+                
+                <!-- Left side: Invoice info -->
+                <div class="billing-invoice-info" style="display: flex; flex-direction: column; gap: 6px; min-width: 0;">
+                    <!-- Invoice number and date -->
+                    <div style="display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap;">
+                        <span style="
+                            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                            font-size: 1.0625rem;
+                            font-weight: 600;
+                            color: #1D1D1F;
+                            letter-spacing: -0.015em;
+                        ">${invoiceNumber}</span>
+                        <span style="
+                            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                            font-size: 0.8125rem;
+                            color: #86868B;
+                            font-weight: 400;
+                        ">${date}</span>
+                    </div>
+                    
+                    <!-- Amount and status -->
+                    <div class="billing-invoice-meta" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                        <span style="
+                            font-family: SF Pro Display, -apple-system, BlinkMacSystemFont, sans-serif;
+                            font-size: 0.9375rem;
+                            font-weight: 400;
+                            color: #1D1D1F;
+                            letter-spacing: -0.01em;
+                        ">$${invoice.amount?.toFixed(2) || '0.00'}</span>
+                        
+                        <span style="
+                            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                            font-weight: 400;
+                            font-size: 0.8125rem;
+                            color: ${invoice.status === 'paid' ? '#34C759' : '#86868B'};
+                        ">${invoice.status.charAt(0).toUpperCase() + invoice.status.slice(1)}</span>
+                    </div>
+                </div>
+                
+                <!-- Right side: Action icon -->
+                <div class="billing-invoice-action" style="display: flex; align-items: center; justify-content: flex-end;">
+                    ${showButton ? `
+                        <button 
+                            class="billing-download-icon"
+                            onclick="downloadInvoice('${invoice.stripe_invoice_id}', '${invoiceNumber}')"
+                            aria-label="Download invoice PDF"
+                            style="
+                                display: inline-flex;
+                                align-items: center;
+                                justify-content: center;
+                                width: 40px;
+                                height: 40px;
+                                padding: 0;
+                                background: transparent;
+                                border: none;
+                                border-radius: 50%;
+                                color: #0066CC;
+                                cursor: pointer;
+                                transition: all 0.15s ease;
+                            "
+                            onmouseover="this.style.background='rgba(0, 102, 204, 0.1)'; this.style.transform='scale(1.05)'"
+                            onmouseout="this.style.background='transparent'; this.style.transform='scale(1)'"
+                        >
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                <polyline points="7 10 12 15 17 10"></polyline>
+                                <line x1="12" y1="15" x2="12" y2="3"></line>
+                            </svg>
+                        </button>
+                    ` : `
+                        <span style="
+                            width: 40px;
+                            height: 40px;
+                            display: inline-flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
+                            font-size: 1rem;
+                            color: #D1D1D6;
+                        ">—</span>
+                    `}
+                </div>
+            </div>
         `;
     });
     
-    html += `
-            </tbody>
-        </table>
-    `;
+    html += `</div>`;
     
     container.innerHTML = html;
 }
 
+// Download invoice PDF
+async function downloadInvoice(stripeInvoiceId, invoiceNumber) {
+    try {
+        console.log(`📄 Downloading invoice ${stripeInvoiceId} (${invoiceNumber})...`);
+        
+        // Call backend endpoint which will redirect to Stripe PDF
+        // Note: API_BASE_URL already includes /v1
+        const apiUrl = window.GalerlyConfig?.API_BASE_URL || window.API_BASE_URL || '';
+        const url = `${apiUrl}/billing/invoice/${stripeInvoiceId}/pdf`;
+        
+        console.log(`📄 Opening PDF URL: ${url}`);
+        
+        // Open in new tab - backend will redirect to Stripe PDF
+        window.open(url, '_blank');
+        
+    } catch (error) {
+        console.error('❌ Error downloading invoice:', error);
+        alert('Failed to download invoice. Please try again or contact support.');
+    }
+}
+
 // Initialize billing page
 async function initBillingPage() {
+    console.log('🎬 Initializing billing page...');
+    
     // Verify authentication with backend (HttpOnly cookie)
     const isAuth = window.isAuthenticated ? await window.isAuthenticated() : false;
+    console.log('🔐 Authentication status:', isAuth);
+    
     if (!isAuth) {
+        console.log('❌ Not authenticated, redirecting to login...');
         window.location.href = window.GalerlyConfig.LOGIN_PAGE;
         return;
     }
@@ -582,18 +742,29 @@ async function initBillingPage() {
     
     try {
         // Load subscription and usage
+        console.log('📊 Loading subscription and usage...');
         const [subscription, usage] = await Promise.all([
             loadSubscription(),
             loadUsage()
         ]);
+        console.log('✅ Subscription loaded:', subscription);
+        console.log('✅ Usage loaded:', usage);
         
         displaySubscription(subscription);
         displayUsage(usage);
         
         // Load billing history if on billing page
         if (document.getElementById('billing-history')) {
+            console.log('📋 Found billing-history element, loading history...');
             const history = await loadBillingHistory();
+            console.log('✅ Billing history loaded:', history);
+            console.log('📋 Number of invoices:', history.invoices?.length || 0);
+            if (history.invoices && history.invoices.length > 0) {
+                console.log('📋 First invoice:', history.invoices[0]);
+            }
             displayBillingHistory(history);
+        } else {
+            console.log('⚠️  No billing-history element found on page');
         }
         
         // Display all plans with current plan highlighted
@@ -651,6 +822,7 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
             features: [
                 'Unlimited galleries',
                 '50 GB storage',
+                'Video support (30 min, up to HD)',
                 'Priority email support',
                 'All Starter features',
                 'Batch photo uploads',
@@ -665,6 +837,7 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
             features: [
                 'Unlimited galleries',
                 '200 GB storage',
+                'Video support (2 hours, up to 4K)',
                 'Priority support (12-24h)',
                 'Dedicated support',
                 'All Plus features',
@@ -680,20 +853,25 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
     plans.forEach(plan => {
         const isCurrentPlan = plan.id === currentPlanId;
         const isFree = plan.id === 'free';
-        const isUpgrade = !isCurrentPlan && !isFree && (currentPlanId === 'free' || 
-            (currentPlanId === 'professional' && plan.id === 'business'));
-        const isDowngrade = !isCurrentPlan && currentPlanId !== 'free' && 
-            (plan.id === 'free' || (currentPlanId === 'business' && plan.id === 'professional'));
+        
+        // Define plan pricing for upgrade/downgrade logic
+        const planPrices = { 'free': 0, 'plus': 12, 'pro': 24 };
+        const currentPrice = planPrices[currentPlanId] || 0;
+        const targetPrice = planPrices[plan.id] || 0;
+        
+        // Determine if upgrade or downgrade based on price
+        const isUpgrade = !isCurrentPlan && !isFree && currentPlanId !== 'free' && targetPrice > currentPrice;
+        const isDowngrade = !isCurrentPlan && currentPlanId !== 'free' && (targetPrice < currentPrice || plan.id === 'free');
         
         // Check if this is a reactivation scenario (pending_plan='free' but user wants current plan)
         const isReactivation = (
             pendingPlan === 'free' && 
             isCurrentPlan && 
-            (plan.id === 'professional' || plan.id === 'business')
+            (plan.id === 'plus' || plan.id === 'pro')
         );
         
         // Debug logging for reactivation detection
-        if (isCurrentPlan && (plan.id === 'professional' || plan.id === 'business')) {
+        if (isCurrentPlan && (plan.id === 'plus' || plan.id === 'pro')) {
         }
         
         let buttonText = '';
@@ -708,14 +886,11 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
             buttonText = 'Current Plan';
             buttonStyle += ' background: #e5e7eb; color: #6b7280; cursor: not-allowed;';
             buttonClass += ' current-plan-btn';
-        } else if (isUpgrade) {
+        } else if (isUpgrade || (currentPlanId === 'free' && !isFree)) {
             buttonText = `Upgrade to ${plan.name}`;
             buttonStyle += ' background: linear-gradient(90deg, #0066CC, #0077FF); color: white;';
         } else if (isDowngrade) {
             buttonText = `Downgrade to ${plan.name}`;
-            buttonStyle += ' background: #f3f4f6; color: #374151;';
-        } else if (isFree && currentPlanId !== 'free') {
-            buttonText = `Switch to ${plan.name}`;
             buttonStyle += ' background: #f3f4f6; color: #374151;';
         }
         
@@ -733,7 +908,7 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
                                 <span style="margin-left: 8px; opacity: 0.6;">${plan.price === 0 ? '' : '/month'}</span>
                             </div>
                             <p style="margin-bottom: 32px;">
-                                ${plan.id === 'free' ? 'Perfect for getting started' : plan.id === 'professional' ? 'Everything you need to grow' : 'Built for teams'}
+                                ${plan.id === 'free' ? 'Perfect for getting started' : plan.id === 'plus' ? 'Everything you need to grow' : 'Built for teams and professionals'}
                             </p>
                             <ul style="list-style: none; padding: 0; margin: 24px 0;">
                                 ${plan.features.map(feature => `<li style="margin-bottom: 12px;">→ ${feature}</li>`).join('')}
@@ -766,7 +941,7 @@ function setupPlanChangeButtons() {
     changeButtons.forEach(button => {
         button.addEventListener('click', async (e) => {
             e.preventDefault();
-            const planId = button.dataset.plan || 'professional';
+            const planId = button.dataset.plan || 'plus';
             const buttonText = button.querySelector('.main-6 span') || button;
             const originalText = buttonText.textContent;
             
@@ -785,7 +960,7 @@ function setupPlanChangeButtons() {
             const isReactivation = (
                 pendingPlan === 'free' && 
                 currentPlanId === planId && 
-                (planId === 'professional' || planId === 'business')
+                (planId === 'plus' || planId === 'pro')
             );
             
             // If reactivation, use changePlan endpoint
@@ -844,17 +1019,17 @@ function setupPlanChangeButtons() {
                 }
             }
             
-            // Check if changing between paid plans (Business <-> Professional)
+            // Check if changing between paid plans (Plus <-> Pro)
             // Also allow if user has pending_plan and wants to change to a different paid plan
             const isPaidPlanChange = (
-                (currentPlanId === 'professional' || currentPlanId === 'business' || currentPlanId === 'plus' || currentPlanId === 'pro') && 
-                (planId === 'professional' || planId === 'business' || planId === 'plus' || planId === 'pro') && 
+                (currentPlanId === 'plus' || currentPlanId === 'pro') && 
+                (planId === 'plus' || planId === 'pro') && 
                 (currentPlanId !== planId || (pendingPlan && pendingPlan !== planId))
             );
             
             if (isPaidPlanChange) {
                 // Determine if this is a downgrade (lower price)
-                const planPrices = { 'free': 0, 'plus': 12, 'professional': 12, 'pro': 24, 'business': 24 };
+                const planPrices = { 'free': 0, 'plus': 12, 'pro': 24 };
                 const currentPrice = planPrices[currentPlanId] || 0;
                 const targetPrice = planPrices[planId] || 0;
                 const isDowngrade = targetPrice < currentPrice;
@@ -992,7 +1167,7 @@ async function setupUpgradeButtons() {
     upgradeButtons.forEach(button => {
         button.addEventListener('click', async (e) => {
             e.preventDefault();
-            const planId = button.dataset.plan || 'professional';
+            const planId = button.dataset.plan || 'plus';
             
             try {
                 button.disabled = true;

@@ -222,7 +222,19 @@ function updateModalContent() {
     
     // Update status - clients can see pending or approved
     statusIndicator.className = `status-indicator ${data.status}`;
-    const statusText = data.status === 'pending' ? 'Pending Approval' : 'Approved';
+    
+    // Map status to display text for clients
+    let statusText = 'Ready to Review';
+    if (data.status === 'pending') {
+        statusText = 'Pending Approval';
+    } else if (data.status === 'approved') {
+        statusText = 'Approved';
+    } else if (data.status === 'active') {
+        statusText = 'Ready to Review';
+    } else if (data.status === 'processing') {
+        statusText = 'Processing...';
+    }
+    
     statusIndicator.querySelector('span:last-child').textContent = statusText;
     
     // Update photo number
@@ -478,10 +490,11 @@ function showNotification(message) {
         right: 20px;
         background: #4CAF50;
         color: white;
-        padding: 16px 24px;
-        border-radius: 8px;
+        padding: 14px 28px;
+        border-radius: 999px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         z-index: 10000;
+        white-space: nowrap;
     `;
     notification.textContent = message;
     document.body.appendChild(notification);

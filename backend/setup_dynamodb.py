@@ -1,25 +1,65 @@
 #!/usr/bin/env python3
 """
-Galerly - DynamoDB Setup & Management
-Unified script for creating tables, indexes, and optimizing DynamoDB
-Replaces: create-dynamodb-tables.sh, create-newsletter-table.sh, optimize_dynamodb.sh
+Galerly - DynamoDB Setup & Management (LocalStack Compatible)
+Works with both AWS and LocalStack based on environment configuration
 """
 import boto3
 import time
 import sys
+import os
 from typing import List, Dict
 from botocore.exceptions import ClientError
 
-# Initialize AWS clients
-dynamodb = boto3.client('dynamodb', region_name='us-east-1')
-dynamodb_resource = boto3.resource('dynamodb', region_name='us-east-1')
+# LocalStack detection
+AWS_ENDPOINT_URL = os.environ.get('AWS_ENDPOINT_URL', None)
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+
+# Initialize AWS clients with LocalStack support
+def create_dynamodb_clients():
+    """Create DynamoDB clients with LocalStack support if configured"""
+    client_args = {
+        'service_name': 'dynamodb',
+        'region_name': AWS_REGION
+    }
+    
+    resource_args = {
+        'service_name': 'dynamodb',
+        'region_name': AWS_REGION
+    }
+    
+    # LocalStack configuration
+    if AWS_ENDPOINT_URL:
+        print(f"🔧 Using LocalStack endpoint: {AWS_ENDPOINT_URL}")
+        client_args['endpoint_url'] = AWS_ENDPOINT_URL
+        client_args['aws_access_key_id'] = os.environ.get('AWS_ACCESS_KEY_ID', 'test')
+        client_args['aws_secret_access_key'] = os.environ.get('AWS_SECRET_ACCESS_KEY', 'test')
+        
+        resource_args['endpoint_url'] = AWS_ENDPOINT_URL
+        resource_args['aws_access_key_id'] = os.environ.get('AWS_ACCESS_KEY_ID', 'test')
+        resource_args['aws_secret_access_key'] = os.environ.get('AWS_SECRET_ACCESS_KEY', 'test')
+    
+    return boto3.client(**client_args), boto3.resource(**resource_args)
+
+dynamodb, dynamodb_resource = create_dynamodb_clients()
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# TABLE DEFINITIONS
+# TABLE DEFINITIONS (using environment variables for table names)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+# Get table names from environment (supports local suffixes)
+def get_table_name(base_name):
+    """
+    Get table name from environment or use base name
+    Converts 'galerly-users' to DYNAMODB_TABLE_USERS env var
+    """
+    # Remove 'galerly-' prefix and convert to env var format
+    # galerly-users -> users -> USERS -> DYNAMODB_TABLE_USERS
+    table_suffix = base_name.replace('galerly-', '', 1)
+    env_var = f"DYNAMODB_TABLE_{table_suffix.upper().replace('-', '_')}"
+    return os.environ.get(env_var, base_name)
 
 TABLES = {
-    'galerly-users': {
+    get_table_name('galerly-users'): {
         'AttributeDefinitions': [
             {'AttributeName': 'email', 'AttributeType': 'S'},
             {'AttributeName': 'id', 'AttributeType': 'S'}
@@ -35,7 +75,7 @@ TABLES = {
             }
         ]
     },
-    'galerly-galleries': {
+    get_table_name('galerly-galleries'): {
         'AttributeDefinitions': [
             {'AttributeName': 'user_id', 'AttributeType': 'S'},
             {'AttributeName': 'id', 'AttributeType': 'S'},
@@ -64,7 +104,7 @@ TABLES = {
             }
         ]
     },
-    'galerly-photos': {
+    get_table_name('galerly-photos'): {
         'AttributeDefinitions': [
             {'AttributeName': 'id', 'AttributeType': 'S'},
             {'AttributeName': 'gallery_id', 'AttributeType': 'S'},
@@ -86,7 +126,7 @@ TABLES = {
             }
         ]
     },
-    'galerly-sessions': {
+    get_table_name('galerly-sessions'): {
         'AttributeDefinitions': [
             {'AttributeName': 'token', 'AttributeType': 'S'},
             {'AttributeName': 'user_id', 'AttributeType': 'S'}
@@ -102,7 +142,7 @@ TABLES = {
             }
         ]
     },
-    'galerly-newsletters': {
+    get_table_name('galerly-newsletters'): {
         'AttributeDefinitions': [
             {'AttributeName': 'email', 'AttributeType': 'S'},
             {'AttributeName': 'subscribed_at', 'AttributeType': 'S'}
@@ -118,7 +158,7 @@ TABLES = {
             }
         ]
     },
-    'galerly-contact': {
+    get_table_name('galerly-contact'): {
         'AttributeDefinitions': [
             {'AttributeName': 'id', 'AttributeType': 'S'},
             {'AttributeName': 'created_at', 'AttributeType': 'S'},
@@ -140,7 +180,7 @@ TABLES = {
             }
         ]
     },
-    'galerly-billing': {
+    get_table_name('galerly-billing'): {
         'AttributeDefinitions': [
             {'AttributeName': 'id', 'AttributeType': 'S'},
             {'AttributeName': 'user_id', 'AttributeType': 'S'},
@@ -162,7 +202,7 @@ TABLES = {
             }
         ]
     },
-    'galerly-subscriptions': {
+    get_table_name('galerly-subscriptions'): {
         'AttributeDefinitions': [
             {'AttributeName': 'id', 'AttributeType': 'S'},
             {'AttributeName': 'user_id', 'AttributeType': 'S'},
@@ -184,7 +224,7 @@ TABLES = {
             }
         ]
     },
-    'galerly-analytics': {
+    get_table_name('galerly-analytics'): {
         'AttributeDefinitions': [
             {'AttributeName': 'id', 'AttributeType': 'S'},
             {'AttributeName': 'gallery_id', 'AttributeType': 'S'},
@@ -219,7 +259,7 @@ TABLES = {
             }
         ]
     },
-    'galerly-client-favorites': {
+    get_table_name('galerly-client-favorites'): {
         'AttributeDefinitions': [
             {'AttributeName': 'client_email', 'AttributeType': 'S'},
             {'AttributeName': 'photo_id', 'AttributeType': 'S'}
@@ -230,7 +270,7 @@ TABLES = {
         ],
         'GlobalSecondaryIndexes': []
     },
-    'galerly-client-feedback': {
+    get_table_name('galerly-client-feedback'): {
         'AttributeDefinitions': [
             {'AttributeName': 'id', 'AttributeType': 'S'},
             {'AttributeName': 'gallery_id', 'AttributeType': 'S'},
@@ -259,7 +299,7 @@ TABLES = {
             }
         ]
     },
-    'galerly-visitor-tracking': {
+    get_table_name('galerly-visitor-tracking'): {
         'AttributeDefinitions': [
             {'AttributeName': 'id', 'AttributeType': 'S'},
             {'AttributeName': 'session_id', 'AttributeType': 'S'},
@@ -297,7 +337,7 @@ TABLES = {
             }
         ]
     },
-    'galerly-notification-preferences': {
+    get_table_name('galerly-notification-preferences'): {
         'AttributeDefinitions': [
             {'AttributeName': 'user_id', 'AttributeType': 'S'}
         ],
@@ -306,7 +346,7 @@ TABLES = {
         ],
         'GlobalSecondaryIndexes': []
     },
-    'galerly-refunds': {
+    get_table_name('galerly-refunds'): {
         'AttributeDefinitions': [
             {'AttributeName': 'id', 'AttributeType': 'S'},
             {'AttributeName': 'user_id', 'AttributeType': 'S'},
@@ -332,7 +372,7 @@ TABLES = {
             }
         ]
     },
-    'galerly-audit-log': {
+    get_table_name('galerly-audit-log'): {
         'AttributeDefinitions': [
             {'AttributeName': 'id', 'AttributeType': 'S'},
             {'AttributeName': 'user_id', 'AttributeType': 'S'},
@@ -355,7 +395,7 @@ TABLES = {
 }
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# FUNCTIONS
+# FUNCTIONS (rest of the file remains the same)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def table_exists(table_name: str) -> bool:
@@ -383,11 +423,14 @@ def create_table(table_name: str, config: Dict) -> bool:
             'TableName': table_name,
             'AttributeDefinitions': config['AttributeDefinitions'],
             'KeySchema': config['KeySchema'],
-            'BillingMode': 'PAY_PER_REQUEST',  # On-demand billing
-            'SSESpecification': {
+            'BillingMode': 'PAY_PER_REQUEST'
+        }
+        
+        # LocalStack doesn't support KMS encryption, skip for local
+        if not AWS_ENDPOINT_URL:
+            params['SSESpecification'] = {
                 'Enabled': True,
-                'SSEType': 'KMS'  # Encryption at rest
-            }
+                'SSEType': 'KMS'
         }
         
         # Add GSIs if present and not empty
@@ -417,7 +460,12 @@ def wait_for_tables(table_names: List[str]):
 
 
 def enable_point_in_time_recovery(table_name: str):
-    """Enable Point-in-Time Recovery for backups"""
+    """Enable Point-in-Time Recovery for backups (AWS only, not LocalStack)"""
+    # Skip for LocalStack
+    if AWS_ENDPOINT_URL:
+        print(f"  ⏭️  Skipping PITR for {table_name} (LocalStack)")
+        return
+    
     try:
         dynamodb.update_continuous_backups(
             TableName=table_name,
@@ -462,7 +510,6 @@ def list_tables():
                 print(f"   Status: {status}")
                 print(f"   Items: {item_count}")
                 print(f"   Billing: {billing}")
-                print(f"   Encryption: {'✅' if table.get('SSEDescription') else '❌'}")
                 
                 # List indexes
                 gsi = table.get('GlobalSecondaryIndexes', [])
@@ -480,6 +527,8 @@ def list_tables():
 def create_all_tables():
     """Create all Galerly tables"""
     print("🗄️  Creating DynamoDB tables for Galerly...")
+    if AWS_ENDPOINT_URL:
+        print(f"   Using LocalStack: {AWS_ENDPOINT_URL}")
     print("")
     
     created_tables = []
@@ -492,28 +541,6 @@ def create_all_tables():
         wait_for_tables(created_tables)
     
     print("\n✅ All tables processed!")
-    print("\n📊 Table Structure:")
-    print("  • galerly-users                    → Photographers/users")
-    print("  • galerly-galleries                → Photo galleries (isolated per user)")
-    print("  • galerly-photos                   → Photos (linked to galleries)")
-    print("  • galerly-sessions                 → Auth sessions")
-    print("  • galerly-newsletters              → Newsletter subscribers")
-    print("  • galerly-contact                  → Support tickets")
-    print("  • galerly-billing                  → Billing records")
-    print("  • galerly-subscriptions            → Subscription management")
-    print("  • galerly-refunds                  → Refund requests & status")
-    print("  • galerly-audit-log                → Subscription change audit trail")
-    print("  • galerly-analytics                → Analytics tracking")
-    print("  • galerly-client-favorites         → Client photo favorites")
-    print("  • galerly-client-feedback          → Client gallery feedback")
-    print("  • galerly-visitor-tracking         → Website visitor tracking (UX analytics)")
-    print("  • galerly-notification-preferences → Email notification settings")
-    print("")
-    print("🔒 Security Features:")
-    print("  • Encryption at rest (KMS)")
-    print("  • Pay-per-request billing (cost-efficient)")
-    print("  • User data isolation via partition keys")
-    print("  • Point-in-Time Recovery (backups)")
 
 
 def delete_all_tables():
@@ -544,6 +571,8 @@ def main():
     """Main function"""
     print("=" * 70)
     print("🔧 GALERLY - DynamoDB Setup & Management")
+    if AWS_ENDPOINT_URL:
+        print(f"   LocalStack Mode: {AWS_ENDPOINT_URL}")
     print("=" * 70)
     print("")
     
@@ -576,4 +605,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-

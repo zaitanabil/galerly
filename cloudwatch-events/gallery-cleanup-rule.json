@@ -1,0 +1,19 @@
+{
+  "Comment": "Galerly - Daily Gallery Expiration & Cleanup Job",
+  "Schedule": "cron(0 2 * * ? *)",
+  "Description": "Runs daily at 2:00 AM UTC to archive expired galleries and delete galleries archived for 30+ days",
+  "RuleName": "galerly-daily-gallery-cleanup",
+  "Targets": [
+    {
+      "Arn": "arn:aws:lambda:REGION:ACCOUNT_ID:function:galerly-api",
+      "Id": "1",
+      "Input": {
+        "httpMethod": "POST",
+        "path": "/v1/admin/cleanup/galleries",
+        "body": "{\"action\": \"run_daily_cleanup\"}"
+      }
+    }
+  ],
+  "State": "ENABLED"
+}
+

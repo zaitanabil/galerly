@@ -257,13 +257,20 @@
                   <div class="card-18 hero-10 animation-11 textarea-7">
                     <div class="button-18 list-7">
                       <div class="container-15 item-7">
-                        <h3 class="grid-15 animation-7"> Downloads </h3>
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                          <h3 class="grid-15 animation-7"> Bulk Downloads </h3>
+                          <button onclick="openBulkDownloadModal()" style="background: none; border: none; cursor: pointer; padding: 8px; transition: all 0.3s ease;" id="bulkDownloadToggle" aria-label="View download logs">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="transition: transform 0.3s ease;">
+                              <polyline points="9 18 15 12 9 6"></polyline>
+                            </svg>
+                          </button>
+                        </div>
                         <div class="input-15 background-7">
                           <div style="display: flex; align-items: baseline; margin: 24px 0;">
-                            <span id="total-downloads"
+                            <span id="total-bulk-downloads"
                               style="font-size: 48px; font-weight: 800; line-height: 1;">0</span>
                           </div>
-                          <p> Photos downloaded </p>
+                          <p> Gallery downloads </p>
                         </div>
                       </div>
                     </div>
@@ -290,24 +297,24 @@
                 <!-- Search and Filter Controls -->
                 <div style="grid-column: 1/-1; margin-bottom: var(--size-xl);">
                   <div
-                    style="display: flex; flex-wrap: wrap; gap: var(--size-m); align-items: center; background: var(--primary-5030); padding: var(--size-l); border-radius: var(--border-radius-m);">
+                    style="display: flex; flex-wrap: wrap; gap: var(--size-m); align-items: center; background: var(--primary-5030); padding: var(--size-l); border-radius: 50px;">
                     <!-- Search Input -->
                     <div style="flex: 1; min-width: 250px;">
                       <input type="text" id="gallerySearchInput"
                         placeholder="Search galleries by name, client, or description..."
-                        style="width: 100%; padding: var(--size-m); border: 1px solid var(--primary-5070); border-radius: var(--border-radius-s); background: var(--primary-5020); color: var(--color-text-primary); font-size: 0.9375rem;"
+                        style="width: 100%; padding: var(--size-m); border: 1px solid var(--primary-5070); border-radius: 50px; background: var(--primary-5020); color: var(--color-text-primary); font-size: 0.9375rem;"
                         onkeyup="if(event.key === 'Enter') performGallerySearch()" />
                     </div>
                     <!-- Client Filter -->
                     <div style="min-width: 200px;">
                       <input type="text" id="clientFilterInput" placeholder="Filter by client..."
-                        style="width: 100%; padding: var(--size-m); border: 1px solid var(--primary-5070); border-radius: var(--border-radius-s); background: var(--primary-5020); color: var(--color-text-primary); font-size: 0.9375rem;"
+                        style="width: 100%; padding: var(--size-m); border: 1px solid var(--primary-5070); border-radius: 50px; background: var(--primary-5020); color: var(--color-text-primary); font-size: 0.9375rem;"
                         onkeyup="if(event.key === 'Enter') performGallerySearch()" />
                     </div>
                     <!-- Sort Dropdown -->
                     <div>
                       <select id="gallerySortSelect" onchange="performGallerySearch()"
-                        style="padding: var(--size-m); border: 1px solid var(--primary-5070); border-radius: var(--border-radius-s); background: var(--primary-5020); color: var(--color-text-primary); font-size: 0.9375rem; cursor: pointer;">
+                        style="padding: var(--size-m); border: 1px solid var(--primary-5070); border-radius: 50px; background: var(--primary-5020); color: var(--color-text-primary); font-size: 0.9375rem; cursor: pointer;">
                         <option value="date_desc">Newest First</option>
                         <option value="date_asc">Oldest First</option>
                         <option value="name_asc">Name A-Z</option>
@@ -316,14 +323,14 @@
                     </div>
                     <!-- Search Button -->
                     <button onclick="performGallerySearch()"
-                      style="padding: var(--size-m) var(--size-l); background: var(--color-blue); color: white; border: none; border-radius: var(--border-radius-s); font-weight: 600; cursor: pointer; transition: background 0.2s;"
-                      onmouseover="this.style.background='var(--color-dark-blue)'"
-                      onmouseout="this.style.background='var(--color-blue)'"> Search </button>
+                      style="padding: var(--size-m) var(--size-l); background: var(--color-blue); color: white; border: 1px solid var(--color-blue); border-radius: 50px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                      onmouseover="this.style.background='transparent'; this.style.color='#000000'; this.style.borderColor='#000000'"
+                      onmouseout="this.style.background='var(--color-blue)'; this.style.color='white'; this.style.borderColor='var(--color-blue)'"> Search </button>
                     <!-- Clear Button -->
                     <button onclick="clearGallerySearch()"
-                      style="padding: var(--size-m) var(--size-l); background: transparent; color: var(--color-text-secondary); border: 1px solid var(--primary-5070); border-radius: var(--border-radius-s); font-weight: 600; cursor: pointer; transition: all 0.2s;"
-                      onmouseover="this.style.background='var(--primary-5070)'"
-                      onmouseout="this.style.background='transparent'"> Clear </button>
+                      style="padding: var(--size-m) var(--size-l); background: transparent; color: var(--color-text-secondary); border: 1px solid var(--primary-5070); border-radius: 50px; font-weight: 600; cursor: pointer; transition: all 0.2s;"
+                      onmouseover="this.style.borderColor='#000000'; this.style.color='#000000'"
+                      onmouseout="this.style.borderColor='var(--primary-5070)'; this.style.color='var(--color-text-secondary)'"> Clear </button>
                   </div>
                 </div>
                 <div class="item-11 input-7" id="galleriesGridContainer">
@@ -339,7 +346,7 @@
         </div>
         <!-- Footer -->
         <footer class="card-10 input-4 animation-9 grid-0">
-          <div class="logo-14 textarea-4 "></div>
+          <div class="logo-14 textarea-4"></div>
           <div class="form-18 feature-0">
             <section class="textarea-10 link-4">
               <div class="header-11 list-4">
@@ -347,29 +354,29 @@
                   <div class="background-10 animation-4">
                     <div>
                       <span aria-label="Stay" class="title-14 header-7">
-                        <span class="subtitle-14 nav-7">Stay</span>
+                        <span class="subtitle-14 nav-7"> Stay </span>
                       </span>
                     </div>
-                    <div style="font-style: italic"> — Connected</div>
+                    <div style="font-style: italic"> &mdash; Connected </div>
                   </div>
                   <p class="title-10 background-4">
-                    <strong>Join photographers worldwide</strong>
-                    <br />Get updates, tips, and exclusive features
+                    <strong> Join creators worldwide </strong>
+                    <br> Updates, stories, and early access
                   </p>
                 </div>
                 <div id="newsletter">
-                  <form id="newsletter_form" class="subtitle-10 header-5" enctype="multipart/form-data">
-                    <div style="margin-bottom: 8px" class="logo-10 nav-5">
-                      <input type="text" required="" placeholder="Your name" class="image-10 main-5" name="firstName" />
+                  <form class="subtitle-10 header-5" enctype="multipart/form-data" id="newsletter_form">
+                    <div class="logo-10 nav-5" style="margin-bottom: 8px">
+                      <input class="image-10 main-5" name="firstName" placeholder="Your name" required type="text">
                     </div>
                     <div class="logo-10 nav-5">
-                      <input type="email" required="" placeholder="Your e-mail" class="image-10 main-5" name="email" />
-                      <button aria-label="Confirm" type="submit" class="logo-18 footer-5">
+                      <input class="image-10 main-5" name="email" placeholder="Your e-mail" required type="email">
+                      <button aria-label="Confirm" class="logo-18 footer-5" type="submit">
                         <div class="title-18 main-6 container-0">
-                          <span style="order: 0">Confirm</span>
+                          <span style="order: 0"> Confirm </span>
                           <span class="text-18 feature-7">
-                            <svg width="17" height="14" viewBox="0 0 17 14" fill="none"
-                              color="var(--text-on-button-secondary)">
+                            <svg color="var(--text-on-button-secondary)" fill="none" height="14" viewbox="0 0 17 14"
+                              width="17">
                               <path
                                 d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
                                 stroke="var(--text-on-button-secondary)" stroke-linecap="round"></path>
@@ -387,34 +394,41 @@
           </div>
           <div class="form-18 feature-0">
             <section class="list-10 section-5">
-              <div class="button-10 card-5"> SHARE ART, <br />NOT FILES </div>
+              <div class="button-10 card-5"> SHARE ART, <br> NOT FILES </div>
               <div class="item-10 button-5">
                 <div class="animation-10 text-5">
                   <div style="flex-shrink: 0">
-                    <span class="input-10 title-5">Galerly</span>
-                    <ul id="siteLinksParagraph" class="form-10 subtitle-5">
+                    <span class="input-10 title-5"> Galerly </span>
+                    <ul class="form-10 subtitle-5" id="siteLinksParagraph">
                       <li>
-                        <a class="grid-10 logo-5" href="/">Platform</a>
+                        <a class="grid-10 logo-5" href="/"> Platform </a>
                       </li>
                       <li>
-                        <a class="grid-10 logo-5" href="pricing">Pricing</a>
+                        <a class="grid-10 logo-5" href="pricing"> Pricing </a>
                       </li>
                       <li>
-                        <a class="grid-10 logo-5" href="faq">FAQ</a>
+                        <a class="grid-10 logo-5" href="faq"> FAQ </a>
                       </li>
                       <li>
-                        <a class="grid-10 logo-5" href="contact">Support</a>
+                        <a class="grid-10 logo-5" href="contact"> Support </a>
                       </li>
                     </ul>
                   </div>
                   <div style="flex-shrink: 0">
-                    <span class="input-10 title-5">Follow us</span>
-                    <ul id="socialLinksParagraph" class="form-10 subtitle-5">
+                    <span class="input-10 title-5"> Follow us </span>
+                    <ul class="form-10 subtitle-5" id="socialLinksParagraph">
                       <li>
-                        <a title="Instagram" target="_blank" rel="noopener noreferrer" class="grid-10 logo-5"
-                          href="https://www.instagram.com/withgalerly/">Instagram <svg
-                            xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none"
-                            class="container-10 main-0">
+                        <a class="grid-10 logo-5" href="https://www.instagram.com/withgalerly" rel="noopener noreferrer"
+                          target="_blank" title="Instagram"> Instagram <svg class="container-10 main-0" fill="none"
+                            height="12" viewbox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M11.0435 9.88557L9.48515 9.89576V3.43836L1.12313 11.8004L0.00276604 10.68L8.36478 2.318L1.91758 2.32818V0.759669H11.0435V9.88557Z"
+                              fill="#101116"></path>
+                          </svg>
+                        </a>
+                        <a class="grid-10 logo-5" href="https://www.tiktok.com/@withgalerly" rel="noopener noreferrer"
+                          target="_blank" title="Instagram"> Tiktok <svg class="container-10 main-0" fill="none"
+                            height="12" viewbox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">
                             <path
                               d="M11.0435 9.88557L9.48515 9.89576V3.43836L1.12313 11.8004L0.00276604 10.68L8.36478 2.318L1.91758 2.32818V0.759669H11.0435V9.88557Z"
                               fill="#101116"></path>
@@ -427,12 +441,12 @@
               </div>
             </section>
             <div class="icon-10 image-5">
-              <a href="/" class="link-10 container-5">
+              <a class="link-10 container-5" href="/">
                 <img src="img/footer-logo-dark.svg" />
               </a>
-              <a class="grid-10 logo-5" href="legal-notice">Legal notice</a>
-              <a class="grid-10 logo-5" href="privacy">Privacy policy</a>
-              <div> 2025 © Galerly </div>
+              <a class="grid-10 logo-5" href="legal-notice"> Legal notice </a>
+              <a class="grid-10 logo-5" href="privacy"> Privacy policy </a>
+              <div> 2025 &copy; Galerly </div>
             </div>
           </div>
           <div class="grid-0"></div>
@@ -474,11 +488,87 @@
         </div>
       </div>
     </div>
+    
+    <!-- Bulk Downloads Modal - Glassmorphism Design -->
+    <div id="bulkDownloadModal" class="bulk-download-modal" style="display: none;">
+      <div class="bulk-download-modal-overlay" onclick="closeBulkDownloadModal()"></div>
+      <div class="bulk-download-modal-content">
+        <!-- Modal Header -->
+        <div class="bulk-download-modal-header">
+          <div>
+            <h2 style="
+              font-family: 'SF Pro Display', -apple-system, sans-serif;
+              font-size: 32px;
+              font-weight: 300;
+              color: #1D1D1F;
+              margin: 0 0 8px 0;
+              letter-spacing: -0.5px;
+              line-height: 1.1;
+            ">Download History</h2>
+            <p style="
+              font-family: 'SF Pro Text', -apple-system, sans-serif;
+              font-size: 15px;
+              color: #86868B;
+              margin: 0;
+              font-weight: 400;
+            ">Track who downloaded your galleries</p>
+          </div>
+          <button onclick="closeBulkDownloadModal()" style="
+            background: rgba(0, 0, 0, 0.05);
+            border: none;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            flex-shrink: 0;
+          " onmouseover="this.style.background='rgba(0, 0, 0, 0.1)'" onmouseout="this.style.background='rgba(0, 0, 0, 0.05)'">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1D1D1F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </button>
+        </div>
+        
+        <!-- Modal Body -->
+        <div class="bulk-download-modal-body" id="bulkDownloadModalBody">
+          <div style="text-align: center; padding: 60px 20px;">
+            <div style="
+              width: 60px;
+              height: 60px;
+              margin: 0 auto 24px;
+              border-radius: 50%;
+              background: rgba(0, 102, 204, 0.1);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            ">
+              <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#0066CC" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="12" y1="8" x2="12" y2="12"></line>
+                <line x1="12" y1="16" x2="12.01" y2="16"></line>
+              </svg>
+            </div>
+            <p style="
+              font-family: 'SF Pro Text', -apple-system, sans-serif;
+              font-size: 16px;
+              color: #86868B;
+              margin: 0;
+            ">Loading download history...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <script src="js/rbac.js"></script>
     <script src="js/auth-check.js"></script>
     <script src="js/main.js"></script>
     <!-- Configuration -->
     <script src="js/env-production.js"></script>
+    <script src="config.env.js"></script>
     <script src="js/config.js"></script>
     <!-- Billing (for usage display) -->
     <script src="js/billing.js"></script>

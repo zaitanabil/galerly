@@ -1,169 +1,183 @@
-#!/usr/bin/env python3
 """
-Import /Users/nz-dev/Desktop/business/galerly.com/worldcities.csv to DynamoDB
-with optimized indexes for fast city search
+Import cities from worldcities.csv to DynamoDB
+Processes ~48,000 cities with prefix indexing for fast autocomplete
 """
+
 import csv
 import boto3
+import os
 from decimal import Decimal
-import time
+from botocore.exceptions import ClientError
 
-# Initialize DynamoDB
-dynamodb_client = boto3.client('dynamodb', region_name='us-east-1')
-dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+# Configuration
+IS_LOCAL = os.getenv('AWS_ENDPOINT_URL', '').startswith('http://localhost')
+AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
+AWS_ENDPOINT_URL = os.getenv('AWS_ENDPOINT_URL')  # Read endpoint URL
+CSV_PATH = '/Users/nz-dev/Desktop/business/galerly.com/worldcities.csv'
 
-def create_optimized_table():
-    """Create DynamoDB table with GSI for fast city prefix search"""
-    print("🗄️  Creating optimized galerly-cities table with search indexes...")
+# DynamoDB client
+if IS_LOCAL:
+    dynamodb = boto3.resource(
+        'dynamodb',
+        endpoint_url=AWS_ENDPOINT_URL,  # Use environment variable
+        region_name=AWS_REGION,
+        aws_access_key_id='test',
+        aws_secret_access_key='test'
+    )
+else:
+    dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+
+TABLE_NAME = 'galerly-cities-local' if IS_LOCAL else 'galerly-cities'
+
+
+def generate_prefixes(city_ascii):
+    """
+    Generate prefix strings for indexing
+    Returns: (prefix1, prefix2, prefix3)
+    """
+    city_lower = city_ascii.lower().strip()
     
-    try:
-        # Delete existing table if it exists
-        try:
-            dynamodb_client.describe_table(TableName='galerly-cities')
-            print("⚠️  Existing table found, deleting...")
-            dynamodb_client.delete_table(TableName='galerly-cities')
-            
-            # Wait for deletion
-            waiter = dynamodb_client.get_waiter('table_not_exists')
-            waiter.wait(TableName='galerly-cities')
-            print("✅ Old table deleted")
-        except dynamodb_client.exceptions.ResourceNotFoundException:
-            print("✓ No existing table found")
-        
-        # Create new table with GSI for city search
-        response = dynamodb_client.create_table(
-            TableName='galerly-cities',
-            KeySchema=[
-                {'AttributeName': 'city_ascii', 'KeyType': 'HASH'},
-                {'AttributeName': 'country', 'KeyType': 'RANGE'}
-            ],
-            AttributeDefinitions=[
-                {'AttributeName': 'city_ascii', 'AttributeType': 'S'},
-                {'AttributeName': 'country', 'AttributeType': 'S'},
-                {'AttributeName': 'search_key', 'AttributeType': 'S'},  # For prefix search
-                {'AttributeName': 'population', 'AttributeType': 'N'}   # For sorting
-            ],
-            GlobalSecondaryIndexes=[
-                {
-                    'IndexName': 'search_key-index',
-                    'KeySchema': [
-                        {'AttributeName': 'search_key', 'KeyType': 'HASH'},
-                        {'AttributeName': 'population', 'KeyType': 'RANGE'}
-                    ],
-                    'Projection': {'ProjectionType': 'ALL'}
-                }
-            ],
-            BillingMode='PAY_PER_REQUEST'
-        )
-        
-        print("✅ Table created with optimized search index!")
-        print("⏳ Waiting for table to become active...")
-        
-        waiter = dynamodb_client.get_waiter('table_exists')
-        waiter.wait(TableName='galerly-cities')
-        
-        print("✅ Table is now active!")
-        return True
-        
-    except Exception as e:
-        if 'ResourceInUseException' in str(e):
-            print("✅ Table already exists with correct structure")
-            return True
-        else:
-            print(f"❌ Error creating table: {e}")
-            raise
+    # Generate prefixes (1, 2, 3 characters)
+    prefix1 = city_lower[0] if len(city_lower) >= 1 else ''
+    prefix2 = city_lower[:2] if len(city_lower) >= 2 else city_lower
+    prefix3 = city_lower[:3] if len(city_lower) >= 3 else city_lower
+    
+    return prefix1, prefix2, prefix3
+
 
 def import_cities():
-    """Import cities from CSV to DynamoDB with search optimization"""
-    print("\n📊 Starting import of /Users/nz-dev/Desktop/business/galerly.com/worldcities.csv to DynamoDB...")
+    """Import cities from CSV with batch writing for efficiency"""
+    table = dynamodb.Table(TABLE_NAME)
     
-    table = dynamodb.Table('galerly-cities')
-    batch_size = 25  # DynamoDB batch limit
-    batch = []
+    print(f"📂 Reading cities from: {CSV_PATH}")
+    print(f"📊 Target table: {TABLE_NAME}")
+    print(f"📍 Environment: {'LocalStack' if IS_LOCAL else 'AWS'}\n")
+    
+    batch_size = 25  # DynamoDB batch_writer limit
     total_imported = 0
-    seen_keys = set()  # Track seen city+country combinations
+    total_skipped = 0
     
-    with open('/Users/nz-dev/Desktop/business/galerly.com/worldcities.csv', 'r', encoding='utf-8') as csvfile:
-        reader = csv.DictReader(csvfile)
+    try:
+        with table.batch_writer() as batch:
+            with open(CSV_PATH, 'r', encoding='utf-8') as csvfile:
+                reader = csv.DictReader(csvfile)
+                
+                for row in reader:
+                    try:
+                        # Extract and clean data
+                        city_id = row['id']
+                        city = row['city'].strip()
+                        city_ascii = row['city_ascii'].strip()
+                        country = row['country'].strip()
+                        iso2 = row['iso2'].strip()
+                        iso3 = row['iso3'].strip()
+                        admin_name = row['admin_name'].strip() if row['admin_name'] else ''
+                        
+                        # Parse coordinates and population
+                        try:
+                            lat = Decimal(str(row['lat']))
+                            lng = Decimal(str(row['lng']))
+                            population = int(row['population']) if row['population'] else 0
+                        except (ValueError, TypeError):
+                            # Skip cities with invalid data
+                            total_skipped += 1
+                            continue
+                        
+                        # Generate prefixes for search
+                        prefix1, prefix2, prefix3 = generate_prefixes(city_ascii)
+                        
+                        # Prepare item
+                        item = {
+                            'city_id': city_id,
+                            'city': city,
+                            'city_ascii': city_ascii,
+                            'city_lower': city_ascii.lower(),  # For exact matching
+                            'country': country,
+                            'iso2': iso2,
+                            'iso3': iso3,
+                            'admin_name': admin_name,
+                            'lat': lat,
+                            'lng': lng,
+                            'population': population,
+                            'prefix1': prefix1,
+                            'prefix2': prefix2,
+                            'prefix3': prefix3,
+                            'display_name': f"{city}, {admin_name}, {country}" if admin_name else f"{city}, {country}"
+                        }
+                        
+                        # Write to DynamoDB
+                        batch.put_item(Item=item)
+                        total_imported += 1
+                        
+                        # Progress indicator
+                        if total_imported % 1000 == 0:
+                            print(f"✅ Imported {total_imported} cities...")
+                            
+                    except Exception as e:
+                        print(f"⚠️  Error importing {row.get('city', 'unknown')}: {e}")
+                        total_skipped += 1
+                        continue
         
-        for row in reader:
-            # Create unique key
-            key = (row['city_ascii'], row['country'])
-            
-            # Skip duplicates (keep only first occurrence)
-            if key in seen_keys:
-                continue
-            
-            # Skip empty city names
-            if not row['city_ascii'] or not row['country']:
-                continue
-            
-            seen_keys.add(key)
-            
-            # Create search key for prefix matching (first 3 chars, lowercase)
-            # This allows fast queries like "Par" -> Paris, "Lon" -> London
-            city_lower = row['city_ascii'].lower()
-            search_prefix = city_lower[:3] if len(city_lower) >= 3 else city_lower
-            
-            # Prepare item for DynamoDB with search optimization
-            item = {
-                'city_ascii': row['city_ascii'],
-                'country': row['country'],
-                'city': row['city'],
-                'lat': Decimal(str(row['lat'])),
-                'lng': Decimal(str(row['lng'])),
-                'population': int(float(row.get('population', 0) or 0)),
-                'search_key': search_prefix,  # For fast prefix search
-                'city_lower': city_lower  # For case-insensitive search
-            }
-            
-            batch.append({
-                'PutRequest': {
-                    'Item': item
-                }
-            })
-            
-            # Write batch when it reaches 25 items
-            if len(batch) >= batch_size:
-                table.meta.client.batch_write_item(
-                    RequestItems={
-                        'galerly-cities': batch
-                    }
-                )
-                total_imported += len(batch)
-                print(f"✓ Imported {total_imported} cities...")
-                batch = []
+        print(f"\n✅ Import complete!")
+        print(f"📊 Total imported: {total_imported}")
+        print(f"⚠️  Total skipped: {total_skipped}")
         
-        # Write remaining items
-        if batch:
-            table.meta.client.batch_write_item(
-                RequestItems={
-                    'galerly-cities': batch
-                }
-            )
-            total_imported += len(batch)
+        # Print some example cities
+        print(f"\n📍 Example cities imported:")
+        response = table.scan(Limit=5)
+        for item in response.get('Items', []):
+            print(f"   • {item['display_name']} (pop: {item['population']:,})")
+        
+    except FileNotFoundError:
+        print(f"❌ Error: CSV file not found at {CSV_PATH}")
+        print(f"💡 Make sure worldcities.csv is in the correct location")
+    except ClientError as e:
+        print(f"❌ DynamoDB error: {e}")
+    except Exception as e:
+        print(f"❌ Unexpected error: {e}")
+        raise
+
+
+def verify_indexes():
+    """Verify that prefix indexes are working"""
+    table = dynamodb.Table(TABLE_NAME)
     
-    print(f"\n✅ Successfully imported {total_imported} cities to DynamoDB!")
-    print(f"📊 Search optimization: Cities indexed by 3-char prefix for instant suggestions")
+    print(f"\n🔍 Verifying prefix indexes...")
+    
+    # Test prefix1 index (cities starting with 'n')
+    response = table.query(
+        IndexName='prefix1-population-index',
+        KeyConditionExpression='prefix1 = :prefix',
+        ExpressionAttributeValues={':prefix': 'n'},
+        ScanIndexForward=False,  # Sort by population DESC
+        Limit=5
+    )
+    
+    print(f"\n✅ Top 5 cities starting with 'N':")
+    for item in response.get('Items', []):
+        print(f"   • {item['display_name']} (pop: {item['population']:,})")
+    
+    # Test prefix2 index (cities starting with 'ne')
+    response = table.query(
+        IndexName='prefix2-population-index',
+        KeyConditionExpression='prefix2 = :prefix',
+        ExpressionAttributeValues={':prefix': 'ne'},
+        ScanIndexForward=False,
+        Limit=5
+    )
+    
+    print(f"\n✅ Top 5 cities starting with 'NE':")
+    for item in response.get('Items', []):
+        print(f"   • {item['display_name']} (pop: {item['population']:,})")
+
 
 if __name__ == '__main__':
-    # Step 1: Create optimized table structure
-    create_optimized_table()
+    print("🌍 Galerly Cities Import")
+    print("=" * 50)
     
-    # Step 2: Import cities data
     import_cities()
+    verify_indexes()
     
-    print("\n" + "="*70)
-    print("🎉 IMPORT COMPLETE!")
-    print("="*70)
-    print("\n✅ Fast city search is now enabled!")
-    print("   - Cities indexed by first 3 characters")
-    print("   - Results sorted by population (largest cities first)")
-    print("   - Case-insensitive search support")
-    print("\n💡 Search examples:")
-    print("   - 'Par' → Paris, Parma, Parnu...")
-    print("   - 'Lon' → London, Long Beach...")
-    print("   - 'Fri' → Fribourg, Friedrichshafen...")
-    print()
-
-
+    print("\n" + "=" * 50)
+    print("✅ Cities import and verification complete!")
+    print("📝 Next step: Test the city search API endpoint")

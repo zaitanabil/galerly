@@ -383,7 +383,7 @@ async function submitFeedback(event, galleryId) {
     });
     
     try {
-        const apiUrl = window.GalerlyConfig?.API_BASE_URL || 'https://api.galerly.com';
+        const apiUrl = window.GalerlyConfig?.API_BASE_URL || window.API_BASE_URL || 'https://api.galerly.com';
         const response = await fetch(`${apiUrl}/api/v1/client/feedback/${galleryId}`, {
             method: 'POST',
             headers: {

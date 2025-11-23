@@ -651,6 +651,115 @@ BRANDED_EMAIL_TEMPLATES = {
 <p class="email-text" style="color: #86868B; font-size: 14px;">If you have any questions, please contact us at <strong>{support_email}</strong></p>
 </div>''' + get_email_footer() + '''</div></body></html>''',
         'text': 'Refund request update (ID: {refund_id}). Status: {status}. Admin notes: {admin_notes}. Contact: {support_email}'
+    },
+    
+    'gallery_expired': {
+        'subject': 'Gallery "{gallery_name}" Has Expired and Been Archived',
+        'html': '''<!DOCTYPE html><html><head>''' + GALERLY_EMAIL_STYLES + '''</head><body>
+<div class="email-container">''' + get_email_header() + '''
+<div class="email-body">
+<h1 class="email-title">Gallery Expired</h1>
+<p class="email-text">Your gallery <strong>"{gallery_name}"</strong> has reached its expiration date and has been automatically archived.</p>
+<div class="email-info-box" style="background: #FFF3CD; border-left: 4px solid #FFC107;">
+<p class="email-info-item"><strong>⚠️ Archive Period:</strong> 30 days</p>
+<p class="email-info-item">Your gallery will be permanently deleted after 30 days in the archive.</p>
+</div>
+<p class="email-text">During the archive period, you can:</p>
+<ul style="margin: 16px 0; padding-left: 24px;">
+<li style="margin-bottom: 8px;">Restore the gallery if needed</li>
+<li style="margin-bottom: 8px;">Download your photos before permanent deletion</li>
+<li style="margin-bottom: 8px;">Upgrade your plan for unlimited gallery lifetime</li>
+</ul>
+<table class="email-button-table" cellspacing="0" cellpadding="0">
+<tr><td align="center">
+<a href="{gallery_url}" class="email-button">View Gallery</a>
+</td></tr>
+</table>
+<hr class="email-divider">
+<p class="email-text" style="color: #86868B; font-size: 14px;">To prevent future expirations, upgrade to <strong>Plus</strong> or <strong>Pro</strong> for unlimited gallery lifetime. Questions? Contact <strong>{support_email}</strong></p>
+</div>''' + get_email_footer() + '''</div></body></html>''',
+        'text': 'Your gallery "{gallery_name}" has expired and been archived. It will be permanently deleted after 30 days. View: {gallery_url}'
+    },
+    
+    'gallery_deleted': {
+        'subject': 'Gallery "{gallery_name}" Has Been Permanently Deleted',
+        'html': '''<!DOCTYPE html><html><head>''' + GALERLY_EMAIL_STYLES + '''</head><body>
+<div class="email-container">''' + get_email_header() + '''
+<div class="email-body">
+<h1 class="email-title">Gallery Permanently Deleted</h1>
+<p class="email-text">Your gallery <strong>"{gallery_name}"</strong> has been permanently deleted after {archived_days} days in the archive.</p>
+<div class="email-info-box" style="background: #F8D7DA; border-left: 4px solid #DC3545;">
+<p class="email-info-item"><strong>⚠️ Action Required:</strong> All photos and data have been permanently removed.</p>
+<p class="email-info-item">This action cannot be undone.</p>
+</div>
+<p class="email-text">To prevent future deletions:</p>
+<ul style="margin: 16px 0; padding-left: 24px;">
+<li style="margin-bottom: 8px;">Set galleries to "Never" expire</li>
+<li style="margin-bottom: 8px;">Upgrade to <strong>Plus</strong> or <strong>Pro</strong> for unlimited gallery lifetime</li>
+<li style="margin-bottom: 8px;">Download your photos before galleries expire</li>
+</ul>
+<table class="email-button-table" cellspacing="0" cellpadding="0">
+<tr><td align="center">
+<a href="{frontend_url}/pricing" class="email-button">View Plans</a>
+</td></tr>
+</table>
+<hr class="email-divider">
+<p class="email-text" style="color: #86868B; font-size: 14px;">Questions? Contact <strong>{support_email}</strong></p>
+</div>''' + get_email_footer() + '''</div></body></html>''',
+        'text': 'Your gallery "{gallery_name}" has been permanently deleted after {archived_days} days in archive. This cannot be undone.'
+    },
+    
+    'bulk_download_notification': {
+        'subject': '{photographer_name} — {downloader_name} Downloaded Your Gallery "{gallery_name}"',
+        'html': '''<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">''' + GALERLY_EMAIL_STYLES + '''</head><body>
+<div class="email-container">''' + get_email_header() + '''
+<div class="email-body">
+<h1 class="email-title">Gallery Downloaded</h1>
+<p class="email-text">Hi <strong>{photographer_name}</strong>,</p>
+<p class="email-text"><strong>{downloader_name}</strong> just downloaded all photos from your gallery: <strong>{gallery_name}</strong></p>
+<div class="email-info-box">
+<p class="email-info-item"><span class="email-info-label">Gallery:</span> {gallery_name}</p>
+<p class="email-info-item"><span class="email-info-label">Photos Downloaded:</span> {photo_count} photos</p>
+<p class="email-info-item"><span class="email-info-label">Downloaded by:</span> {downloader_name} ({downloader_type})</p>
+<p class="email-info-item"><span class="email-info-label">Time:</span> {download_time}</p>
+</div>
+<a href="{gallery_url}" class="email-button">View Gallery</a>
+<hr class="email-divider">
+<p class="email-text" style="color: #86868B; font-size: 14px;">Track engagement in your dashboard to see how clients interact with your galleries.</p>
+</div>''' + get_email_footer() + '''</div></body></html>''',
+        'text': '{photographer_name} — {downloader_name} downloaded all photos from "{gallery_name}" ({photo_count} photos). View: {gallery_url}'
+    },
+    
+    'account_deletion_scheduled': {
+        'subject': 'Account Deletion Scheduled — {days_remaining} Days to Cancel',
+        'html': '''<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">''' + GALERLY_EMAIL_STYLES + '''</head><body>
+<div class="email-container">''' + get_email_header() + '''
+<div class="email-body">
+<h1 class="email-title">Account Deletion Scheduled</h1>
+<p class="email-text">Hi <strong>{user_name}</strong>,</p>
+<p class="email-text">Your Galerly account has been scheduled for deletion. We're sad to see you go.</p>
+<div class="email-info-box" style="background: #FFF3CD; border-left: 4px solid #FFC107;">
+<p class="email-info-item"><strong>⏰ Important:</strong> Your account will be permanently deleted on <strong>{deletion_date}</strong></p>
+<p class="email-info-item"><strong>Days remaining:</strong> {days_remaining} days</p>
+</div>
+<p class="email-text"><strong>What happens next?</strong></p>
+<ul style="margin: 16px 0; padding-left: 24px; color: #1D1D1F; font-size: 15px; line-height: 1.6;">
+<li style="margin-bottom: 8px;">Your account is now archived and inaccessible</li>
+<li style="margin-bottom: 8px;">All galleries, photos, and client data are preserved for 30 days</li>
+<li style="margin-bottom: 8px;">After 30 days, all data will be permanently deleted</li>
+<li style="margin-bottom: 8px;">This deletion cannot be undone after the 30-day period</li>
+</ul>
+<div class="email-info-box">
+<p class="email-info-item"><strong>Changed your mind?</strong></p>
+<p class="email-info-item">Contact our support team within {days_remaining} days to recover your account and all data.</p>
+<p class="email-info-item" style="margin-top: 12px;"><strong>Support Email:</strong> {support_email}</p>
+</div>
+<hr class="email-divider">
+<p class="email-text" style="color: #86868B; font-size: 14px;">If you didn't request this deletion, contact support immediately at <strong>{support_email}</strong></p>
+</div>''' + get_email_footer() + '''</div></body></html>''',
+        'text': 'Your Galerly account has been scheduled for deletion on {deletion_date}. You have {days_remaining} days to contact support at {support_email} to recover your account.'
     }
 }
 

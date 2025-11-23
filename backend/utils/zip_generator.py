@@ -12,7 +12,7 @@ import io
 import zipfile
 from datetime import datetime
 from boto3.dynamodb.conditions import Key
-from utils.config import s3_client, S3_BUCKET, photos_table
+from utils.config import s3_client, S3_BUCKET, S3_RENDITIONS_BUCKET, photos_table
 
 
 def generate_gallery_zip(gallery_id):
@@ -43,7 +43,8 @@ def generate_gallery_zip(gallery_id):
             # Still create an empty zip or delete existing zip
             zip_s3_key = f"{gallery_id}/gallery-all-photos.zip"
             try:
-                s3_client.delete_object(Bucket=S3_BUCKET, Key=zip_s3_key)
+                # Delete from renditions bucket (where ZIPs are stored)
+                s3_client.delete_object(Bucket=S3_RENDITIONS_BUCKET, Key=zip_s3_key)
                 print(f"🗑️  Deleted empty zip file: {zip_s3_key}")
             except:
                 pass
@@ -122,27 +123,47 @@ def generate_gallery_zip(gallery_id):
                     photo_id = photo.get('id', '')
                     s3_key = photo.get('s3_key')
                     
-                    if not s3_key:
+                    # PRIORITY: Use original file if available (HEIC, RAW, etc)
+                    # Otherwise use converted file (JPEG)
+                    original_s3_key = photo.get('original_s3_key')
+                    original_filename = photo.get('original_filename')
+                    
+                    download_s3_key = original_s3_key if original_s3_key else s3_key
+                    download_filename = original_filename if original_filename else photo.get('filename')
+                    
+                    if not download_s3_key:
                         print(f"  ⚠️  Photo {idx}/{len(valid_photos)} ({photo_id}): No s3_key, skipping")
                         failed_photos.append(photo_id)
                         continue
                     
                     # Double-check S3 file exists before downloading
                     try:
-                        s3_client.head_object(Bucket=S3_BUCKET, Key=s3_key)
+                        s3_client.head_object(Bucket=S3_BUCKET, Key=download_s3_key)
                     except s3_client.exceptions.ClientError as e:
                         if e.response['Error']['Code'] == '404':
-                            print(f"  ⚠️  Photo {idx}/{len(valid_photos)} ({photo_id}): S3 file missing, skipping")
-                            failed_photos.append(photo_id)
-                            continue
+                            # Original missing, try converted file
+                            if original_s3_key and s3_key:
+                                print(f"  ⚠️  Original file missing, falling back to converted: {s3_key}")
+                                download_s3_key = s3_key
+                                download_filename = photo.get('filename')
+                                try:
+                                    s3_client.head_object(Bucket=S3_BUCKET, Key=download_s3_key)
+                                except:
+                                    print(f"  ⚠️  Photo {idx}/{len(valid_photos)} ({photo_id}): Both original and converted missing, skipping")
+                                    failed_photos.append(photo_id)
+                                    continue
+                            else:
+                                print(f"  ⚠️  Photo {idx}/{len(valid_photos)} ({photo_id}): S3 file missing, skipping")
+                                failed_photos.append(photo_id)
+                                continue
                         else:
                             raise
                     
-                    # Get filename from database, or extract from S3 key to preserve original format
-                    filename = photo.get('filename')
+                    # Get filename from database
+                    filename = download_filename
                     if not filename:
                         # Extract filename from S3 key (e.g., "gallery-id/photo-id.png" → "photo-id.png")
-                        filename = s3_key.split('/')[-1]
+                        filename = download_s3_key.split('/')[-1]
                         print(f"  ℹ️  Photo {idx}/{len(valid_photos)}: No filename in DB for {photo_id}, using S3 key: {filename}")
                     
                     # Handle duplicate filenames
@@ -160,8 +181,9 @@ def generate_gallery_zip(gallery_id):
                         used_filenames[original_filename] = 1
                     
                     # Download original image from S3 (no processing/modification)
-                    print(f"  📥 Photo {idx}/{len(valid_photos)}: Downloading {s3_key}...")
-                    s3_object = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+                    # Uses original file (HEIC/RAW) if available, otherwise converted (JPEG)
+                    print(f"  📥 Photo {idx}/{len(valid_photos)}: Downloading {download_s3_key}...")
+                    s3_object = s3_client.get_object(Bucket=S3_BUCKET, Key=download_s3_key)
                     image_data = s3_object['Body'].read()
                     
                     if not image_data or len(image_data) == 0:
@@ -190,7 +212,8 @@ def generate_gallery_zip(gallery_id):
             # Delete the ZIP file since there are no valid photos
             zip_s3_key = f"{gallery_id}/gallery-all-photos.zip"
             try:
-                s3_client.delete_object(Bucket=S3_BUCKET, Key=zip_s3_key)
+                # Delete from renditions bucket (where ZIPs are stored)
+                s3_client.delete_object(Bucket=S3_RENDITIONS_BUCKET, Key=zip_s3_key)
                 print(f"🗑️  Deleted empty zip file: {zip_s3_key}")
             except:
                 pass
@@ -210,11 +233,11 @@ def generate_gallery_zip(gallery_id):
         if failed_photos:
             print(f"⚠️  {len(failed_photos)} photos failed to add (orphaned or errors)")
         
-        # Upload ZIP to S3 (overwrite existing)
+        # Upload ZIP to S3 renditions bucket (where ZIPs are stored)
         zip_s3_key = f"{gallery_id}/gallery-all-photos.zip"
         print(f"📤 Uploading ZIP to S3: {zip_s3_key}...")
         s3_client.put_object(
-            Bucket=S3_BUCKET,
+            Bucket=S3_RENDITIONS_BUCKET,
             Key=zip_s3_key,
             Body=zip_data,
             ContentType='application/zip',
@@ -248,9 +271,9 @@ def generate_gallery_zip(gallery_id):
             print(f"⚠️  Cache invalidation skipped: {str(invalidation_error)}")
             # Don't fail if cache invalidation fails
         
-        # Generate CloudFront URL for the zip
-        from utils.cdn_urls import CDN_DOMAIN
-        zip_url = f"https://{CDN_DOMAIN}/{zip_s3_key}"
+        # Generate URL for the zip (handles both CloudFront and LocalStack)
+        from utils.cdn_urls import get_zip_url
+        zip_url = get_zip_url(gallery_id)
         
         print(f"✅ ZIP uploaded to S3: {zip_s3_key} ({zip_size_mb:.2f} MB)")
         print(f"✅ ZIP URL: {zip_url}")

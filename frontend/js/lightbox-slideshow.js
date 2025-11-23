@@ -401,6 +401,21 @@ function loadSlideshowPhoto(index) {
                 img.style.opacity = '1';
             };
             
+            // Fallback to original if medium fails
+            img.onerror = () => {
+                console.warn('⚠️  Slideshow medium rendition failed, using original');
+                const originalUrl = getImageUrl(photo.url);
+                img.src = originalUrl;
+                img.onload = () => {
+                    slideshowImageCache.set(getImageUrl(mediumUrl), img.cloneNode());
+                    img.style.opacity = '1';
+                };
+                img.onerror = () => {
+                    console.error('❌ Slideshow original also failed for photo:', photo.id);
+                    img.style.opacity = '1';
+                };
+            };
+            
             // Update info
             if (info) {
                 info.textContent = `${index + 1} / ${photos.length}`;
@@ -576,11 +591,12 @@ function showNotification(message, type = 'success') {
         right: 20px;
         background: ${type === 'success' ? '#4CAF50' : '#f44336'};
         color: white;
-        padding: 16px 24px;
-        border-radius: 8px;
+        padding: 14px 28px;
+        border-radius: 999px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         z-index: 10001;
         font-size: 14px;
+        white-space: nowrap;
     `;
     notification.textContent = message;
     document.body.appendChild(notification);

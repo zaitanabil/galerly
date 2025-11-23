@@ -23,7 +23,7 @@ Assume the role of an expert in AWS architecture, AWS database design, and full-
 * No assumptions, only use data available in the codebase or given input
 
 ## Documentation
-* Do not write `.md` files
+* Do not write documentation files
 * Keep documentation concise, written by IT for IT
 
 ## Language Style

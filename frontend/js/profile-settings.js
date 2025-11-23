@@ -212,3 +212,160 @@ function showMessage(message, type) {
         console.error(`Status message error - ${type}: ${message}`);
     }
 }
+
+/**
+ * Confirm account deletion
+ * Shows a modal for account deletion confirmation
+ */
+function confirmDeleteAccount() {
+    const modal = document.getElementById('deleteAccountModal');
+    const input = document.getElementById('deleteConfirmInput');
+    const confirmBtn = document.getElementById('confirmDeleteBtn');
+    
+    if (modal) {
+        modal.style.display = 'block';
+        
+        // Reset input
+        if (input) {
+            input.value = '';
+            input.classList.remove('error');
+        }
+        
+        // Disable confirm button initially
+        if (confirmBtn) {
+            confirmBtn.disabled = true;
+        }
+        
+        // Add input validation
+        if (input && confirmBtn) {
+            input.addEventListener('input', function() {
+                const value = this.value.trim().toLowerCase();
+                if (value === 'delete my account') {
+                    confirmBtn.disabled = false;
+                    this.classList.remove('error');
+                } else {
+                    confirmBtn.disabled = true;
+                }
+            });
+        }
+        
+        // Close on background click
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                closeDeleteModal();
+            }
+        });
+        
+        // Close on Escape key
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && modal.style.display === 'block') {
+                closeDeleteModal();
+            }
+        });
+    }
+}
+
+/**
+ * Close the delete account modal
+ */
+function closeDeleteModal() {
+    const modal = document.getElementById('deleteAccountModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+/**
+ * Execute account deletion after confirmation
+ */
+async function executeDeleteAccount() {
+    const input = document.getElementById('deleteConfirmInput');
+    const confirmBtn = document.getElementById('confirmDeleteBtn');
+    
+    // Final validation
+    if (!input || input.value.trim().toLowerCase() !== 'delete my account') {
+        if (input) {
+            input.classList.add('error');
+        }
+        showMessage('Please type "delete my account" to confirm', 'error');
+        return;
+    }
+    
+    // Disable button to prevent double-clicks
+    if (confirmBtn) {
+        confirmBtn.disabled = true;
+        confirmBtn.textContent = 'Deleting...';
+    }
+    
+    try {
+        const response = await fetch(`${window.GalerlyConfig.API_BASE_URL}/auth/delete-account`, {
+            method: 'DELETE',
+            credentials: 'include',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to delete account');
+        }
+        
+        // Close modal
+        closeDeleteModal();
+        
+        // Clear local storage
+        localStorage.clear();
+        
+        // Redirect to homepage immediately
+        window.location.href = '/';
+        
+    } catch (error) {
+        console.error('Error deleting account:', error);
+        showMessage(error.message || 'Failed to delete account. Please contact support.', 'error');
+        
+        // Re-enable button
+        if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.textContent = 'Delete Account';
+        }
+    }
+}
+
+/**
+ * Delete user account
+ * Makes API call to delete the account and all associated data
+ */
+async function deleteAccount() {
+    try {
+        showMessage('Deleting your account...', 'error');
+        
+        const response = await fetch(`${window.GalerlyConfig.API_BASE_URL}/auth/delete-account`, {
+            method: 'DELETE',
+            credentials: 'include',  // Send HttpOnly cookie
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            const error = await response.json();
+            throw new Error(error.error || 'Failed to delete account');
+        }
+        
+        // Clear local storage
+        localStorage.clear();
+        
+        // Show success message
+        showMessage('Account deleted successfully. Redirecting...', 'success');
+        
+        // Redirect to homepage after 2 seconds
+        setTimeout(() => {
+            window.location.href = '/';
+        }, 2000);
+        
+    } catch (error) {
+        console.error('Error deleting account:', error);
+        showMessage(error.message || 'Failed to delete account. Please contact support.', 'error');
+    }
+}

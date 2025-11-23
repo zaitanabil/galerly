@@ -20,17 +20,18 @@ def get_user_plan_limits(user):
             user_response = users_table.get_item(Key={'email': user_email})
             if 'Item' in user_response:
                 db_user = user_response['Item']
-                plan_id = db_user.get('subscription', 'free')
+                # Use 'plan' field (new), fallback to 'subscription' (legacy)
+                plan_id = db_user.get('plan', db_user.get('subscription', 'free'))
                 print(f"📋 get_user_plan_limits: User {user_email} plan from DB: {plan_id}")
             else:
-                plan_id = user.get('subscription', 'free')
+                plan_id = user.get('plan', user.get('subscription', 'free'))
                 print(f"⚠️  User not found in DB, using session plan: {plan_id}")
         else:
-            plan_id = user.get('subscription', 'free')
+            plan_id = user.get('plan', user.get('subscription', 'free'))
             print(f"⚠️  No email in user object, using session plan: {plan_id}")
     except Exception as e:
         print(f"⚠️  Error fetching user from DB: {str(e)}, using session plan")
-        plan_id = user.get('subscription', 'free')
+        plan_id = user.get('plan', user.get('subscription', 'free'))
     
     plan = PLANS.get(plan_id, PLANS['free'])
     

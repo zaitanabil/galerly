@@ -39,7 +39,7 @@ document.addEventListener('DOMContentLoaded', async function() {
 async function checkActualAuth() {
     try {
         // Get API base URL
-        const apiUrl = window.CONFIG?.API_BASE_URL || window.API_BASE_URL || '';
+        const apiUrl = window.GalerlyConfig?.API_BASE_URL || window.API_BASE_URL || '';
         
         // Call auth/me endpoint to verify HttpOnly cookie
         const response = await fetch(`${apiUrl}/auth/me`, {
@@ -461,9 +461,39 @@ async function loadGalleryDataByToken(shareToken) {
         // Check authentication status
         const isAuthenticated = await checkActualAuth();
         
-        // Fetch gallery details using share token - this will get the gallery ID first
-        // We need to use a public endpoint that accepts tokens
-        const gallery = await apiRequest(`client/galleries/by-token/${shareToken}`);
+        // Fetch gallery using token - PUBLIC ACCESS (no auth required)
+        // Use direct fetch to avoid adding auth headers that might interfere
+        const apiUrl = window.GalerlyConfig?.API_BASE_URL || window.API_BASE_URL || '';
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        
+        let gallery;
+        try {
+            const response = await fetch(`${apiUrl}/client/galleries/by-token/${shareToken}`, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                credentials: 'include',
+                signal: controller.signal
+            });
+            
+            clearTimeout(timeoutId);
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({ error: 'Gallery not found' }));
+                throw new Error(errorData.error || 'Failed to load gallery');
+            }
+            
+            gallery = await response.json();
+        } catch (fetchError) {
+            clearTimeout(timeoutId);
+            if (fetchError.name === 'AbortError') {
+                throw new Error('Request timeout - please check your connection');
+            }
+            throw fetchError;
+        }
+        
         // Update page title
         document.title = `${gallery.name} — Galerly`;
         // Update hero section

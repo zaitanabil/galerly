@@ -7,7 +7,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="theme-color" content="#F5F5F7" />
   <title>Profile Settings - Photographer Account Management | Galerly</title>
-  <meta name="description" content="Manage your photographer profile settings, update business information, location, contact details, and portfolio visibility. Professional account management for photographers." />
+  <meta name="description"
+    content="Manage your photographer profile settings, update business information, location, contact details, and portfolio visibility. Professional account management for photographers." />
   <meta name="robots" content="noindex, nofollow" />
   <meta name="msapplication-TileColor" content="#F5F5F7" />
   <link rel="canonical" href="profile-settings" />
@@ -154,6 +155,192 @@
       font-size: 16px;
       font-weight: 700;
       margin-right: 6px;
+    }
+
+    /* Delete Account Modal */
+    #deleteAccountModal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.5);
+      backdrop-filter: blur(8px);
+      z-index: 10000;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+      }
+      to {
+        opacity: 1;
+      }
+    }
+
+    .delete-modal-content {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      border-radius: 24px;
+      padding: 40px;
+      max-width: 500px;
+      width: 90%;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      animation: slideUp 0.3s ease;
+    }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translate(-50%, -40%);
+      }
+      to {
+        opacity: 1;
+        transform: translate(-50%, -50%);
+      }
+    }
+
+    .delete-modal-icon {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 24px;
+      background: linear-gradient(135deg, #ff6b6b 0%, #dc3545 100%);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .delete-modal-title {
+      font-size: 24px;
+      font-weight: 700;
+      text-align: center;
+      margin-bottom: 16px;
+      color: #1D1D1F;
+    }
+
+    .delete-modal-text {
+      font-size: 15px;
+      line-height: 1.6;
+      color: #6E6E73;
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .delete-modal-warning {
+      background: #fff3cd;
+      border: 2px solid #ffc107;
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 24px;
+    }
+
+    .delete-modal-warning-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #856404;
+      margin-bottom: 8px;
+    }
+
+    .delete-modal-warning-list {
+      list-style: none;
+      padding: 0;
+      margin: 0;
+    }
+
+    .delete-modal-warning-list li {
+      font-size: 13px;
+      color: #856404;
+      padding: 4px 0;
+      padding-left: 20px;
+      position: relative;
+    }
+
+    .delete-modal-warning-list li::before {
+      content: "•";
+      position: absolute;
+      left: 8px;
+      font-weight: 700;
+    }
+
+    .delete-modal-input {
+      width: 100%;
+      padding: 14px 16px;
+      border: 2px solid #ddd;
+      border-radius: 12px;
+      font-size: 15px;
+      font-family: var(--pp-neue-font);
+      margin-bottom: 24px;
+      transition: border-color 0.2s;
+    }
+
+    .delete-modal-input:focus {
+      outline: none;
+      border-color: #dc3545;
+    }
+
+    .delete-modal-input.error {
+      border-color: #dc3545;
+      background: #fff5f5;
+    }
+
+    .delete-modal-actions {
+      display: flex;
+      gap: 12px;
+    }
+
+    .delete-modal-btn {
+      flex: 1;
+      padding: 14px 24px;
+      border-radius: 50px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      border: none;
+      font-family: var(--pp-neue-font);
+    }
+
+    .delete-modal-btn-cancel {
+      background: transparent;
+      color: #1D1D1F;
+      border: 2px solid #1D1D1F;
+    }
+
+    .delete-modal-btn-cancel:hover {
+      background: #F5F5F7;
+    }
+
+    .delete-modal-btn-delete {
+      background: #dc3545;
+      color: white;
+      border: 2px solid #dc3545;
+    }
+
+    .delete-modal-btn-delete:hover {
+      background: #c82333;
+      border-color: #c82333;
+    }
+
+    .delete-modal-btn-delete:disabled {
+      background: #ddd;
+      border-color: #ddd;
+      color: #999;
+      cursor: not-allowed;
+    }
+
+    .delete-modal-archive-note {
+      font-size: 12px;
+      color: #999;
+      text-align: center;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #eee;
     }
   </style>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -472,23 +659,18 @@
 
                   <!-- Actions -->
                   <div class="settings-actions"
-                    style="display: flex; gap: 16px; justify-content: flex-start; align-items: center; padding-top: var(--size-xl); margin-top: var(--size-xs); border-top: 1px solid var(--primary-100);">
-                    <a aria-label="Cancel" class="image-18 hero-7" href="dashboard"
-                      style="border: 2px solid var(--color-shark, #1D1D1F); border-radius: var(--border-radius-2xl); background: transparent;">
+                    style="display: flex; gap: 16px; justify-content: space-between; align-items: center; padding-top: var(--size-xl); margin-top: var(--size-xs); border-top: 1px solid var(--primary-100);">
+                    <button type="button" onclick="confirmDeleteAccount()" aria-label="Delete Account" class="image-18 hero-7"
+                      style="border: 2px solid #dc3545; border-radius: var(--border-radius-2xl); background: transparent; cursor: pointer;">
                       <div class="title-18 main-6 container-0">
-                        <span style="color: var(--text-primary, #1D1D1F);">Cancel <span class="text-18 feature-7">
-                            <svg width="17" height="14" viewBox="0 0 17 14" fill="none"
-                              color="var(--text-primary, #1D1D1F)">
-                              <path
-                                d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
-                                stroke="currentColor" stroke-linecap="round"></path>
-                              <path d="M1 7L16 7" stroke="currentColor" stroke-linecap="round">
-                              </path>
+                        <span style="color: #dc3545;">Delete Account
+                          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" style="margin-left: 6px; vertical-align: middle;">
+                            <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 0 1 1.334-1.334h2.666a1.333 1.333 0 0 1 1.334 1.334V4m2 0v9.333a1.333 1.333 0 0 1-1.334 1.334H4.667a1.333 1.333 0 0 1-1.334-1.334V4h9.334Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M6.667 7.333v4M9.333 7.333v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
                             </svg>
-                          </span>
                         </span>
                       </div>
-                    </a>
+                    </button>
                     <button type="submit" aria-label="Save Profile" class="image-18 nav-6 container-0"
                       style="border: none; cursor: pointer; background: var(--button-primary-fill, #0071E3);">
                       <div class="title-18 main-6">
@@ -514,7 +696,7 @@
         </div>
         <!-- Footer -->
         <footer class="card-10 input-4 animation-9 grid-0">
-          <div class="logo-14 textarea-4 "></div>
+          <div class="logo-14 textarea-4"></div>
           <div class="form-18 feature-0">
             <section class="textarea-10 link-4">
               <div class="header-11 list-4">
@@ -522,29 +704,29 @@
                   <div class="background-10 animation-4">
                     <div>
                       <span aria-label="Stay" class="title-14 header-7">
-                        <span class="subtitle-14 nav-7">Stay</span>
+                        <span class="subtitle-14 nav-7"> Stay </span>
                       </span>
                     </div>
-                    <div style="font-style: italic"> — Connected</div>
+                    <div style="font-style: italic"> &mdash; Connected </div>
                   </div>
                   <p class="title-10 background-4">
-                    <strong>Join photographers worldwide</strong>
-                    <br />Get updates, tips, and exclusive features
+                    <strong> Join creators worldwide </strong>
+                    <br> Updates, stories, and early access
                   </p>
                 </div>
                 <div id="newsletter">
-                  <form id="newsletter_form" class="subtitle-10 header-5" enctype="multipart/form-data">
-                    <div style="margin-bottom: 8px" class="logo-10 nav-5">
-                      <input type="text" required="" placeholder="Your name" class="image-10 main-5" name="firstName" />
+                  <form class="subtitle-10 header-5" enctype="multipart/form-data" id="newsletter_form">
+                    <div class="logo-10 nav-5" style="margin-bottom: 8px">
+                      <input class="image-10 main-5" name="firstName" placeholder="Your name" required type="text">
                     </div>
                     <div class="logo-10 nav-5">
-                      <input type="email" required="" placeholder="Your e-mail" class="image-10 main-5" name="email" />
-                      <button aria-label="Confirm" type="submit" class="logo-18 footer-5">
+                      <input class="image-10 main-5" name="email" placeholder="Your e-mail" required type="email">
+                      <button aria-label="Confirm" class="logo-18 footer-5" type="submit">
                         <div class="title-18 main-6 container-0">
-                          <span style="order: 0">Confirm</span>
+                          <span style="order: 0"> Confirm </span>
                           <span class="text-18 feature-7">
-                            <svg width="17" height="14" viewBox="0 0 17 14" fill="none"
-                              color="var(--text-on-button-secondary)">
+                            <svg color="var(--text-on-button-secondary)" fill="none" height="14" viewbox="0 0 17 14"
+                              width="17">
                               <path
                                 d="M10.6862 13.1281L16.1072 7.70711C16.4977 7.31658 16.4977 6.68342 16.1072 6.29289L10.6862 0.871896"
                                 stroke="var(--text-on-button-secondary)" stroke-linecap="round"></path>
@@ -562,34 +744,41 @@
           </div>
           <div class="form-18 feature-0">
             <section class="list-10 section-5">
-              <div class="button-10 card-5"> SHARE ART, <br />NOT FILES </div>
+              <div class="button-10 card-5"> SHARE ART, <br> NOT FILES </div>
               <div class="item-10 button-5">
                 <div class="animation-10 text-5">
                   <div style="flex-shrink: 0">
-                    <span class="input-10 title-5">Galerly</span>
-                    <ul id="siteLinksParagraph" class="form-10 subtitle-5">
+                    <span class="input-10 title-5"> Galerly </span>
+                    <ul class="form-10 subtitle-5" id="siteLinksParagraph">
                       <li>
-                        <a class="grid-10 logo-5" href="/">Platform</a>
+                        <a class="grid-10 logo-5" href="/"> Platform </a>
                       </li>
                       <li>
-                        <a class="grid-10 logo-5" href="pricing">Pricing</a>
+                        <a class="grid-10 logo-5" href="pricing"> Pricing </a>
                       </li>
                       <li>
-                        <a class="grid-10 logo-5" href="faq">FAQ</a>
+                        <a class="grid-10 logo-5" href="faq"> FAQ </a>
                       </li>
                       <li>
-                        <a class="grid-10 logo-5" href="contact">Support</a>
+                        <a class="grid-10 logo-5" href="contact"> Support </a>
                       </li>
                     </ul>
                   </div>
                   <div style="flex-shrink: 0">
-                    <span class="input-10 title-5">Follow us</span>
-                    <ul id="socialLinksParagraph" class="form-10 subtitle-5">
+                    <span class="input-10 title-5"> Follow us </span>
+                    <ul class="form-10 subtitle-5" id="socialLinksParagraph">
                       <li>
-                        <a title="Instagram" target="_blank" rel="noopener noreferrer" class="grid-10 logo-5"
-                          href="https://www.instagram.com/withgalerly/">Instagram <svg
-                            xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12" fill="none"
-                            class="container-10 main-0">
+                        <a class="grid-10 logo-5" href="https://www.instagram.com/withgalerly" rel="noopener noreferrer"
+                          target="_blank" title="Instagram"> Instagram <svg class="container-10 main-0" fill="none"
+                            height="12" viewbox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">
+                            <path
+                              d="M11.0435 9.88557L9.48515 9.89576V3.43836L1.12313 11.8004L0.00276604 10.68L8.36478 2.318L1.91758 2.32818V0.759669H11.0435V9.88557Z"
+                              fill="#101116"></path>
+                          </svg>
+                        </a>
+                        <a class="grid-10 logo-5" href="https://www.tiktok.com/@withgalerly" rel="noopener noreferrer"
+                          target="_blank" title="Instagram"> Tiktok <svg class="container-10 main-0" fill="none"
+                            height="12" viewbox="0 0 12 12" width="12" xmlns="http://www.w3.org/2000/svg">
                             <path
                               d="M11.0435 9.88557L9.48515 9.89576V3.43836L1.12313 11.8004L0.00276604 10.68L8.36478 2.318L1.91758 2.32818V0.759669H11.0435V9.88557Z"
                               fill="#101116"></path>
@@ -602,12 +791,12 @@
               </div>
             </section>
             <div class="icon-10 image-5">
-              <a href="/" class="link-10 container-5">
+              <a class="link-10 container-5" href="/">
                 <img src="img/footer-logo-dark.svg" />
               </a>
-              <a class="grid-10 logo-5" href="legal-notice">Legal notice</a>
-              <a class="grid-10 logo-5" href="privacy">Privacy policy</a>
-              <div> 2025 © Galerly </div>
+              <a class="grid-10 logo-5" href="legal-notice"> Legal notice </a>
+              <a class="grid-10 logo-5" href="privacy"> Privacy policy </a>
+              <div> 2025 &copy; Galerly </div>
             </div>
           </div>
           <div class="grid-0"></div>
@@ -649,14 +838,85 @@
         </div>
       </div>
     </div>
+    
+    <!-- Delete Account Modal -->
+    <div id="deleteAccountModal">
+      <div class="delete-modal-content">
+        <div class="delete-modal-icon">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none">
+            <path d="M4 8h24M10.667 8V5.333A2.667 2.667 0 0 1 13.334 2.667h5.333A2.667 2.667 0 0 1 21.334 5.333V8m4 0v18.667a2.667 2.667 0 0 1-2.667 2.666H9.334a2.667 2.667 0 0 1-2.667-2.666V8h18.667Z" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M13.333 14.667v8M18.667 14.667v8" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+        </div>
+        
+        <h2 class="delete-modal-title">Delete Your Account?</h2>
+        
+        <p class="delete-modal-text">
+          This action will permanently remove your account and all associated data after 30 days.
+        </p>
+        
+        <div class="delete-modal-warning">
+          <div class="delete-modal-warning-title">This will delete:</div>
+          <ul class="delete-modal-warning-list">
+            <li>Your photographer profile</li>
+            <li>All galleries and photos</li>
+            <li>Client data and interactions</li>
+            <li>Billing information</li>
+          </ul>
+        </div>
+        
+        <p class="delete-modal-text" style="font-size: 14px; margin-bottom: 12px; font-weight: 600;">
+          Type <strong>"delete my account"</strong> to confirm:
+        </p>
+        
+        <input 
+          type="text" 
+          id="deleteConfirmInput" 
+          class="delete-modal-input" 
+          placeholder="delete my account"
+          autocomplete="off"
+        />
+        
+        <div class="delete-modal-actions">
+          <button class="delete-modal-btn delete-modal-btn-cancel" onclick="closeDeleteModal()">
+            Cancel
+          </button>
+          <button class="delete-modal-btn delete-modal-btn-delete" id="confirmDeleteBtn" disabled onclick="executeDeleteAccount()">
+            Delete Account
+          </button>
+        </div>
+        
+        <p class="delete-modal-archive-note">
+          Your account will be archived for 30 days before permanent deletion. Contact support within 30 days to recover your account.
+        </p>
+      </div>
+    </div>
+    
     <script src="js/rbac.js"></script>
     <script src="js/auth-check.js"></script>
     <script src="js/main.js"></script>
     <!-- Configuration -->
     <script src="js/env-production.js"></script>
+    <script src="config.env.js"></script>
     <script src="js/config.js"></script>
+    <!-- City Autocomplete -->
+    <script src="js/city-autocomplete.js"></script>
     <!-- Profile Settings -->
     <script src="js/profile-settings.js"></script>
+    <script>
+        // Initialize city autocomplete when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            initCityAutocomplete('city', function(city) {
+                console.log('Selected city:', city);
+                // Store the full city data
+                const cityInput = document.getElementById('city');
+                if (cityInput) {
+                    cityInput.value = city.city_ascii + ', ' + city.country;
+                    cityInput.dataset.cityData = JSON.stringify(city);
+                }
+            }, 'Start typing your city...');
+        });
+    </script>
     <!-- Notification Preferences -->
     <script src="js/notification-preferences.js"></script>
     <script src="js/cookie-consent.js"></script>

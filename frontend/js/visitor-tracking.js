@@ -5,16 +5,29 @@
  */
 (function() {
     'use strict';
+    
+    // Detect LocalStack mode and disable tracking in local development
+    const isLocalStack = window.GALERLY_ENV_CONFIG?.IS_LOCALSTACK || 
+                        window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1';
+    
     const TRACKING_CONFIG = {
-        apiEndpoint: (typeof window !== 'undefined' && window.API_BASE_URL) || 
-                    (typeof CONFIG !== 'undefined' && CONFIG.API_BASE_URL) || 
+        apiEndpoint: (typeof window.GalerlyConfig !== 'undefined' && window.GalerlyConfig.API_BASE_URL) || 
+                    (typeof window.API_BASE_URL !== 'undefined' && window.API_BASE_URL) ||
                     'https://api.galerly.com/xb667e3fa92f9776468017a9758f31ba4/v1',
-        enabled: true, // Always enabled for UX improvement
+        enabled: !isLocalStack, // Disable tracking in LocalStack mode
         sessionTimeout: 30 * 60 * 1000, // 30 minutes
         heartbeatInterval: 30 * 1000, // 30 seconds (send updates every 30s)
         debounceTime: 300, // 300ms
         maxScrollDepthUpdate: 5000 // Send scroll depth update max every 5s
     };
+    
+    // Early return if tracking is disabled (LocalStack mode)
+    if (!TRACKING_CONFIG.enabled) {
+        console.log('📊 Visitor tracking disabled in LocalStack mode');
+        window.VisitorTracker = null;
+        return;
+    }
     class VisitorTracker {
         constructor() {
             this.sessionId = this.getOrCreateSessionId();

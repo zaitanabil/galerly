@@ -200,11 +200,19 @@ async function populateExpiryOptions(currentExpiry) {
             expirySelect.appendChild(optionEl);
         });
         
-        // Set current value (or default to maximum for free plan)
+        // Set current value if it exists in the options
         if (currentExpiry) {
-            expirySelect.value = currentExpiry.toString();
+            const expiryStr = currentExpiry.toString();
+            // Check if this value exists in the dropdown
+            const optionExists = Array.from(expirySelect.options).some(opt => opt.value === expiryStr);
+            if (optionExists) {
+                expirySelect.value = expiryStr;
         } else if (plan === 'free') {
-            // Default to 7 days (maximum) for free users
+                // If the saved value doesn't exist in free plan options, default to 7 days
+                expirySelect.value = '7';
+            }
+        } else if (plan === 'free') {
+            // No saved value - default to 7 days (maximum) for free users
             expirySelect.value = '7';
         }
         
@@ -315,12 +323,26 @@ function renderGalleryPhotos(photos, startIndex, count) {
         
         const isFavorite = photo.is_favorite === true;
         const isApproved = photo.status === 'approved';
+        const isActive = photo.status === 'active';
         
-        // For formats that need enhancement, use data-src and let enhancement handler load it
-        // For standard formats, set src immediately with blur effect
-        const imgAttributes = needsEnhancement 
-            ? `data-src="${thumbnailUrl}" style="${isApproved ? 'border: 3px solid #10b981;' : ''} filter: blur(10px); transition: filter 0.3s ease; background-color: #F5F5F7; min-height: 200px; display: block;"`
-            : `src="${thumbnailUrl}" style="${isApproved ? 'border: 3px solid #10b981;' : ''} filter: blur(10px); transition: filter 0.3s ease; background-color: #F5F5F7;" onload="this.style.filter='none';" onerror="console.error('Image load failed:', this.src); this.onerror=null; handleImageLoadError(this, '${photo.id}', '${photo.filename || ''}');"`;
+        // Extract filename safely
+        const filename = photo.filename || '';
+        
+        // Determine if format needs enhancement (HEIC, TIFF, RAW, etc.)
+        const needsEnhancement = filename && (
+            filename.toLowerCase().endsWith('.heic') ||
+            filename.toLowerCase().endsWith('.heif') ||
+            filename.toLowerCase().endsWith('.tiff') ||
+            filename.toLowerCase().endsWith('.tif') ||
+            filename.toLowerCase().endsWith('.raw') ||
+            filename.toLowerCase().endsWith('.cr2') ||
+            filename.toLowerCase().endsWith('.nef') ||
+            filename.toLowerCase().endsWith('.arw')
+        );
+        
+        // Safari fix: Always use src (not data-src) and remove lazy loading issues
+        // Load thumbnails immediately for better Safari compatibility
+        const imgAttributes = `src="${thumbnailUrl}" style="${isApproved ? 'border: 3px solid #10b981;' : ''} opacity: 1; background-color: #F5F5F7; width: 100%; height: 100%; object-fit: cover;" onload="this.style.opacity='1';" onerror="console.error('Image load failed:', this.src);"`;
         
         photoEl.innerHTML = `
             <img ${imgAttributes}
@@ -328,7 +350,6 @@ function renderGalleryPhotos(photos, startIndex, count) {
                  data-full="${fullUrl}"
                  data-photo-id="${photo.id}"
                  data-filename="${filename}"
-                 loading="lazy"
                  crossorigin="anonymous">
             ${isFavorite ? `
                 <div style="
@@ -352,7 +373,7 @@ function renderGalleryPhotos(photos, startIndex, count) {
                 </div>
             ` : ''}
             <div class="photo-overlay">
-                ${photo.status === 'approved' ? '✓ Approved' : 'Click to view'}
+                ${isApproved ? '✓ Approved by Client' : isActive ? 'Ready for Review' : 'Click to view'}
             </div>
         `;
         galleryGrid.appendChild(photoEl);
@@ -881,13 +902,34 @@ async function readFileAsBase64(file) {
     });
 }
 /**
- * Handle image load error - log details for debugging
+ * Handle image load error - log details for debugging and fallback to original
  */
 async function handleImageLoadError(img, photoId, filename) {
     const failedUrl = img.src;
-    console.error(`❌ Image load failed for photo ${photoId}`);
-    console.error(`   Filename: ${filename}`);
-    console.error(`   Failed URL: ${failedUrl}`);
+    console.warn(`⚠️  Rendition failed to load for photo ${photoId}`);
+    console.warn(`   Filename: ${filename}`);
+    console.warn(`   Failed URL: ${failedUrl}`);
+    
+    // Try to load the original file as fallback
+    const originalUrl = img.getAttribute('data-full');
+    if (originalUrl && originalUrl !== failedUrl) {
+        console.log(`   🔄 Falling back to original image...`);
+        
+        // Clear the error handler to prevent infinite loop
+        img.onerror = null;
+        
+        // Try loading the original
+        img.src = originalUrl;
+        img.style.filter = 'none'; // Remove blur since we're loading original
+        
+        // If original also fails, show error
+        img.onerror = () => {
+            console.error(`❌ Original image also failed: ${originalUrl}`);
+            showImageErrorState(img, filename);
+        };
+        
+        return;
+    }
     
     // Check if it's a RAW format
     const isRAW = filename && /\.(dng|cr2|cr3|nef|arw|raf|orf|rw2|pef|3fr)$/i.test(filename);
@@ -903,9 +945,17 @@ async function handleImageLoadError(img, photoId, filename) {
         console.log(`   Solution: Lambda@Edge must process ?format=jpeg parameters.`);
     }
     
+    showImageErrorState(img, filename);
+}
+
+/**
+ * Show visual error state for failed images
+ */
+function showImageErrorState(img, filename) {
     // Show visual error indicator
     img.style.border = '2px solid #ef4444';
     img.style.opacity = '0.5';
+    img.style.filter = 'none';
     img.alt = 'Image failed to load - check console for details';
     
     // Add error overlay

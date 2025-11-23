@@ -7,7 +7,7 @@ import re
 import random
 from datetime import datetime
 from utils.config import users_table, sessions_table
-from utils.response import create_response
+from utils.response import create_response, get_required_env
 from utils.auth import hash_password
 from utils.email import send_welcome_email, send_password_reset_email, send_verification_code_email
 
@@ -203,6 +203,20 @@ def handle_register(body):
     try:
         response = users_table.get_item(Key={'email': email})
         if 'Item' in response:
+            existing_user = response['Item']
+            account_status = existing_user.get('account_status', 'ACTIVE')
+            
+            # If account is pending deletion, offer restoration
+            if account_status == 'PENDING_DELETION':
+                return create_response(409, {
+                    'error': 'Account pending deletion',
+                    'message': 'An account with this email is scheduled for deletion. Contact support to restore your account.',
+                    'support_email': 'support@galerly.com',
+                    'can_restore': True,
+                    'deletion_date': existing_user.get('permanent_deletion_date')
+                })
+            
+            # Active account already exists
             return create_response(409, {'error': 'User already exists'})
     except:
         pass
@@ -238,6 +252,7 @@ def handle_register(body):
     token = secrets.token_urlsafe(32)
     sessions_table.put_item(Item={
         'token': token,
+        'user_id': user['id'],  # Store user_id for session invalidation
         'user': user,
         'created_at': datetime.utcnow().isoformat() + 'Z'
     })
@@ -245,13 +260,19 @@ def handle_register(body):
     # Set HttpOnly cookie for security
     # 7 days expiration (Swiss law compliance)
     max_age = 60 * 60 * 24 * 7  # 7 days in seconds
-    cookie_value = f'galerly_session={token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age={max_age}'
+    # Use Lax for development (works in Safari), Strict for production
+    # Remove Secure flag for localhost (HTTP)
+    import os
+    is_local = 'localhost' in os.environ.get('FRONTEND_URL', '')
+    secure_flag = '' if is_local else 'Secure; '
+    samesite = 'Lax' if is_local else 'Strict'
+    cookie_value = f'galerly_session={token}; HttpOnly; {secure_flag}SameSite={samesite}; Path=/; Max-Age={max_age}'
     
     return {
         'statusCode': 201,
         'headers': {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': 'https://galerly.com',
+            'Access-Control-Allow-Origin': get_required_env('FRONTEND_URL'),
             'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type,Authorization,Cookie',
             'Access-Control-Allow-Credentials': 'true',
@@ -285,6 +306,18 @@ def handle_login(body):
             return create_response(401, {'error': 'Invalid credentials'})
         
         user = response['Item']
+        
+        # Check if account is deleted or pending deletion
+        account_status = user.get('account_status', 'ACTIVE')
+        if account_status == 'PENDING_DELETION':
+            return create_response(403, {
+                'error': 'Account deleted',
+                'message': 'Your account has been scheduled for deletion. Contact support to restore your account.',
+                'support_email': 'support@galerly.com',
+                'can_restore': True,
+                'deletion_date': user.get('permanent_deletion_date')
+            })
+        
         if user['password_hash'] != hash_password(password):
             return create_response(401, {'error': 'Invalid credentials'})
     except:
@@ -294,6 +327,7 @@ def handle_login(body):
     token = secrets.token_urlsafe(32)
     sessions_table.put_item(Item={
         'token': token,
+        'user_id': user['id'],  # Store user_id for session invalidation
         'user': user,
         'created_at': datetime.utcnow().isoformat() + 'Z'
     })
@@ -301,13 +335,19 @@ def handle_login(body):
     # Set HttpOnly cookie for security
     # 7 days expiration (Swiss law compliance)
     max_age = 60 * 60 * 24 * 7  # 7 days in seconds
-    cookie_value = f'galerly_session={token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age={max_age}'
+    # Use Lax for development (works in Safari), Strict for production
+    # Remove Secure flag for localhost (HTTP)
+    import os
+    is_local = 'localhost' in os.environ.get('FRONTEND_URL', '')
+    secure_flag = '' if is_local else 'Secure; '
+    samesite = 'Lax' if is_local else 'Strict'
+    cookie_value = f'galerly_session={token}; HttpOnly; {secure_flag}SameSite={samesite}; Path=/; Max-Age={max_age}'
     
     return {
         'statusCode': 200,
         'headers': {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': 'https://galerly.com',
+            'Access-Control-Allow-Origin': get_required_env('FRONTEND_URL'),
             'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type,Authorization,Cookie',
             'Access-Control-Allow-Credentials': 'true',
@@ -361,13 +401,17 @@ def handle_logout(event):
             print(f"Error deleting session: {str(e)}")
     
     # Clear cookie by setting Max-Age=0
-    cookie_value = 'galerly_session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0'
+    import os
+    is_local = 'localhost' in os.environ.get('FRONTEND_URL', '')
+    secure_flag = '' if is_local else 'Secure; '
+    samesite = 'Lax' if is_local else 'Strict'
+    cookie_value = f'galerly_session=; HttpOnly; {secure_flag}SameSite={samesite}; Path=/; Max-Age=0'
     
     return {
         'statusCode': 200,
         'headers': {
             'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': 'https://galerly.com',
+            'Access-Control-Allow-Origin': get_required_env('FRONTEND_URL'),
             'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
             'Access-Control-Allow-Headers': 'Content-Type,Authorization,Cookie',
             'Access-Control-Allow-Credentials': 'true',
@@ -482,4 +526,156 @@ def handle_reset_password(body):
         import traceback
         traceback.print_exc()
         return create_response(500, {'error': 'Failed to reset password'})
+
+
+def handle_delete_account(user):
+    """
+    Soft delete user account - marks for deletion with 30-day archival period
+    Similar to gallery deletion: archived for 30 days before permanent removal
+    """
+    try:
+        user_email = user.get('email')
+        user_id = user.get('id')
+        
+        if not user_email or not user_id:
+            return create_response(400, {'error': 'Invalid user session'})
+        
+        # Get current timestamp
+        now = datetime.utcnow()
+        deletion_scheduled_at = now.isoformat() + 'Z'
+        
+        # Calculate permanent deletion date (30 days from now)
+        from datetime import timedelta
+        deletion_date = now + timedelta(days=30)
+        deletion_date_str = deletion_date.isoformat() + 'Z'
+        
+        print(f"🗑️ Soft deleting account: {user_email}")
+        print(f"   User ID: {user_id}")
+        print(f"   Scheduled for permanent deletion: {deletion_date_str}")
+        
+        # Update user account with deletion markers
+        # Mark account as deleted and set deletion date
+        users_table.update_item(
+            Key={'email': user_email},
+            UpdateExpression='''
+                SET deleted_at = :deleted_at,
+                    deletion_scheduled_at = :scheduled_at,
+                    permanent_deletion_date = :deletion_date,
+                    account_status = :status,
+                    updated_at = :now
+            ''',
+            ExpressionAttributeValues={
+                ':deleted_at': deletion_scheduled_at,
+                ':scheduled_at': deletion_scheduled_at,
+                ':deletion_date': deletion_date_str,
+                ':status': 'PENDING_DELETION',
+                ':now': deletion_scheduled_at
+            }
+        )
+        
+        # Import galleries table for marking user's galleries
+        from utils.config import galleries_table, photos_table
+        
+        # Mark all user's galleries for deletion
+        try:
+            galleries_response = galleries_table.scan(
+                FilterExpression='user_id = :user_id',
+                ExpressionAttributeValues={':user_id': user_id}
+            )
+            
+            user_galleries = galleries_response.get('Items', [])
+            print(f"   Found {len(user_galleries)} galleries to mark for deletion")
+            
+            for gallery in user_galleries:
+                gallery_id = gallery.get('id')
+                if gallery_id:
+                    galleries_table.update_item(
+                        Key={
+                            'user_id': user_id,
+                            'id': gallery_id
+                        },
+                        UpdateExpression='''
+                            SET deleted_at = :deleted_at,
+                                deletion_scheduled_at = :scheduled_at,
+                                permanent_deletion_date = :deletion_date,
+                                updated_at = :now
+                        ''',
+                        ExpressionAttributeValues={
+                            ':deleted_at': deletion_scheduled_at,
+                            ':scheduled_at': deletion_scheduled_at,
+                            ':deletion_date': deletion_date_str,
+                            ':now': deletion_scheduled_at
+                        }
+                    )
+                    print(f"   ✓ Marked gallery {gallery_id} for deletion")
+        except Exception as gallery_error:
+            print(f"⚠️  Error marking galleries for deletion: {gallery_error}")
+            # Continue with account deletion even if gallery marking fails
+        
+        # Invalidate all user sessions (logout from all devices)
+        try:
+            sessions_response = sessions_table.scan(
+                FilterExpression='user_id = :user_id',
+                ExpressionAttributeValues={':user_id': user_id}
+            )
+            
+            for session in sessions_response.get('Items', []):
+                token = session.get('token')
+                if token:
+                    sessions_table.delete_item(Key={'token': token})
+            
+            print(f"   ✓ Invalidated all user sessions")
+        except Exception as session_error:
+            print(f"⚠️  Error invalidating sessions: {session_error}")
+        
+        # Send account deletion notification email
+        try:
+            from utils.email import send_email
+            import os
+            
+            support_email = os.environ.get('SUPPORT_EMAIL', 'support@galerly.com')
+            
+            send_email(
+                to_email=user_email,
+                template_name='account_deletion_scheduled',
+                template_vars={
+                    'user_name': user.get('name', user_email.split('@')[0]),
+                    'deletion_date': deletion_date.strftime('%B %d, %Y'),
+                    'days_remaining': '30',
+                    'support_email': support_email
+                }
+            )
+            print(f"   ✓ Sent deletion notification email to {user_email}")
+        except Exception as email_error:
+            print(f"⚠️  Error sending deletion email: {email_error}")
+            import traceback
+            traceback.print_exc()
+            # Continue even if email fails
+        
+        print(f"✅ Account soft deleted successfully")
+        print(f"   Account will be permanently deleted on: {deletion_date_str}")
+        
+        # Check if local development to set appropriate cookie flags
+        import os
+        is_local = 'localhost' in os.environ.get('FRONTEND_URL', '')
+        secure_flag = '' if is_local else 'Secure; '
+        samesite = 'Lax' if is_local else 'Strict'
+        cookie_value = f'galerly_session=; HttpOnly; {secure_flag}SameSite={samesite}; Path=/; Max-Age=0'
+        
+        response = create_response(200, {
+            'message': 'Account scheduled for deletion. Your data will be permanently removed in 30 days.',
+            'deletion_date': deletion_date_str,
+            'days_remaining': 30
+        })
+        
+        # Add Set-Cookie header to clear session
+        response['headers']['Set-Cookie'] = cookie_value
+        
+        return response
+        
+    except Exception as e:
+        print(f"❌ Error deleting account: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': 'Failed to delete account. Please contact support.'})
 

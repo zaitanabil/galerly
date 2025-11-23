@@ -165,13 +165,24 @@ class UploadQueue {
      */
     async uploadFile(file) {
         try {
+            // Store original file before any processing
+            const originalFile = file;
+            let wasConverted = false;
+            
             // 🚀 BIG TECH SOLUTION: Convert HEIC to JPEG (Instagram/Booking.com approach)
             // This happens CLIENT-SIDE before upload for universal browser compatibility
             if (typeof window.processImageForUpload === 'function') {
                 console.log(`📸 Processing image: ${file.name}`);
                 try {
-                    file = await window.processImageForUpload(file);
-                    console.log(`✅ Image processed: ${file.name}`);
+                    const processedFile = await window.processImageForUpload(file);
+                    if (processedFile !== file) {
+                        // File was converted (e.g., HEIC → JPEG)
+                        wasConverted = true;
+                        file = processedFile;
+                        console.log(`✅ Image converted: ${originalFile.name} → ${file.name}`);
+                    } else {
+                        console.log(`✅ Image processed (no conversion): ${file.name}`);
+                    }
                 } catch (processError) {
                     console.warn(`⚠️  Image processing failed, using original:`, processError);
                     // Continue with original file
@@ -219,9 +230,65 @@ class UploadQueue {
                 })
             });
 
-            const { photo_id, s3_key, upload_url, upload_fields } = urlResponse;
+            const { photo_id, s3_key, upload_url, upload_fields, use_direct_upload } = urlResponse;
 
-            // Step 4: Upload to S3
+            // Variable to store upload response
+            let uploadResponse = null;
+
+            // Step 4: Upload to S3 (or direct backend for LocalStack)
+            if (use_direct_upload) {
+                // LocalStack: Direct backend upload
+                console.log('📤 Using direct backend upload (LocalStack)...');
+                
+                // Convert converted file to base64
+                const base64Data = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        // Remove data URL prefix (data:image/jpeg;base64,)
+                        const base64 = reader.result.split(',')[1];
+                        resolve(base64);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+                
+                // Prepare upload payload
+                const uploadPayload = {
+                    photo_id: photo_id,
+                    s3_key: s3_key,
+                    filename: file.name,
+                    file_data: base64Data
+                };
+                
+                // If file was converted, also send original
+                if (wasConverted) {
+                    console.log(`📦 Also uploading original file: ${originalFile.name}`);
+                    const originalBase64 = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => {
+                            const base64 = reader.result.split(',')[1];
+                            resolve(base64);
+                        };
+                        reader.onerror = reject;
+                        reader.readAsDataURL(originalFile);
+                    });
+                    
+                    uploadPayload.original_filename = originalFile.name;
+                    uploadPayload.original_file_data = originalBase64;
+                }
+                
+                // Upload via backend
+                uploadResponse = await apiRequest(upload_url, {
+                    method: 'POST',
+                    body: JSON.stringify(uploadPayload)
+                });
+                
+                if (!uploadResponse.success) {
+                    throw new Error(`Direct upload failed: ${uploadResponse.error || 'Unknown error'}`);
+                }
+                
+            } else {
+                // Production: S3 presigned POST
             const formData = new FormData();
             Object.entries(upload_fields).forEach(([key, value]) => {
                 formData.append(key, value);
@@ -235,17 +302,27 @@ class UploadQueue {
 
             if (!s3Response.ok && s3Response.status !== 204) {
                 throw new Error(`S3 upload failed: ${s3Response.status}`);
+                }
             }
 
             // Step 5: Confirm upload (triggers security validation)
+            // Step 5: Confirm upload with backend
+            const confirmPayload = {
+                photo_id: photo_id,
+                s3_key: s3_key,
+                filename: file.name,
+                file_size: file.size
+            };
+            
+            // Include original file info if available
+            if (use_direct_upload && wasConverted && uploadResponse.original_s3_key) {
+                confirmPayload.original_s3_key = uploadResponse.original_s3_key;
+                confirmPayload.original_filename = uploadResponse.original_filename;
+            }
+            
             const confirmResponse = await apiRequest(`galleries/${this.galleryId}/photos/confirm-upload`, {
                 method: 'POST',
-                body: JSON.stringify({
-                    photo_id: photo_id,
-                    s3_key: s3_key,
-                    filename: file.name,
-                    file_size: file.size
-                })
+                body: JSON.stringify(confirmPayload)
             });
 
             this.uploadedCount++;
@@ -273,10 +350,15 @@ class UploadQueue {
         const percent = total > 0 ? (completed / total) * 100 : 0;
 
         const progressBarFill = document.getElementById('progressBarFill');
+        const progressLabel = document.getElementById('progressLabel');
         const progressCounter = document.getElementById('progressCounter');
 
         if (progressBarFill) {
             progressBarFill.style.width = `${percent}%`;
+        }
+
+        if (progressLabel) {
+            progressLabel.textContent = `Uploading ${total} ${total === 1 ? 'file' : 'files'}`;
         }
 
         if (progressCounter) {

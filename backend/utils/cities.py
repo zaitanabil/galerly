@@ -1,206 +1,116 @@
 """
-City search utilities using DynamoDB with GSI for ultra-fast queries
+City search utilities using DynamoDB with prefix GSIs for ultra-fast queries
 """
 import boto3
+import os
 from .response import create_response
 
-# Initialize DynamoDB
-dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
-cities_table = dynamodb.Table('galerly-cities')
+# Configuration
+AWS_ENDPOINT_URL = os.getenv('AWS_ENDPOINT_URL', '')
+IS_LOCAL = AWS_ENDPOINT_URL and ('localhost' in AWS_ENDPOINT_URL or 'localstack' in AWS_ENDPOINT_URL)
+AWS_REGION = os.getenv('AWS_REGION', 'us-east-1')
 
-# In-memory cache for cities (loaded once on cold start)
-CITIES_CACHE = []
+# DynamoDB setup
+if IS_LOCAL:
+    dynamodb = boto3.resource(
+        'dynamodb',
+        endpoint_url=AWS_ENDPOINT_URL,
+        region_name=AWS_REGION,
+        aws_access_key_id='test',
+        aws_secret_access_key='test'
+    )
+    TABLE_NAME = 'galerly-cities-local'
+    print(f"🔧 Cities: Using LocalStack at {AWS_ENDPOINT_URL}")
+else:
+    dynamodb = boto3.resource('dynamodb', region_name=AWS_REGION)
+    TABLE_NAME = 'galerly-cities'
+    print(f"🔧 Cities: Using AWS DynamoDB")
 
-def search_cities_with_gsi(query):
+cities_table = dynamodb.Table(TABLE_NAME)
+print(f"📊 Cities table: {TABLE_NAME}")
+
+
+def search_cities(query):
     """
-    Ultra-fast city search using DynamoDB GSI (no memory loading needed).
+    Ultra-fast city search using prefix GSIs.
     
-    Uses the search_key-index GSI for instant prefix searches.
-    Falls back to in-memory cache for longer/complex queries.
+    Strategy:
+    - 1-2 chars: Use prefix1 or prefix2 index
+    - 3+ chars: Use prefix3 index for best performance
+    
+    All results sorted by population (largest first)
+    Returns top 10 matches
     """
     try:
-        if not query or len(query) < 2:
-            return create_response(400, {'error': 'Query must be at least 2 characters'})
+        if not query or len(query) < 1:
+            return create_response(400, {'error': 'Query required'})
         
-        query_lower = query.lower()
-        print(f"🔍 Searching for cities starting with: {query}")
+        query_lower = query.lower().strip()
+        query_len = len(query_lower)
         
-        # For 3+ char queries, use the GSI for instant results
-        if len(query_lower) >= 3:
-            search_prefix = query_lower[:3]
+        print(f"🔍 Searching cities: '{query}' (length: {query_len})")
+        
+        # Choose the appropriate index based on query length
+        if query_len == 1:
+            index_name = 'prefix1-population-index'
+            prefix_key = 'prefix1'
+            prefix_value = query_lower[0]
+        elif query_len == 2:
+            index_name = 'prefix2-population-index'
+            prefix_key = 'prefix2'
+            prefix_value = query_lower[:2]
+        else:  # 3+ characters
+            index_name = 'prefix3-population-index'
+            prefix_key = 'prefix3'
+            prefix_value = query_lower[:3]
+        
+        print(f"📊 Using index: {index_name} with prefix: '{prefix_value}'")
+        
+        # Query the GSI (sorted by population DESC automatically)
+        response = cities_table.query(IndexName=index_name,KeyConditionExpression=f'{prefix_key} = :prefix',ExpressionAttributeValues={':prefix': prefix_value},ScanIndexForward=False,Limit=100)
+                
+        items = response.get('Items', [])
+        print(f"📦 Retrieved {len(items)} cities from index")
+                
+        # Filter to exact query match (for queries longer than the prefix)
+        matches = []
+        for item in items:
+            city_lower = item.get('city_lower', '')
             
-            try:
-                # Query the GSI (ultra-fast, no memory loading)
-                response = cities_table.query(
-                    IndexName='search_key-index',
-                    KeyConditionExpression='search_key = :prefix',
-                    ExpressionAttributeValues={
-                        ':prefix': search_prefix
-                    },
-                    ScanIndexForward=False,  # Sort by population DESC
-                    Limit=100  # Get top 100 from this prefix
-                )
-                
-                items = response.get('Items', [])
-                
-                # Filter results to match full query (not just 3-char prefix)
-                matches = []
-                for item in items:
-                    city_lower = item.get('city_lower', '')
-                    if city_lower.startswith(query_lower):
-                        matches.append({
-                            'city_ascii': item.get('city_ascii', ''),
-                            'country': item.get('country', ''),
-                            'display': f"{item.get('city_ascii', '')}, {item.get('country', '')}",
-                            'population': int(item.get('population', 0)),
-                            'lat': float(item.get('lat', 0)),
-                            'lng': float(item.get('lng', 0))
-                        })
-                
-                # Already sorted by population, take top 10
-                top_matches = matches[:10]
-                
-                print(f"✅ GSI query found {len(matches)} matches, returning top {len(top_matches)}")
-                
-                return create_response(200, {
-                    'cities': top_matches,
-                    'total': len(matches)
+            # Check if city starts with the full query
+            if city_lower.startswith(query_lower):
+                matches.append({
+                    'city_id': item.get('city_id'),
+                    'city': item.get('city'),
+                    'city_ascii': item.get('city_ascii'),
+                    'country': item.get('country'),
+                    'admin_name': item.get('admin_name', ''),
+                    'display_name': item.get('display_name'),
+                    'population': int(item.get('population', 0)),
+                    'lat': float(item.get('lat', 0)),
+                    'lng': float(item.get('lng', 0))
                 })
-                
-            except Exception as gsi_error:
-                print(f"⚠️  GSI query failed, falling back to cache: {gsi_error}")
-                # Fall through to cache-based search
         
-        # For short queries (< 3 chars) or GSI fallback, use in-memory cache
-        return search_cities_cached(query_lower)
+        # Already sorted by population DESC from GSI, take top 10
+        top_matches = matches[:10]
+        
+        print(f"✅ Found {len(matches)} matches, returning top {len(top_matches)}")
+        
+        # Debug: Print first match to verify structure
+        if top_matches:
+            print(f"🔍 First match structure: {top_matches[0]}")
+        
+        return create_response(200, {
+            'cities': top_matches,
+            'total': len(matches),
+            'query': query
+        })
         
     except Exception as e:
         print(f"❌ Error searching cities: {str(e)}")
         import traceback
         traceback.print_exc()
-        return create_response(500, {'error': 'City search failed'})
-
-def load_cities_from_dynamodb():
-    """
-    Load all cities from DynamoDB into memory (once on cold start).
-    This makes searches instant instead of scanning DynamoDB on every request.
-    """
-    global CITIES_CACHE
-    
-    if CITIES_CACHE:
-        print(f"✅ Using cached cities: {len(CITIES_CACHE)} in memory")
-        return CITIES_CACHE
-    
-    try:
-        print("📥 Loading cities from DynamoDB into memory...")
-        
-        # Scan entire table with parallel scan for faster loading (done only once on cold start)
-        # Using 4 parallel segments for 4x faster initial load
-        items = []
-        segments = 4
-        
-        # Parallel scan for faster loading
-        from concurrent.futures import ThreadPoolExecutor, as_completed
-        
-        def scan_segment(segment):
-            """Scan a single segment of the table"""
-            segment_items = []
-            response = cities_table.scan(
-                Segment=segment,
-                TotalSegments=segments
-            )
-            segment_items.extend(response.get('Items', []))
-            
-            while 'LastEvaluatedKey' in response:
-                response = cities_table.scan(
-                    Segment=segment,
-                    TotalSegments=segments,
-                    ExclusiveStartKey=response['LastEvaluatedKey']
-                )
-                segment_items.extend(response.get('Items', []))
-            
-            return segment_items
-        
-        # Execute parallel scans
-        with ThreadPoolExecutor(max_workers=segments) as executor:
-            futures = [executor.submit(scan_segment, i) for i in range(segments)]
-            for future in as_completed(futures):
-                items.extend(future.result())
-        
-        # Store in cache
-        cache = []
-        for item in items:
-            cache.append({
-                'city': item.get('city', ''),
-                'city_ascii': item.get('city_ascii', ''),
-                'country': item.get('country', ''),
-                'lat': float(item.get('lat', 0)),
-                'lng': float(item.get('lng', 0)),
-                'population': int(item.get('population', 0))
+        return create_response(500, {
+            'error': 'City search failed',
+            'message': str(e)
             })
-        
-        CITIES_CACHE = cache  # Assign to global
-        print(f"✅ Loaded {len(CITIES_CACHE)} cities into Lambda memory")
-        return CITIES_CACHE
-    
-    except Exception as e:
-        print(f"❌ Error loading cities from DynamoDB: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return []
-
-def search_cities_cached(query_lower):
-    """
-    Search cities using in-memory cache (fallback for short queries or GSI failures).
-    
-    Logic:
-    - User can search by either 'city' (e.g., "Béni") or 'city_ascii' (e.g., "Beni")
-    - Returns matches that START with the query in either field
-    - Always displays results as "city_ascii, country"
-    - Sorted by population (largest first)
-    - Returns top 10 results
-    
-    Performance: Instant! Searches in-memory cache (loaded once on cold start)
-    """
-    # Load cities into memory (only happens once on cold start)
-    cities = load_cities_from_dynamodb()
-    
-    if not cities:
-        return create_response(500, {'error': 'Cities database not loaded'})
-    
-    print(f"🔍 Cache search for: {query_lower}")
-    
-    # Fast in-memory search
-    matches = []
-    for city in cities:
-        city_name = city['city'].lower()
-        city_ascii = city['city_ascii'].lower()
-        
-        # Check if query matches the start of either field
-        if city_name.startswith(query_lower) or city_ascii.startswith(query_lower):
-            matches.append({
-                'city_ascii': city['city_ascii'],
-                'country': city['country'],
-                'display': f"{city['city_ascii']}, {city['country']}",  # Always use city_ascii
-                'population': city['population'],
-                'lat': city['lat'],
-                'lng': city['lng']
-            })
-    
-    # Sort by population (largest first) and take top 10
-    matches.sort(key=lambda x: x['population'], reverse=True)
-    top_matches = matches[:10]
-    
-    print(f"✅ Found {len(matches)} matches in {len(cities)} cities, returning top {len(top_matches)}")
-    
-    return create_response(200, {
-        'cities': top_matches,
-        'total': len(matches)
-    })
-
-def search_cities(query):
-    """
-    Main search function - automatically chooses best strategy.
-    Uses GSI for 3+ char queries, cache for shorter queries.
-    """
-    return search_cities_with_gsi(query)

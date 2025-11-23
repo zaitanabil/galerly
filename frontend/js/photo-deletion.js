@@ -400,7 +400,7 @@ function confirmBulkDelete() {
                     background: var(--background-primary, #F5F5F7);
                     color: var(--text-primary, #1D1D1F);
                     border: none;
-                    border-radius: var(--border-radius-s, 12px);
+                    border-radius: 100px;
                     cursor: pointer;
                     font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
                     font-size: 15px;
@@ -417,7 +417,7 @@ function confirmBulkDelete() {
                     background: #FF3B30;
                     color: white;
                     border: none;
-                    border-radius: var(--border-radius-s, 12px);
+                    border-radius: 100px;
                     cursor: pointer;
                     font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
                     font-size: 15px;

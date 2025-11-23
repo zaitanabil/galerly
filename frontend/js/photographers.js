@@ -45,7 +45,7 @@ function showCitySuggestions(suggestions) {
     }
     
     dropdown.innerHTML = suggestions.map((city) => `
-        <div class="city-suggestion-item" data-city="${city.display}" style="
+        <div class="city-suggestion-item" data-city="${city.display_name || city.display || city.city_ascii}" style="
             padding: 14px 18px;
             cursor: pointer;
             transition: background 0.2s ease;
@@ -54,7 +54,7 @@ function showCitySuggestions(suggestions) {
             color: var(--primary-900);
         " onmouseover="this.style.background='rgba(0, 0, 0, 0.03)'" 
            onmouseout="this.style.background='white'">
-            ${city.display}
+            ${city.display_name || city.display || city.city_ascii}
         </div>
     `).join('');
     

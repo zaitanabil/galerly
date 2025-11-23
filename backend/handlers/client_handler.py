@@ -108,25 +108,37 @@ def handle_client_galleries(user):
             
             # Check if user email is in the list
             if user_email in [email.lower() for email in client_emails]:
-                # Get photographer info
-                try:
-                    photographer_id = gallery.get('user_id')
-                    photographer_response = users_table.scan(
-                        FilterExpression='id = :id',
-                        ExpressionAttributeValues={':id': photographer_id}
-                    )
-                    photographers = photographer_response.get('Items', [])
-                    if photographers:
-                        photographer = photographers[0]
-                        gallery['photographer_name'] = photographer.get('name') or photographer.get('username') or 'Unknown'
-                        gallery['photographer_id'] = photographer['id']
-                    else:
+                # Check if gallery owner's account is deleted - SKIP if deleted
+                photographer_id = gallery.get('user_id')
+                if photographer_id:
+                    try:
+                        photographer_response = users_table.scan(
+                            FilterExpression='id = :id',
+                            ExpressionAttributeValues={':id': photographer_id}
+                        )
+                        
+                        if photographer_response.get('Items'):
+                            photographer = photographer_response['Items'][0]
+                            account_status = photographer.get('account_status', 'ACTIVE')
+                            
+                            # Skip galleries from deleted photographers
+                            if account_status == 'PENDING_DELETION':
+                                print(f"⚠️  Skipping gallery {gallery.get('id')} - photographer account deleted")
+                                continue
+                            
+                            # Add photographer info
+                            gallery['photographer_name'] = photographer.get('name') or photographer.get('username') or 'Unknown'
+                            gallery['photographer_id'] = photographer['id']
+                        else:
+                            gallery['photographer_name'] = 'Unknown Photographer'
+                            gallery['photographer_id'] = photographer_id
+                    except Exception as e:
+                        print(f"⚠️  Error checking photographer status: {e}")
                         gallery['photographer_name'] = 'Unknown Photographer'
-                        gallery['photographer_id'] = photographer_id
-                except Exception as e:
-                    print(f"Error looking up photographer: {str(e)}")
+                        gallery['photographer_id'] = gallery.get('user_id')
+                else:
                     gallery['photographer_name'] = 'Unknown Photographer'
-                    gallery['photographer_id'] = gallery.get('user_id')
+                    gallery['photographer_id'] = None
                 
                 # Get photos for gallery
                 try:
@@ -184,6 +196,29 @@ def handle_get_client_gallery(gallery_id, user):
             return create_response(404, {'error': 'Gallery not found'})
         
         gallery = galleries[0]
+        
+        # Check if gallery owner's account is deleted - BEFORE checking client access
+        photographer_id = gallery.get('user_id')
+        if photographer_id:
+            try:
+                photographer_response = users_table.scan(
+                    FilterExpression='id = :id',
+                    ExpressionAttributeValues={':id': photographer_id}
+                )
+                
+                if photographer_response.get('Items'):
+                    photographer = photographer_response['Items'][0]
+                    account_status = photographer.get('account_status', 'ACTIVE')
+                    
+                    if account_status == 'PENDING_DELETION':
+                        return create_response(410, {
+                            'error': 'Gallery unavailable',
+                            'message': 'This gallery is no longer available. The photographer\'s account has been deactivated.'
+                        })
+            except Exception as e:
+                print(f"⚠️  Error checking photographer status: {e}")
+                # Continue if check fails - don't block gallery access
+        
         user_email = user['email'].lower()
         
         # Check if client has access (user email in client_emails array or legacy client_email)
@@ -257,6 +292,33 @@ def handle_get_client_gallery_by_token(share_token):
             return create_response(404, {'error': 'Gallery not found or link is invalid'})
         
         gallery = galleries[0]
+        
+        # Check if gallery owner's account is deleted
+        photographer_id = gallery.get('user_id')
+        if photographer_id:
+            try:
+                photographer_response = users_table.scan(
+                    FilterExpression='id = :id',
+                    ExpressionAttributeValues={':id': photographer_id}
+                )
+                
+                if photographer_response.get('Items'):
+                    photographer = photographer_response['Items'][0]
+                    account_status = photographer.get('account_status', 'ACTIVE')
+                    
+                    if account_status == 'PENDING_DELETION':
+                        return create_response(410, {
+                            'error': 'Gallery unavailable',
+                            'message': 'This gallery is no longer available. The photographer\'s account has been deactivated.'
+                        })
+            except Exception as e:
+                print(f"⚠️  Error checking photographer status: {e}")
+                # Continue if check fails - don't block gallery access
+        
+        # Check if gallery is archived
+        if gallery.get('archived', False):
+            return create_response(410, {'error': 'This gallery has been archived and is no longer accessible'})
+        
         gallery_id = gallery['id']
         
         # Check if token is expired

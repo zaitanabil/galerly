@@ -82,7 +82,7 @@ async function getGalleryShareInfo(galleryId, authenticated = false, retries = 2
             return data;
         } else {
             // Public access - use fetch directly with timeout
-            const apiUrl = window.CONFIG?.API_BASE_URL || window.API_BASE_URL || '';
+            const apiUrl = window.GalerlyConfig?.API_BASE_URL || window.API_BASE_URL || '';
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
             
@@ -148,7 +148,7 @@ async function getPhotoShareInfo(photoId, authenticated = false, retries = 2) {
             return data;
         } else {
             // Public access - use fetch directly with timeout
-            const apiUrl = window.CONFIG?.API_BASE_URL || window.API_BASE_URL || '';
+            const apiUrl = window.GalerlyConfig?.API_BASE_URL || window.API_BASE_URL || '';
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
             
@@ -332,8 +332,8 @@ function showNotification(message, type = 'success') {
         right: 24px;
         background: ${bgColor};
         color: #FFFFFF;
-        padding: 16px 32px;
-        border-radius: 100px;
+        padding: 14px 28px;
+        border-radius: 999px;
         box-shadow: 0 8px 24px ${shadowColor};
         z-index: 10000;
         font-family: 'SF Pro Text', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -341,6 +341,7 @@ function showNotification(message, type = 'success') {
         font-weight: 600;
         letter-spacing: -0.01em;
         animation: slideIn 0.2s ease-out;
+        white-space: nowrap;
     `;
     notification.textContent = message;
     

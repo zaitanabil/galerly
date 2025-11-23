@@ -109,6 +109,23 @@ function openPhotoModal(index) {
             modalImage.src = mediumUrl;
             modalImage.style.filter = 'none';
         };
+        mediumImg.onerror = () => {
+            console.warn('⚠️  Medium rendition failed, using original:', photo.url);
+            // Fallback to original if medium fails
+            const originalUrl = getImageUrl(photo.url);
+            const originalImg = new Image();
+            originalImg.onload = () => {
+                imageCache.set(mediumUrl, originalImg); // Cache under medium URL
+                modalImage.src = originalUrl;
+                modalImage.style.filter = 'none';
+            };
+            originalImg.onerror = () => {
+                console.error('❌ Both medium and original failed for photo:', photo.id);
+                modalImage.style.filter = 'none';
+                modalImage.alt = 'Failed to load image';
+            };
+            originalImg.src = originalUrl;
+        };
         mediumImg.src = mediumUrl;
     }
     
@@ -169,6 +186,22 @@ function navigatePhoto(direction) {
             modalImage.src = mediumUrl;
             modalImage.style.filter = 'none';
         };
+        mediumImg.onerror = () => {
+            console.warn('⚠️  Medium rendition failed during navigation, using original');
+            // Fallback to original
+            const originalUrl = getImageUrl(photo.url);
+            const originalImg = new Image();
+            originalImg.onload = () => {
+                imageCache.set(mediumUrl, originalImg);
+                modalImage.src = originalUrl;
+                modalImage.style.filter = 'none';
+            };
+            originalImg.onerror = () => {
+                console.error('❌ Original also failed for photo:', photo.id);
+                modalImage.style.filter = 'none';
+            };
+            originalImg.src = originalUrl;
+        };
         mediumImg.src = mediumUrl;
     }
     
@@ -184,7 +217,19 @@ function updateModalContent() {
     const commentsList = document.getElementById('commentsList');
     // Update status indicator
     statusIndicator.className = `status-indicator ${data.status}`;
-    const statusText = data.status === 'pending' ? 'Pending' : 'Approved';
+    
+    // Map status to display text
+    let statusText = 'Ready for Review';
+    if (data.status === 'pending') {
+        statusText = 'Pending';
+    } else if (data.status === 'approved') {
+        statusText = 'Approved by Client';
+    } else if (data.status === 'active') {
+        statusText = 'Ready for Review';
+    } else if (data.status === 'processing') {
+        statusText = 'Processing...';
+    }
+    
     statusIndicator.querySelector('span:last-child').textContent = statusText;
     // Update photo number
     photoNumber.textContent = `Photo ${currentPhotoIndex + 1} of ${photos.length}`;
@@ -375,11 +420,12 @@ function showNotification(message) {
         right: 20px;
         background: #4CAF50;
         color: white;
-        padding: 16px 24px;
-        border-radius: 8px;
+        padding: 14px 28px;
+        border-radius: 999px;
         box-shadow: 0 4px 12px rgba(0,0,0,0.15);
         z-index: 10000;
         animation: slideInRight 0.3s ease;
+        white-space: nowrap;
     `;
     notification.textContent = message;
     document.body.appendChild(notification);
