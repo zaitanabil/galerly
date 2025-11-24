@@ -21,7 +21,7 @@ echo ""
 
 # Stop all services
 echo "🐳 Stopping containers..."
-docker-compose -f docker-compose.localstack.yml down
+docker-compose -f docker/docker-compose.localstack.yml down
 
 echo ""
 echo "✅ All services stopped"

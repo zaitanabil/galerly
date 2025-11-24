@@ -160,7 +160,7 @@ echo ""
 
 # Start backend and frontend services
 echo "🌐 Starting backend and frontend services..."
-docker-compose -f docker-compose.localstack.yml up -d backend frontend
+docker-compose -f docker/docker-compose.localstack.yml up -d backend frontend
 echo ""
 
 # Restore S3 from backup
@@ -201,9 +201,9 @@ echo "  • Backup location:  ./localstack_data/s3_backup/"
 echo "  • View logs:        tail -f ./localstack_data/auto-backup.log"
 echo ""
 echo "Useful Commands:"
-echo "  • View logs:        docker-compose -f docker-compose.localstack.yml logs -f"
+echo "  • View logs:        docker-compose -f docker/docker-compose.localstack.yml logs -f"
 echo "  • Stop services:    ./scripts/stop-localstack.sh"
-echo "  • Restart services: docker-compose -f docker-compose.localstack.yml restart"
+echo "  • Restart services: docker-compose -f docker/docker-compose.localstack.yml restart"
 echo "  • List S3 buckets:  aws --endpoint-url=${AWS_ENDPOINT_URL} s3 ls"
 echo "  • List DynamoDB:    aws --endpoint-url=${AWS_ENDPOINT_URL} dynamodb list-tables"
 echo ""
@@ -219,4 +219,4 @@ echo "Press Ctrl+C to stop, or run: ./scripts/stop-localstack.sh"
 echo ""
 
 # Follow logs
-docker-compose -f docker-compose.localstack.yml logs -f
+docker-compose -f docker/docker-compose.localstack.yml logs -f
