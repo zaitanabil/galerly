@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  backend-tests:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.test
+    volumes:
+      - ./backend:/app
+      - ./test-results:/app/test-results
+      - ./backend/htmlcov:/app/htmlcov
+    environment:
+      - PYTHONPATH=/app
+      - ENVIRONMENT=test
+    command: >
+      bash -c "
+        echo '=== Running Backend Tests ===' &&
+        pytest tests/ -v 
+        --cov=handlers 
+        --cov=utils 
+        --cov-report=xml 
+        --cov-report=html 
+        --cov-report=term-missing 
+        --junitxml=/app/test-results/junit.xml 
+        -n auto &&
+        echo '=== Tests Complete ===' &&
+        echo 'Coverage report: /app/htmlcov/index.html'
+      "
+    networks:
+      - test-network
+
+  integration-tests:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.test
+    volumes:
+      - ./backend:/app
+      - ./test-results:/app/test-results
+    environment:
+      - PYTHONPATH=/app
+      - ENVIRONMENT=test
+    command: >
+      bash -c "
+        echo '=== Running Integration Tests ===' &&
+        pytest tests/test_integration_workflows.py -v --junitxml=/app/test-results/integration-junit.xml &&
+        echo '=== Integration Tests Complete ==='
+      "
+    depends_on:
+      - backend-tests
+    networks:
+      - test-network
+
+  all-tests:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.test
+    volumes:
+      - ./backend:/app
+      - ./test-results:/app/test-results
+      - ./backend/htmlcov:/app/htmlcov
+    environment:
+      - PYTHONPATH=/app
+      - ENVIRONMENT=test
+    command: >
+      bash -c "
+        echo '================================================' &&
+        echo '          GALERLY COMPREHENSIVE TEST SUITE      ' &&
+        echo '================================================' &&
+        echo '' &&
+        python tests/run_tests.py &&
+        echo '' &&
+        echo '================================================' &&
+        echo '          ALL TESTS COMPLETED                   ' &&
+        echo '================================================' &&
+        echo '' &&
+        echo 'Coverage Report: /app/htmlcov/index.html' &&
+        echo 'JUnit XML: /app/test-results/junit.xml'
+      "
+    networks:
+      - test-network
+
+networks:
+  test-network:
+    driver: bridge
+
+volumes:
+  test-results:
+

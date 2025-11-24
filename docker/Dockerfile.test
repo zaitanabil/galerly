@@ -1,0 +1,35 @@
+# Backend Test Container
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first for better caching
+COPY backend/requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install test dependencies
+RUN pip install --no-cache-dir \
+    pytest==7.4.3 \
+    pytest-cov==4.1.0 \
+    pytest-xdist==3.5.0 \
+    pytest-timeout==2.2.0 \
+    coverage==7.3.2
+
+# Copy backend code
+COPY backend/ /app/
+
+# Set Python path
+ENV PYTHONPATH=/app
+
+# Create directory for test results
+RUN mkdir -p /app/test-results
+
+# Run tests by default
+CMD ["pytest", "tests/", "-v", "--cov=handlers", "--cov=utils", "--cov-report=xml", "--cov-report=term-missing", "--junitxml=/app/test-results/junit.xml", "-n", "auto"]
+

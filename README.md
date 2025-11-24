@@ -1,324 +1,162 @@
-# Galerly Documentation
+# Galerly
 
-Photography gallery platform. Share art, not files.
+Professional photo gallery management platform for photographers.
 
----
+## Project Structure
+
+```
+galerly.com/
+├── backend/           # Python API (Flask/Lambda)
+├── frontend/          # HTML/CSS/JavaScript
+├── docker/            # Container configuration
+├── scripts/           # Operational automation
+├── docs/              # Documentation
+├── .github/workflows/ # CI/CD pipelines
+└── tests/             # Comprehensive test suite (500+ tests)
+```
 
 ## Quick Start
 
-### Deploy
+### Local Development
 
-**All deployments via GitHub Actions:**
 ```bash
-git add .
-git commit -m "Your changes"
-git push origin main
-```
+# Start LocalStack (local AWS)
+./scripts/start-localstack.sh
 
-GitHub Actions automatically:
-- ✅ Checks/creates DynamoDB tables (if needed)
-- ✅ Checks/creates indexes (if needed)
-- ✅ Verifies AWS configuration
-- ✅ Deploys backend (Lambda)
-- ✅ Deploys frontend (S3)
-- ⏱️ Takes ~5-7 min (first time), ~2-3 min (after)
-
-See: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) for setup.
-
----
-
-## Architecture
-
-```
-Browser → S3 (Frontend) → API Gateway → Lambda (Python) → DynamoDB
-                                                        ↓
-                                                   S3 (Images)
-```
-
-**Components:**
-- **Frontend:** S3 static website (HTML/CSS/JS)
-- **Backend:** Lambda Python 3.11 (`galerly-api`)
-- **Database:** DynamoDB (users, galleries, photos, sessions)
-- **Storage:** S3 (`galerly-images-storage`)
-- **API:** `https://ow085upbvb.execute-api.us-east-1.amazonaws.com/prod`
-
----
-
-## API Endpoints
-
-### Authentication
-```
-POST /api/v1/auth/register    - Register user
-POST /api/v1/auth/login       - Login
-GET  /api/v1/auth/me          - Current user
-```
-
-### Galleries
-```
-GET    /api/v1/galleries         - List galleries
-POST   /api/v1/galleries         - Create gallery
-GET    /api/v1/galleries/{id}    - Get gallery
-PUT    /api/v1/galleries/{id}    - Update gallery
-DELETE /api/v1/galleries/{id}    - Delete gallery
-```
-
-### Photos
-```
-POST /api/v1/galleries/{id}/photos  - Upload photo
-PUT  /api/v1/photos/{id}            - Update photo status
-POST /api/v1/photos/{id}/comments   - Add comment
-```
-
-### Client Access
-```
-GET /api/v1/client/galleries     - Client galleries
-GET /api/v1/client/galleries/{id} - Client gallery view
-```
-
-### Public
-```
-GET  /api/v1/photographers        - List photographers
-GET  /api/v1/photographers/{id}   - Photographer profile
-GET  /api/v1/cities/search?q=     - City autocomplete
-POST /api/v1/newsletter/subscribe - Subscribe to newsletter
-POST /api/v1/contact/submit       - Submit support ticket
-```
-
-**Full API docs:** See `docs/API.md`
-
----
-
-## Database Schema
-
-### galerly-users
-```
-PK: email
-- id, username, name, password_hash, role, subscription
-- city, bio, specialties, created_at, updated_at
-```
-
-### galerly-galleries
-```
-PK: user_id, SK: id
-- name, description, client_name, client_email
-- privacy, share_token, allow_download, allow_comments
-- photo_count, view_count, created_at, updated_at
-```
-
-### galerly-photos
-```
-PK: id, GSI: gallery_id
-- filename, s3_key, url, title, description
-- status (pending/approved), views, comments
-- created_at, updated_at
-```
-
-### galerly-sessions
-```
-PK: token, GSI: user_id
-- user (full object), created_at
-- TTL: 24 hours
-```
-
-### galerly-newsletters
-```
-PK: email, GSI: subscribed_at
-- firstName, status (active/unsubscribed)
-- subscribed_at, updated_at, source
-```
-
-### galerly-contact
-```
-PK: id, GSI: created_at, status
-- name, email, issue_type, message
-- status (new/in_progress/resolved/closed)
-- created_at, updated_at
-```
-
----
-
-## Design System
-
-**Colors:**
-- Science Blue: `#0066CC`
-- Shark (Dark): `#1D1D1F`
-- Light Gray: `#F5F5F7`
-- Pure White: `#FFFFFF`
-- Coral Accent: `#FF6F61`
-- Mint Green: `#98FF98`
-
-**Design:** Liquid Glass (glassmorphism)
-
-**Files:**
-- `frontend/css/variables.css` - Design system (507 lines)
-- `docs/BRAND.md` - Brand guidelines
-- `docs/DESIGN_SYSTEM.md` - Complete design system
-
----
-
-## Backend Structure
-
-```
-backend/
-├── api.py                    # Main router
-├── setup_dynamodb.py         # DynamoDB setup (replaces 5 shell scripts)
-├── setup_aws.py              # AWS configuration (CORS, etc.)
-├── manage_indexes.py         # Index management
-├── import_cities_to_dynamodb.py  # City data import
-├── utils/
-│   ├── config.py            # AWS clients
-│   ├── auth.py              # Authentication
-│   ├── response.py          # API responses
-│   ├── security.py          # Security utilities
-│   └── cities.py            # City search
-└── handlers/
-    ├── auth_handler.py      # Login/Register
-    ├── gallery_handler.py   # Gallery CRUD
-    ├── photo_handler.py     # Photo upload
-    ├── client_handler.py    # Client access
-    ├── dashboard_handler.py # Stats
-    ├── photographer_handler.py
-    ├── profile_handler.py
-    ├── newsletter_handler.py # Newsletter subscriptions
-    └── city_handler.py
-```
-
-### Backend Setup Scripts
-
-**DynamoDB Management:**
-```bash
-python setup_dynamodb.py create    # Create all tables
-python setup_dynamodb.py optimize  # Optimize tables
-python setup_dynamodb.py list      # List tables
-```
-
-**AWS Configuration:**
-```bash
-python setup_aws.py api-cors       # Enable API Gateway CORS
-python setup_aws.py s3-cors        # Enable S3 CORS
-python setup_aws.py all            # Configure everything
-```
-
-**Index Management:**
-```bash
-python manage_indexes.py           # Check indexes
-python manage_indexes.py --create  # Create missing indexes
-```
-
-See `backend/README_SETUP.md` for detailed documentation.
-
----
-
-## Frontend Structure
-
-```
-frontend/
-├── index.html               # Landing page
-├── auth.html                # Login/Register
-├── dashboard.html           # Photographer dashboard
-├── client-dashboard.html    # Client dashboard
-├── gallery.html             # Gallery management
-├── profile-settings.html    # Profile editor
-├── css/
-│   ├── variables.css        # Design system
-│   ├── style.css            # Main styles
-│   └── gallery.css          # Gallery-specific
-└── js/
-    ├── config.js            # API config
-    ├── auth.js              # Auth logic
-    ├── gallery-loader.js    # Gallery operations
-    └── *.js                 # Other modules
-```
-
----
-
-## Development
-
-### Local Testing
-
-**Backend:**
-```bash
+# Run backend
 cd backend
-python3 -c "from api import handler; print(handler({'path': '/health', 'httpMethod': 'GET'}, {}))"
+python api.py
+
+# Frontend served via Python HTTP server or deploy to S3
 ```
 
-**Frontend:**
+### Run Tests
+
 ```bash
-cd frontend
-python3 -m http.server 8000
-# Open http://localhost:8000
+# All tests with Docker
+./scripts/run-tests.sh
+
+# Backend tests only
+cd backend
+pytest tests/ -v
+
+# With coverage
+pytest tests/ --cov=handlers --cov=utils --cov-report=html
 ```
 
-### Environment Variables
+## Features
 
-**Lambda:**
-```bash
-S3_BUCKET_NAME=galerly-images-storage
-```
+- 📸 **Gallery Management** - Create, organize, and share photo galleries
+- 👥 **Client Portal** - Secure client access to their photos
+- ⭐ **Favorites & Feedback** - Clients can favorite photos and leave feedback
+- 💳 **Subscription Billing** - Tiered plans with Stripe integration
+- 📊 **Analytics** - Track views, downloads, and engagement
+- 🔐 **Authentication** - Secure user auth with sessions
+- 📧 **Notifications** - Email notifications and reminders
+- 🎨 **Portfolio** - Public portfolio pages for photographers
+- 📱 **Responsive** - Works on desktop, tablet, and mobile
 
-**Frontend (`js/config.js`):**
-```javascript
-const API_BASE_URL = 'https://ow085upbvb.execute-api.us-east-1.amazonaws.com/prod';
-```
+## Tech Stack
 
----
-
-## Monitoring
-
-**CloudWatch Logs:**
-```bash
-aws logs tail /aws/lambda/galerly-api --follow
-```
-
-**Health Check:**
-```bash
-curl https://ow085upbvb.execute-api.us-east-1.amazonaws.com/prod/health
-```
-
----
-
-## Troubleshooting
-
-**Lambda not updating:**
-```bash
-aws lambda update-function-code --function-name galerly-api --zip-file fileb://galerly-modular.zip
-aws lambda wait function-updated --function-name galerly-api
-```
-
-**Frontend not updating:**
-```bash
-aws s3 sync frontend/ s3://galerly-frontend-app/ --delete --cache-control "no-cache"
-```
-
-**Check logs:**
-```bash
-aws logs tail /aws/lambda/galerly-api --follow
-```
-
----
-
-## Resources
-
-- **Website:** http://galerly-frontend-app.s3-website-us-east-1.amazonaws.com
-- **API:** https://ow085upbvb.execute-api.us-east-1.amazonaws.com/prod
-- **Region:** us-east-1
-- **Docs:** [`/docs`](docs/) folder
-
----
+- **Backend**: Python 3.11, Flask, AWS Lambda
+- **Frontend**: Vanilla JavaScript, HTML5, CSS3
+- **Database**: AWS DynamoDB
+- **Storage**: AWS S3 + CloudFront CDN
+- **Payments**: Stripe
+- **Infrastructure**: AWS (Lambda, API Gateway, CloudFront, S3, DynamoDB)
+- **Local Dev**: LocalStack
+- **CI/CD**: GitHub Actions
+- **Testing**: Pytest, 500+ automated tests
 
 ## Documentation
 
-**All documentation in [`/docs`](docs/) folder** - See [`docs/README.md`](docs/README.md)
+- [Project Organization](docs/PROJECT_ORGANIZATION.md) - Directory structure
+- [Pagination Implementation](docs/PAGINATION.md) - Pagination guide
+- [Stripe Webhook Setup](docs/STRIPE_WEBHOOK_SETUP.md) - Payment integration
+- [Subscription Validation](docs/SUBSCRIPTION_VALIDATION.md) - Business rules
+- [Brand Identity](docs/BRAND_IDENTITY.md) - Design guidelines
 
-**Quick Links:**
-- **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)** - How to deploy (GitHub Actions)
-- **[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)** - Development workflow
-- **[docs/INFRASTRUCTURE.md](docs/INFRASTRUCTURE.md)** - AWS infrastructure automation
-- **[docs/API.md](docs/API.md)** - API reference
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** - System architecture
+## Testing
 
----
+- ✅ 500+ automated tests
+- ✅ 100% endpoint coverage
+- ✅ Integration workflows tested
+- ✅ CI/CD with GitHub Actions
+- ✅ Docker test containers
 
-**Version:** 2.0.0  
-**Updated:** November 13, 2025  
-**Major Changes:** Consolidated backend scripts into Python (removed 5 shell scripts), centralized documentation
+```bash
+# Run all tests
+./scripts/run-tests.sh
+
+# Run specific tests
+pytest backend/tests/test_auth_handler.py
+pytest backend/tests/test_gallery_handler.py
+pytest backend/tests/test_billing_handler.py
+```
+
+## Deployment
+
+### Backend (AWS Lambda)
+```bash
+cd backend
+./deploy-lambda.sh
+```
+
+### Frontend (S3 + CloudFront)
+```bash
+aws s3 sync frontend/ s3://your-bucket/ --delete
+aws cloudfront create-invalidation --distribution-id ID --paths "/*"
+```
+
+## Scripts
+
+Located in `scripts/` directory:
+
+- `run-tests.sh` - Run comprehensive test suite
+- `start-localstack.sh` - Start local AWS environment
+- `stop-localstack.sh` - Stop LocalStack
+- `auto-backup-s3.sh` - Automated S3 backups
+- `run-gallery-cleanup.sh` - Cleanup expired galleries
+- `generate-frontend-config.sh` - Generate frontend config
+
+## Environment Variables
+
+Create `.env` file in backend/:
+
+```bash
+ENVIRONMENT=local
+AWS_ENDPOINT_URL=http://localhost:4566
+FRONTEND_URL=http://localhost:8000
+STRIPE_SECRET_KEY=sk_test_...
+STRIPE_WEBHOOK_SECRET=whsec_...
+```
+
+## API Endpoints
+
+112+ RESTful endpoints organized by feature:
+
+- `/v1/auth/*` - Authentication & authorization
+- `/v1/galleries/*` - Gallery management
+- `/v1/photos/*` - Photo operations
+- `/v1/client/*` - Client portal
+- `/v1/billing/*` - Subscription & billing
+- `/v1/analytics/*` - Analytics & tracking
+- `/v1/notifications/*` - Notification system
+
+See [API Documentation](docs/API.md) for complete reference.
+
+## Contributing
+
+1. Create feature branch
+2. Write tests for new features
+3. Ensure all tests pass (`./scripts/run-tests.sh`)
+4. Follow coding standards (`.cursor/rules/rule1.mdc`)
+5. Create pull request
+
+## License
+
+Proprietary - All rights reserved
+
+## Support
+
+For questions or issues, contact: support@galerly.com
