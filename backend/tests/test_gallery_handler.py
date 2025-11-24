@@ -12,19 +12,12 @@ def mock_tables_and_clients():
     """Mock DynamoDB tables and S3 client used by gallery_handler."""
     with patch('handlers.gallery_handler.galleries_table') as mock_galleries, \
          patch('handlers.gallery_handler.photos_table') as mock_photos, \
-         patch('handlers.gallery_handler.s3_client') as mock_s3, \
-         patch('handlers.gallery_handler.application_cache') as mock_cache:
-        
-        # Configure cache to always miss (test real logic)
-        mock_cache.retrieve.return_value = None
-        mock_cache.store.return_value = None
-        mock_cache.invalidate_pattern.return_value = 0
+         patch('handlers.gallery_handler.s3_client') as mock_s3:
         
         yield {
             'galleries': mock_galleries,
             'photos': mock_photos,
-            's3': mock_s3,
-            'cache': mock_cache
+            's3': mock_s3
         }
 
 # Test: handle_list_galleries

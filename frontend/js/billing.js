@@ -307,6 +307,26 @@ function openInModal(url, title = 'Document') {
 async function loadSubscription() {
     try {
         const data = await window.apiRequest('billing/subscription');
+        
+        // Sync plan to localStorage so other pages can access it
+        const userData = localStorage.getItem('galerly_user_data');
+        if (userData && data.plan) {
+            try {
+                const user = JSON.parse(userData);
+                user.plan = data.plan;
+                localStorage.setItem('galerly_user_data', JSON.stringify(user));
+                console.log('✅ Synced plan to localStorage:', data.plan);
+                
+                // Trigger navigation update to show/hide Pro-only features
+                if (typeof window.updateEmailTemplatesNav === 'function') {
+                    window.updateEmailTemplatesNav();
+                    console.log('🔄 Triggered Email Templates nav update after plan sync');
+                }
+            } catch (e) {
+                console.error('Failed to sync plan to localStorage:', e);
+            }
+        }
+        
         return data;
     } catch (error) {
         console.error('Error loading subscription:', error);
@@ -392,7 +412,10 @@ async function createCheckoutSession(planId) {
 }
 
 // Check downgrade limits
-async function checkDowngradeLimits(targetPlan = 'free') {
+async function checkDowngradeLimits(targetPlan) {
+    if (!targetPlan) {
+        throw new Error('Target plan is required');
+    }
     try {
         const data = await window.apiRequest(`billing/subscription/check-downgrade?target_plan=${targetPlan}`);
         return data;
@@ -766,8 +789,8 @@ async function displaySubscription(subscription) {
     if (!container) return;
     
     const plan = subscription.plan_details || {};
-    const currentPlan = subscription.plan || 'free';
-        const status = currentPlan === 'free' ? 'free' : (subscription.status || 'active');
+    const currentPlan = subscription.plan;
+    const status = (currentPlan === 'free' || !currentPlan) ? 'free' : (subscription.status || 'active');
     
     // Check for pending plan change
     const pendingPlan = subscription.pending_plan;
@@ -794,7 +817,7 @@ async function displaySubscription(subscription) {
                 color: #1D1D1F;
                 margin: 0;
                 letter-spacing: -0.02em;
-            ">${plan.name || (currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1))}</h2>
+            ">${plan.name || (currentPlan ? (currentPlan.charAt(0).toUpperCase() + currentPlan.slice(1)) : 'Starter')}</h2>
             ${pendingPlan ? `<span style="
                 font-family: SF Pro Text, -apple-system, BlinkMacSystemFont, sans-serif;
                 font-size: 0.875rem;
@@ -809,7 +832,7 @@ async function displaySubscription(subscription) {
             margin-bottom: 24px;
         ">
             <span style="color: ${status === 'active' ? '#34C759' : status === 'canceled' ? '#FF6F61' : '#86868B'}; font-weight: 500;">
-                ${status === 'free' ? 'Starter Plan' : status.charAt(0).toUpperCase() + status.slice(1)}
+                ${status === 'free' ? 'Starter Plan' : (status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown')}
             </span>
         </p>
     `;
@@ -1145,7 +1168,7 @@ function displayUsage(usage) {
     
     // Warning if approaching limits
     if (galleryLimit.remaining === 0 || (storageLimit.usage_percent && storageLimit.usage_percent >= 90)) {
-        const currentPlan = usage.plan?.id || 'free';
+        const currentPlan = usage.plan?.id;
         let upgradePlan = currentPlan === 'plus' ? 'pro' : 'plus';
         let upgradePlanName = currentPlan === 'plus' ? 'Pro' : 'Plus';
         
@@ -1516,15 +1539,17 @@ async function displayAllPlans(currentPlanId, subscriptionData = null) {
     const featureSize = isSmallMobile ? '0.875rem' : '0.9375rem';
     
     plans.forEach(plan => {
-        const isCurrentPlan = plan.id === currentPlanId;
+        // Treat null/undefined currentPlanId as 'free'
+        const normalizedCurrentPlanId = currentPlanId || 'free';
+        const isCurrentPlan = plan.id === normalizedCurrentPlanId;
         const isFree = plan.id === 'free';
         
         const planPrices = { 'free': 0, 'plus': 12, 'pro': 24 };
-        const currentPrice = planPrices[currentPlanId] || 0;
+        const currentPrice = planPrices[normalizedCurrentPlanId] || 0;
         const targetPrice = planPrices[plan.id] || 0;
         
-        const isUpgrade = !isCurrentPlan && !isFree && currentPlanId !== 'free' && targetPrice > currentPrice;
-        const isDowngrade = !isCurrentPlan && currentPlanId !== 'free' && (targetPrice < currentPrice || plan.id === 'free');
+        const isUpgrade = !isCurrentPlan && !isFree && normalizedCurrentPlanId !== 'free' && targetPrice > currentPrice;
+        const isDowngrade = !isCurrentPlan && normalizedCurrentPlanId !== 'free' && (targetPrice < currentPrice || plan.id === 'free');
         
         const isReactivation = (isCanceled && isCurrentPlan && (plan.id === 'plus' || plan.id === 'pro'));
         
@@ -1644,17 +1669,25 @@ function setupPlanChangeButtons() {
     changeButtons.forEach(button => {
         button.addEventListener('click', async (e) => {
             e.preventDefault();
-            const planId = button.dataset.plan || 'plus';
+            const planId = button.dataset.plan;
+            
+            // Validate planId exists
+            if (!planId) {
+                console.error('Button missing data-plan attribute');
+                showError('Invalid plan selection. Please refresh the page and try again.', 'Configuration Error');
+                return;
+            }
+            
             const buttonText = button.querySelector('.main-6 span') || button;
             const originalText = buttonText.textContent;
             
             // Get current plan and pending plan from subscription
-            let currentPlanId = 'free';
+            let currentPlanId = null;
             let pendingPlan = null;
             let isCanceled = false;
             try {
                 const subscription = await loadSubscription();
-                currentPlanId = subscription.plan || 'free';
+                currentPlanId = subscription.plan;
                 pendingPlan = subscription.pending_plan || null;
                 isCanceled = subscription.status === 'canceled';
             } catch (error) {
@@ -1935,7 +1968,14 @@ async function setupUpgradeButtons() {
     upgradeButtons.forEach(button => {
         button.addEventListener('click', async (e) => {
             e.preventDefault();
-            const planId = button.dataset.plan || 'plus';
+            const planId = button.dataset.plan;
+            
+            // Validate planId exists
+            if (!planId) {
+                console.error('Button missing data-plan attribute');
+                showError('Invalid plan selection. Please refresh the page and try again.', 'Configuration Error');
+                return;
+            }
             
             try {
                 button.disabled = true;

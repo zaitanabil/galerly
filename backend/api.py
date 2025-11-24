@@ -617,13 +617,13 @@ def handler(event, context):
             return handle_get_template(user, template_type)
         
         # Save/update template
-        if path.startswith('/v1/email-templates/') and method == 'PUT':
+        if path.startswith('/v1/email-templates/') and method == 'PUT' and '/preview' not in path:
             parts = path.split('/')
             template_type = parts[-1]
             return handle_save_template(user, template_type, body)
         
         # Delete custom template (revert to default)
-        if path.startswith('/v1/email-templates/') and method == 'DELETE':
+        if path.startswith('/v1/email-templates/') and method == 'DELETE' and '/preview' not in path:
             parts = path.split('/')
             template_type = parts[-1]
             return handle_delete_template(user, template_type)
@@ -631,7 +631,16 @@ def handler(event, context):
         # Preview template with sample data
         if path.startswith('/v1/email-templates/') and '/preview' in path and method == 'POST':
             parts = path.split('/')
-            template_type = parts[parts.index('email-templates') + 1]
+            # Path should be: /v1/email-templates/{template_type}/preview
+            # Extract template_type safely (it's before 'preview')
+            try:
+                preview_index = parts.index('preview')
+                if preview_index > 0:
+                    template_type = parts[preview_index - 1]
+                else:
+                    return create_response(400, {'error': 'Invalid preview path'})
+            except (ValueError, IndexError):
+                return create_response(400, {'error': 'Invalid preview path'})
             return handle_preview_template(user, template_type, body)
         
         # Manual expiry check (photographer can test expiry notifications)

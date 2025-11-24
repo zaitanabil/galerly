@@ -41,7 +41,7 @@ class TestListTemplates:
         
         mock_template_dependencies['table'].query.return_value = {
             'Items': [
-                {'user_id': 'user_pro', 'template_type': 'gallery_shared', 'updated_at': '2024-01-01'}
+                {'user_id': 'user_pro', 'template_type': 'gallery_shared_with_account', 'updated_at': '2024-01-01'}
             ]
         }
         
@@ -74,14 +74,14 @@ class TestGetTemplate:
         mock_template_dependencies['table'].get_item.return_value = {
             'Item': {
                 'user_id': 'user_pro',
-                'template_type': 'gallery_shared',
+                'template_type': 'gallery_shared_with_account',
                 'subject': 'Custom Subject',
                 'html_body': '<html>Custom HTML</html>',
                 'text_body': 'Custom Text'
             }
         }
         
-        result = handle_get_template(sample_pro_user, 'gallery_shared')
+        result = handle_get_template(sample_pro_user, 'gallery_shared_with_account')
         
         assert result['statusCode'] == 200
         body = json.loads(result['body'])
@@ -94,7 +94,7 @@ class TestGetTemplate:
         
         mock_template_dependencies['table'].get_item.return_value = {}
         
-        result = handle_get_template(sample_pro_user, 'gallery_shared')
+        result = handle_get_template(sample_pro_user, 'gallery_shared_with_account')
         
         assert result['statusCode'] == 200
         body = json.loads(result['body'])
@@ -113,7 +113,7 @@ class TestGetTemplate:
         """Free user cannot get templates."""
         from handlers.email_template_handler import handle_get_template
         
-        result = handle_get_template(sample_free_user, 'gallery_shared')
+        result = handle_get_template(sample_free_user, 'gallery_shared_with_account')
         
         assert result['statusCode'] == 403
 
@@ -132,7 +132,7 @@ class TestSaveTemplate:
             'text_body': 'Hi {client_name}, view at {gallery_url}'
         }
         
-        result = handle_save_template(sample_pro_user, 'gallery_shared', body)
+        result = handle_save_template(sample_pro_user, 'gallery_shared_with_account', body)
         
         assert result['statusCode'] == 200
         mock_template_dependencies['table'].put_item.assert_called_once()
@@ -146,7 +146,7 @@ class TestSaveTemplate:
             'text_body': 'Test'
         }
         
-        result = handle_save_template(sample_pro_user, 'gallery_shared', body)
+        result = handle_save_template(sample_pro_user, 'gallery_shared_with_account', body)
         
         assert result['statusCode'] == 400
     
@@ -158,7 +158,7 @@ class TestSaveTemplate:
             'subject': 'Test Subject'
         }
         
-        result = handle_save_template(sample_pro_user, 'gallery_shared', body)
+        result = handle_save_template(sample_pro_user, 'gallery_shared_with_account', body)
         
         assert result['statusCode'] == 400
     
@@ -184,7 +184,7 @@ class TestSaveTemplate:
             'html_body': '<html>Test</html>'
         }
         
-        result = handle_save_template(sample_free_user, 'gallery_shared', body)
+        result = handle_save_template(sample_free_user, 'gallery_shared_with_account', body)
         
         assert result['statusCode'] == 403
 
@@ -195,7 +195,7 @@ class TestDeleteTemplate:
         """Delete custom template successfully."""
         from handlers.email_template_handler import handle_delete_template
         
-        result = handle_delete_template(sample_pro_user, 'gallery_shared')
+        result = handle_delete_template(sample_pro_user, 'gallery_shared_with_account')
         
         assert result['statusCode'] == 200
         mock_template_dependencies['table'].delete_item.assert_called_once()
@@ -212,7 +212,7 @@ class TestDeleteTemplate:
         """Free user cannot delete templates."""
         from handlers.email_template_handler import handle_delete_template
         
-        result = handle_delete_template(sample_free_user, 'gallery_shared')
+        result = handle_delete_template(sample_free_user, 'gallery_shared_with_account')
         
         assert result['statusCode'] == 403
 
@@ -229,7 +229,7 @@ class TestPreviewTemplate:
             'text_body': 'Hi {client_name}, view at {gallery_url}'
         }
         
-        result = handle_preview_template(sample_pro_user, 'gallery_shared', body)
+        result = handle_preview_template(sample_pro_user, 'gallery_shared_with_account', body)
         
         assert result['statusCode'] == 200
         response_body = json.loads(result['body'])
@@ -247,7 +247,7 @@ class TestPreviewTemplate:
             'text_body': 'Test'
         }
         
-        result = handle_preview_template(sample_pro_user, 'gallery_shared', body)
+        result = handle_preview_template(sample_pro_user, 'gallery_shared_with_account', body)
         
         assert result['statusCode'] == 400
     
@@ -279,7 +279,7 @@ class TestGetUserTemplate:
             }
         }
         
-        template = get_user_template('user_123', 'gallery_shared')
+        template = get_user_template('user_123', 'gallery_shared_with_account')
         
         assert template['subject'] == 'Custom'
         assert template['html'] == '<html>Custom</html>'
@@ -290,7 +290,7 @@ class TestGetUserTemplate:
         
         mock_template_dependencies['table'].get_item.return_value = {}
         
-        template = get_user_template('user_123', 'gallery_shared')
+        template = get_user_template('user_123', 'gallery_shared_with_account')
         
         # Should return default template
         assert 'subject' in template
@@ -313,19 +313,19 @@ class TestPlanEnforcement:
         
         assert result['statusCode'] == 403
     
-    def test_professional_plan_allowed(self, mock_template_dependencies):
-        """Professional plan (alias for pro) is allowed."""
+    def test_pro_plan_allowed(self, mock_template_dependencies):
+        """Pro plan is allowed."""
         from handlers.email_template_handler import handle_list_templates
         
-        professional_user = {
+        pro_user = {
             'id': 'user_prof',
             'email': 'prof@example.com',
-            'plan': 'professional'
+            'plan': 'pro'
         }
         
         mock_template_dependencies['table'].query.return_value = {'Items': []}
         
-        result = handle_list_templates(professional_user)
+        result = handle_list_templates(pro_user)
         
         assert result['statusCode'] == 200
 

@@ -54,4 +54,3 @@ for bucket in "$S3_PHOTOS_BUCKET" "$S3_BUCKET" "$S3_RENDITIONS_BUCKET"; do
 done
 
 echo "✅ LocalStack initialization complete"
-

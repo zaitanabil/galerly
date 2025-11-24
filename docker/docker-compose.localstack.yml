@@ -38,6 +38,14 @@ services:
       # S3 configuration
       - S3_SKIP_SIGNATURE_VALIDATION=${S3_SKIP_SIGNATURE_VALIDATION:-1}
       
+      # S3 bucket names for init scripts
+      - S3_PHOTOS_BUCKET=${S3_PHOTOS_BUCKET}
+      - S3_BUCKET=${S3_BUCKET}
+      - S3_RENDITIONS_BUCKET=${S3_RENDITIONS_BUCKET}
+      - AWS_ENDPOINT_URL=${AWS_ENDPOINT_URL}
+      - AWS_REGION=${AWS_REGION}
+      - FRONTEND_URL=${FRONTEND_URL}
+      
       # Data persistence directory
       - DATA_DIR=/var/lib/localstack/data
       

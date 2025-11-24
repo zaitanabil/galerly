@@ -11,7 +11,6 @@ from utils.config import galleries_table, photos_table, s3_client, S3_BUCKET, cl
 from utils.response import create_response
 from handlers.subscription_handler import enforce_gallery_limit
 from utils.email import send_gallery_shared_email
-from utils.cache import cached, invalidate_user_galleries, invalidate_gallery
 
 def enrich_photos_with_any_favorites(photos, gallery):
     """Add is_favorite field to photos - TRUE if ANY client favorited it (for photographer view)"""
@@ -53,21 +52,6 @@ def enrich_photos_with_any_favorites(photos, gallery):
 
 def handle_list_galleries(user, query_params=None):
     """List all galleries for THIS USER ONLY with optional search and filters"""
-    from utils.cache import application_cache, generate_cache_key
-    
-    # Generate cache key for this request
-    user_id = user['id']
-    cache_params = query_params or {}
-    ck = generate_cache_key('gallery_list', user_id, **cache_params)
-    
-    # Try to get from cache
-    cached_result = application_cache.retrieve(ck)
-    if cached_result is not None:
-        print(f"✅ Cache HIT: gallery_list for user {user_id}")
-        return cached_result
-    
-    print(f"⚠️  Cache MISS: gallery_list for user {user_id}")
-    
     try:
         # Query galleries by user_id (partition key) with projection (only fetch needed fields for list view)
         # This reduces data transfer and improves performance
@@ -133,15 +117,10 @@ def handle_list_galleries(user, query_params=None):
             user_galleries = [g for g in user_galleries if not g.get('archived', False)]
             user_galleries.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         
-        result = create_response(200, {
+        return create_response(200, {
             'galleries': user_galleries,
             'total': len(user_galleries)
         })
-        
-        # Cache the result (5 minutes TTL)
-        application_cache.store(ck, result, ttl=300)
-        
-        return result
     except Exception as e:
         print(f"Error listing galleries: {str(e)}")
         return create_response(200, {'galleries': [], 'total': 0})
@@ -197,12 +176,12 @@ def handle_create_gallery(user, body):
     
     # ⏰ AUTOMATIC EXPIRATION FOR FREE PLAN
     # Free plan (started pack) galleries ALWAYS expire after 7 days MAXIMUM
-    user_plan = user.get('plan', 'free').lower()
+    user_plan = (user.get('plan') or user.get('subscription') or '').lower()
     expiry_days = None
     expiry_date = None
     
-    if user_plan == 'free':
-        # Force 7-day expiration for free users (MAXIMUM, NOT NEGOTIABLE)
+    if user_plan == 'free' or user_plan == '':
+        # Force 7-day expiration for free users OR users with no plan (MAXIMUM, NOT NEGOTIABLE)
         expiry_days = 7
         expiry_date = (datetime.utcnow() + timedelta(days=7)).isoformat() + 'Z'
         print(f"🆓 FREE PLAN: Enforcing 7-day maximum expiration (expires: {expiry_date})")
@@ -263,31 +242,14 @@ def handle_create_gallery(user, body):
             pass  # Don't fail gallery creation if email fails
     
     print(f"✅ Gallery created for user {user['id']}: {gallery_id} with {len(client_emails)} clients")
-    # Invalidate user's gallery list cache
-    invalidate_user_galleries(user['id'])
     
     return create_response(201, gallery)
 
 def handle_get_gallery(gallery_id, user=None, query_params=None):
     """Get gallery details with optional pagination - CHECK USER OWNERSHIP"""
-    from utils.cache import application_cache, generate_cache_key
-    
     try:
         if not user:
             return create_response(401, {'error': 'Authentication required'})
-        
-        # Generate cache key for this request
-        user_id = user['id']
-        cache_params = query_params or {}
-        ck = generate_cache_key('gallery', gallery_id, user_id, **cache_params)
-        
-        # Try to get from cache
-        cached_result = application_cache.retrieve(ck)
-        if cached_result is not None:
-            print(f"✅ Cache HIT: gallery {gallery_id} for user {user_id}")
-            return cached_result
-        
-        print(f"⚠️  Cache MISS: gallery {gallery_id} for user {user_id}")
         
         # Parse pagination parameters
         page_size = 50  # Default page size
@@ -378,12 +340,7 @@ def handle_get_gallery(gallery_id, user=None, query_params=None):
                 'returned_count': len(gallery_photos)
             }
         
-        result = create_response(200, response_data)
-        
-        # Cache the result (5 minutes TTL)
-        application_cache.store(ck, result, ttl=300)
-        
-        return result
+        return create_response(200, response_data)
     except Exception as e:
         print(f"Error getting gallery: {str(e)}")
         return create_response(404, {'error': 'Gallery not found'})
@@ -444,11 +401,11 @@ def handle_update_gallery(gallery_id, user, body):
             expiry_days = body.get('expiry_days')
             
             # Get user's plan
-            user_plan = user.get('plan', 'free').lower()
+            user_plan = (user.get('plan') or user.get('subscription') or '').lower()
             
             # ⏰ FREE PLAN RESTRICTION: MAXIMUM 7 DAYS, CANNOT BE EXTENDED
-            if user_plan == 'free':
-                # Free users are LOCKED to 7 days maximum - cannot extend or set to "never"
+            if user_plan == 'free' or user_plan == '':
+                # Free users OR users with no plan are LOCKED to 7 days maximum - cannot extend or set to "never"
                 if expiry_days is None or expiry_days == '' or str(expiry_days).lower() == 'never':
                     # Cannot set to "never" - force 7 days
                     gallery['expiry_days'] = 7
@@ -509,10 +466,6 @@ def handle_update_gallery(gallery_id, user, body):
         
         # Save back to DynamoDB
         galleries_table.put_item(Item=gallery)
-        
-        # Invalidate caches for this gallery and user's gallery list
-        invalidate_gallery(gallery_id)
-        invalidate_user_galleries(user['id'])
         
         return create_response(200, gallery)
     except Exception as e:
@@ -683,9 +636,6 @@ def handle_delete_gallery(gallery_id, user):
             'id': gallery_id
         })
         
-        # Invalidate caches for this gallery and user's gallery list
-        invalidate_gallery(gallery_id)
-        invalidate_user_galleries(user['id'])
         
         return create_response(200, {'message': 'Gallery deleted successfully'})
     except Exception as e:

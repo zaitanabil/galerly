@@ -158,7 +158,7 @@ async function populateExpiryOptions(currentExpiry) {
     try {
         // Get current user's subscription info
         const response = await apiRequest('subscription/usage');
-        const plan = response?.plan || 'free';
+        const plan = response?.plan;
         
         // Define expiry options per plan
         const expiryOptions = {

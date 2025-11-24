@@ -59,12 +59,14 @@ def get_upgrade_path(user_id, subscription_created_at):
         from_plan = first_upgrade.get('from_plan', 'none').lower()
         to_plan = first_upgrade.get('to_plan', '').lower()
         
-        # Normalize plan names
+        # Normalize plan names (handle legacy values in audit log)
         if from_plan in ['none', 'free', 'starter']:
             from_plan = 'starter'
-        if to_plan in ['professional']:
+        
+        # Map legacy plan names to current ones
+        if to_plan == 'professional':
             to_plan = 'plus'
-        if to_plan in ['business']:
+        elif to_plan == 'business':
             to_plan = 'pro'
         
         # Determine path
@@ -75,7 +77,7 @@ def get_upgrade_path(user_id, subscription_created_at):
         elif from_plan == 'plus' and to_plan == 'pro':
             return 'plus_to_pro'
         
-        # Check if user had plus before going to pro
+        # Check if user had plus before going to pro (including legacy 'professional')
         has_plus_history = any(
             h.get('to_plan', '').lower() in ['plus', 'professional'] 
             for h in relevant_history
@@ -153,11 +155,15 @@ def check_refund_eligibility(user):
         if user_email:
             user_response = users_table.get_item(Key={'email': user_email})
             if 'Item' in user_response:
-                current_plan = user_response['Item'].get('subscription', 'free')
+                current_plan = user_response['Item'].get('plan') or user_response['Item'].get('subscription')
             else:
-                current_plan = user.get('subscription', 'free')
+                current_plan = user.get('plan') or user.get('subscription')
         else:
-            current_plan = user.get('subscription', 'free')
+            current_plan = user.get('plan') or user.get('subscription')
+        
+        # Treat None/missing plan as 'free'
+        if not current_plan:
+            current_plan = 'free'
         
         if current_plan == 'free':
             return {
@@ -234,7 +240,7 @@ def check_refund_eligibility(user):
         print(f"🔍 Refund check: User {user['id']} | Plan: {current_plan} | Path: {upgrade_path} | Usage: {total_storage_gb:.2f}GB, {galleries_since_purchase} galleries")
         
         # Apply refund rules based on current plan and upgrade path
-        if current_plan in ['plus', 'professional']:
+        if current_plan in ['plus']:
             # Plus plan: Always check Starter limits (5GB, 5 galleries)
             # Since Plus can only come from Starter
             if total_storage_gb > 5 or galleries_since_purchase > 5:
@@ -244,7 +250,7 @@ def check_refund_eligibility(user):
                     'details': details
                 }
         
-        elif current_plan in ['pro', 'business']:
+        elif current_plan in ['pro']:
             # Pro plan: Check based on upgrade path
             
             if upgrade_path == 'plus_to_pro':

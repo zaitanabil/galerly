@@ -121,6 +121,7 @@ subscriptions_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_SUBSCRIPTI
 analytics_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_ANALYTICS'))
 client_favorites_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_CLIENT_FAVORITES'))
 client_feedback_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_CLIENT_FEEDBACK'))
+email_templates_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_EMAIL_TEMPLATES'))
 
 # Debug logging for LocalStack
 if IS_LOCAL and AWS_ENDPOINT_URL:

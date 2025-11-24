@@ -227,7 +227,7 @@ def handle_invoice_event(event_type, invoice):
                 
                 # Get subscription to determine plan
                 subscription_id = invoice.get('subscription')
-                plan = 'free'
+                plan = 'free'  # Default to free if no subscription found
                 if subscription_id:
                     subscriptions_table = dynamodb.Table('galerly-subscriptions')
                     sub_response = subscriptions_table.query(
@@ -236,7 +236,7 @@ def handle_invoice_event(event_type, invoice):
                         ExpressionAttributeValues={':sid': subscription_id}
                     )
                     if sub_response.get('Items'):
-                        plan = sub_response['Items'][0].get('plan', 'free')
+                        plan = sub_response['Items'][0].get('plan') or 'free'
                 
                 # Store billing record
                 billing_id = str(uuid.uuid4())

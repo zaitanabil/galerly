@@ -43,38 +43,53 @@ def send_email(to_email, template_name, template_vars=None, user_id=None):
     if template_vars is None:
         template_vars = {}
     
-    # ===== DEBUG: Log actual SMTP configuration =====
-    print(f"🔍 SMTP Configuration Check:")
-    print(f"   SMTP_HOST: {SMTP_HOST}")
-    print(f"   SMTP_PORT: {SMTP_PORT}")
-    print(f"   SMTP_USER: {SMTP_USER}")
-    print(f"   FROM_EMAIL: {FROM_EMAIL}")
-    print(f"   FROM_NAME: {FROM_NAME}")
-    print(f"   SMTP_PASSWORD set: {'YES' if SMTP_PASSWORD else 'NO'}")
-    print(f"   SMTP_PASSWORD length: {len(SMTP_PASSWORD) if SMTP_PASSWORD else 0}")
-    if SMTP_PASSWORD:
-        print(f"   SMTP_PASSWORD starts with: {SMTP_PASSWORD[:3]}...")
-        print(f"   SMTP_PASSWORD ends with: ...{SMTP_PASSWORD[-3:]}")
-    # ================================================
-    
     # Get template (custom if user_id provided and they're Pro)
     if user_id:
         from handlers.email_template_handler import get_user_template
-        template = get_user_template(user_id, template_name)
+        try:
+            template = get_user_template(user_id, template_name)
+            if not template:
+                print(f"⚠️  Custom template '{template_name}' not found for user {user_id}, using default")
+                if template_name not in EMAIL_TEMPLATES:
+                    print(f"❌ Default email template '{template_name}' not found")
+                    return False
+                template = EMAIL_TEMPLATES[template_name]
+        except Exception as e:
+            print(f"❌ Error loading custom template '{template_name}' for user {user_id}: {str(e)}")
+            if template_name not in EMAIL_TEMPLATES:
+                print(f"❌ Default email template '{template_name}' not found")
+                return False
+            template = EMAIL_TEMPLATES[template_name]
     else:
         if template_name not in EMAIL_TEMPLATES:
-            print(f"⚠️  Email template '{template_name}' not found")
+            print(f"❌ Email template '{template_name}' not found")
             return False
         template = EMAIL_TEMPLATES[template_name]
+    
+    # Validate template structure (both custom and default must have required keys)
+    required_keys = ['subject', 'html', 'text']
+    missing_keys = [key for key in required_keys if key not in template]
+    if missing_keys:
+        print(f"⚠️  Email template '{template_name}' missing required keys: {missing_keys}")
+        return False
     
     # Check if SMTP password is configured
     if not SMTP_PASSWORD:
         print(f"❌ SMTP_PASSWORD not configured. Cannot send email.")
         return False
     
-    subject = template['subject'].format(**template_vars)
-    html_body = template['html'].format(**template_vars)
-    text_body = template['text'].format(**template_vars)
+    # Format template with variables (wrapped in try-except for missing variables)
+    try:
+        subject = template['subject'].format(**template_vars)
+        html_body = template['html'].format(**template_vars)
+        text_body = template['text'].format(**template_vars)
+    except KeyError as e:
+        print(f"❌ Template variable error: Missing variable {e} in template '{template_name}'")
+        print(f"   Available variables: {list(template_vars.keys())}")
+        return False
+    except Exception as e:
+        print(f"❌ Error formatting template '{template_name}': {str(e)}")
+        return False
     
     try:
         # Create message
@@ -187,8 +202,13 @@ def send_password_reset_email(user_email, user_name, reset_token):
     )
 
 
-def send_new_photos_added_email(client_email, client_name, photographer_name, gallery_name, gallery_url, photo_count):
-    """Send notification when new photos are added to gallery"""
+def send_new_photos_added_email(client_email, client_name, photographer_name, gallery_name, gallery_url, photo_count, user_id=None):
+    """
+    Send notification when new photos are added to gallery
+    
+    Args:
+        user_id: If provided, uses custom Pro user templates
+    """
     return send_email(
         client_email,
         'new_photos_added',
@@ -198,7 +218,8 @@ def send_new_photos_added_email(client_email, client_name, photographer_name, ga
             'gallery_name': gallery_name,
             'gallery_url': gallery_url,
             'photo_count': photo_count
-        }
+        },
+        user_id=user_id
     )
 
 
@@ -213,8 +234,13 @@ def send_verification_code_email(user_email, code):
     )
 
 
-def send_gallery_ready_email(client_email, client_name, photographer_name, gallery_name, gallery_url, message=''):
-    """Send notification when gallery is ready for viewing"""
+def send_gallery_ready_email(client_email, client_name, photographer_name, gallery_name, gallery_url, message='', user_id=None):
+    """
+    Send notification when gallery is ready for viewing
+    
+    Args:
+        user_id: If provided, uses custom Pro user templates
+    """
     return send_email(
         client_email,
         'gallery_ready',
@@ -224,12 +250,18 @@ def send_gallery_ready_email(client_email, client_name, photographer_name, galle
             'gallery_name': gallery_name,
             'gallery_url': gallery_url,
             'message': message or 'Your photos are ready! Click below to view and select your favorites.'
-        }
+        },
+        user_id=user_id
     )
 
 
-def send_selection_reminder_email(client_email, client_name, photographer_name, gallery_name, gallery_url, message=''):
-    """Send reminder to client to select photos"""
+def send_selection_reminder_email(client_email, client_name, photographer_name, gallery_name, gallery_url, message='', user_id=None):
+    """
+    Send reminder to client to select photos
+    
+    Args:
+        user_id: If provided, uses custom Pro user templates
+    """
     return send_email(
         client_email,
         'selection_reminder',
@@ -239,12 +271,18 @@ def send_selection_reminder_email(client_email, client_name, photographer_name, 
             'gallery_name': gallery_name,
             'gallery_url': gallery_url,
             'message': message or 'Please take a moment to select your favorite photos from the gallery.'
-        }
+        },
+        user_id=user_id
     )
 
 
-def send_custom_email(client_email, client_name, photographer_name, subject, title, message, button_text='', button_url=''):
-    """Send custom message from photographer to client"""
+def send_custom_email(client_email, client_name, photographer_name, subject, title, message, button_text='', button_url='', user_id=None):
+    """
+    Send custom message from photographer to client
+    
+    Args:
+        user_id: If provided, uses custom Pro user templates
+    """
     button_html = ''
     if button_text and button_url:
         button_html = f'<a href="{button_url}" class="email-button">{button_text}</a>'
@@ -259,12 +297,18 @@ def send_custom_email(client_email, client_name, photographer_name, subject, tit
             'title': title,
             'message': message,
             'button_html': button_html
-        }
+        },
+        user_id=user_id
     )
 
 
-def send_gallery_expiring_email(client_email, client_name, photographer_name, gallery_name, gallery_url, days_remaining):
-    """Send notification when gallery is about to expire - TO CLIENT"""
+def send_gallery_expiring_email(client_email, client_name, photographer_name, gallery_name, gallery_url, days_remaining, user_id=None):
+    """
+    Send notification when gallery is about to expire - TO CLIENT
+    
+    Args:
+        user_id: If provided, uses custom Pro user templates
+    """
     return send_email(
         client_email,
         'gallery_expiring_soon',
@@ -274,7 +318,8 @@ def send_gallery_expiring_email(client_email, client_name, photographer_name, ga
             'gallery_name': gallery_name,
             'gallery_url': gallery_url,
             'days_remaining': days_remaining
-        }
+        },
+        user_id=user_id
     )
 
 
@@ -292,8 +337,13 @@ def send_gallery_expiration_reminder_email(photographer_email, photographer_name
     )
 
 
-def send_client_selected_photos_email(photographer_email, photographer_name, client_name, gallery_name, gallery_url, selection_count):
-    """Notify photographer when client selects photos"""
+def send_client_selected_photos_email(photographer_email, photographer_name, client_name, gallery_name, gallery_url, selection_count, user_id=None):
+    """
+    Notify photographer when client selects photos
+    
+    Args:
+        user_id: If provided, uses custom Pro user templates
+    """
     return send_email(
         photographer_email,
         'client_selected_photos',
@@ -303,12 +353,18 @@ def send_client_selected_photos_email(photographer_email, photographer_name, cli
             'gallery_name': gallery_name,
             'gallery_url': gallery_url,
             'selection_count': selection_count
-        }
+        },
+        user_id=user_id
     )
 
 
-def send_client_feedback_email(photographer_email, photographer_name, client_name, gallery_name, gallery_url, rating, feedback):
-    """Notify photographer when client leaves feedback"""
+def send_client_feedback_email(photographer_email, photographer_name, client_name, gallery_name, gallery_url, rating, feedback, user_id=None):
+    """
+    Notify photographer when client leaves feedback
+    
+    Args:
+        user_id: If provided, uses custom Pro user templates
+    """
     return send_email(
         photographer_email,
         'client_feedback_received',
@@ -319,7 +375,8 @@ def send_client_feedback_email(photographer_email, photographer_name, client_nam
             'gallery_url': gallery_url,
             'rating': rating,
             'feedback': feedback
-        }
+        },
+        user_id=user_id
     )
 
 

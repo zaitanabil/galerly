@@ -83,7 +83,7 @@ def handle_update_profile(user, body):
             'city': user_data.get('city'),
             'specialties': user_data.get('specialties', []),
             'role': user_data.get('role'),
-            'subscription': user_data.get('subscription', 'free')
+            'subscription': user_data.get('subscription')
         })
     except Exception as e:
         print(f"❌ Error updating profile: {str(e)}")

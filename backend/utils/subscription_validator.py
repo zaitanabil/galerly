@@ -33,6 +33,7 @@ PLAN_HIERARCHY = {
 }
 
 # Legacy plan mappings
+# Keep these for backward compatibility with old data in database
 LEGACY_PLAN_MAP = {
     'professional': 'plus',
     'business': 'pro'
@@ -45,8 +46,8 @@ class SubscriptionState:
         self.user = user_data
         
         # Normalize plan names (handle legacy)
-        raw_plan = user_data.get('plan', user_data.get('subscription', 'free'))
-        self.current_plan = LEGACY_PLAN_MAP.get(raw_plan, raw_plan)
+        raw_plan = user_data.get('plan') or user_data.get('subscription')
+        self.current_plan = LEGACY_PLAN_MAP.get(raw_plan, raw_plan) if raw_plan else None
         
         # State flags
         self.has_stripe_subscription = bool(subscription_data.get('stripe_subscription_id'))

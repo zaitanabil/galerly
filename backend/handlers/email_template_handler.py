@@ -6,14 +6,12 @@ import json
 import boto3
 from datetime import datetime
 from utils.response import create_response
-from utils.config import dynamodb
-
-# DynamoDB table
-email_templates_table = dynamodb.Table('email_templates')
+from utils.config import dynamodb, users_table, email_templates_table
 
 # Default template types that can be customized
+# Note: gallery_shared_with_account and gallery_shared_no_account are used in send_gallery_shared_email()
+# based on client account status. The generic 'gallery_shared' is not used.
 CUSTOMIZABLE_TEMPLATES = [
-    'gallery_shared',
     'gallery_shared_with_account',
     'gallery_shared_no_account',
     'new_photos_added',
@@ -27,7 +25,6 @@ CUSTOMIZABLE_TEMPLATES = [
 
 # Template variables available for each type
 TEMPLATE_VARIABLES = {
-    'gallery_shared': ['client_name', 'photographer_name', 'gallery_name', 'gallery_url', 'description'],
     'gallery_shared_with_account': ['client_name', 'photographer_name', 'gallery_name', 'gallery_url', 'description'],
     'gallery_shared_no_account': ['client_name', 'photographer_name', 'gallery_name', 'gallery_url', 'description', 'signup_url'],
     'new_photos_added': ['client_name', 'photographer_name', 'gallery_name', 'gallery_url', 'photo_count'],
@@ -41,9 +38,35 @@ TEMPLATE_VARIABLES = {
 
 
 def check_pro_plan(user):
-    """Check if user has Pro plan"""
-    user_plan = user.get('plan', 'free').lower()
-    return user_plan in ['pro', 'professional']
+    """Check if user has Pro plan - fetch fresh data from DB"""
+    user_email = user.get('email')
+    if not user_email:
+        print(f"⚠️  Email Templates - No email in user object")
+        return False
+    
+    # Fetch fresh user data from DynamoDB to get current plan
+    try:
+        response = users_table.get_item(Key={'email': user_email})
+        if 'Item' not in response:
+            print(f"⚠️  Email Templates - User not found in DB: {user_email}")
+            return False
+        
+        db_user = response['Item']
+        # Check both plan and subscription fields (for legacy data)
+        user_plan = (db_user.get('plan') or db_user.get('subscription') or '').lower()
+        
+        print(f"🔍 Email Templates - Pro Plan Check:")
+        print(f"   User ID: {user.get('id')}")
+        print(f"   User Email: {user_email}")
+        print(f"   User plan from DB: {db_user.get('plan')}")
+        print(f"   User subscription from DB: {db_user.get('subscription')}")
+        print(f"   User plan (resolved): {user_plan}")
+        print(f"   Is Pro: {user_plan in ['pro']}")
+        
+        return user_plan in ['pro']
+    except Exception as e:
+        print(f"❌ Email Templates - Error checking plan: {str(e)}")
+        return False
 
 
 def handle_list_templates(user):
@@ -56,7 +79,7 @@ def handle_list_templates(user):
             return create_response(403, {
                 'error': 'Email template editing is a Pro feature',
                 'upgrade_required': True,
-                'current_plan': user.get('plan', 'free')
+                'current_plan': user.get('plan')
             })
         
         # Get user's custom templates
@@ -152,7 +175,7 @@ def handle_save_template(user, template_type, body):
             return create_response(403, {
                 'error': 'Email template editing is a Pro feature',
                 'upgrade_required': True,
-                'current_plan': user.get('plan', 'free')
+                'current_plan': user.get('plan')
             })
         
         # Validate template type

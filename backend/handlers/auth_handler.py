@@ -144,13 +144,21 @@ def handle_register(body):
     if email and '@' in email:
         default_username = email.split('@')[0]
     username = body.get('username', default_username).strip()
-    role = body.get('role', 'photographer')
+    role = body.get('role')
     
     if not email or not password:
         return create_response(400, {'error': 'Email and password required'})
     
     if not verification_token:
         return create_response(400, {'error': 'Email verification required. Please verify your email first.'})
+    
+    # Validate role - REQUIRED field, no defaults
+    if not role:
+        return create_response(400, {'error': 'Role is required'})
+    
+    valid_roles = ['photographer', 'client']
+    if role not in valid_roles:
+        return create_response(400, {'error': f'Invalid role. Must be one of: {", ".join(valid_roles)}'})
     
     # Validate email format
     if not validate_email_format(email):
@@ -229,7 +237,7 @@ def handle_register(body):
         'role': role,
         'password_hash': hash_password(password),
         'created_at': datetime.utcnow().isoformat() + 'Z',
-        'subscription': 'free',
+        'plan': 'free',  # Set initial plan for new users
         'email_verified': True  # Email was verified during registration
     }
     
@@ -283,7 +291,7 @@ def handle_register(body):
             'email': email,
             'username': username,
             'role': role,
-            'subscription': 'free'
+            'plan': 'free'  # Include plan in registration response
             # No token in response - it's in HttpOnly cookie!
         })
     }
@@ -357,8 +365,9 @@ def handle_login(body):
             'id': user['id'],
             'email': user['email'],
             'username': user.get('username', email.split('@')[0] if '@' in email else email),
-            'role': user.get('role', 'photographer'),
-            'subscription': user.get('subscription', 'free')
+            'role': user.get('role') or 'photographer',  # Default to photographer if missing
+            'plan': user.get('plan') or 'free',  # Default to free if missing
+            'subscription': user.get('subscription')
             # No token in response - it's in HttpOnly cookie!
         })
     }
@@ -372,8 +381,9 @@ def handle_get_me(user):
         'name': user.get('name'),
         'bio': user.get('bio'),
         'city': user.get('city'),
-        'role': user.get('role', 'photographer'),
-        'subscription': user.get('subscription', 'free')
+        'role': user.get('role') or 'photographer',  # Default to photographer if missing
+        'plan': user.get('plan') or 'free',  # Default to free if missing
+        'subscription': user.get('subscription')
     })
 
 def handle_logout(event):

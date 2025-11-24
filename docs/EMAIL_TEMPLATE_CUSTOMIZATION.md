@@ -8,8 +8,7 @@ Email template editing is a **Pro-only feature** that allows photographers to cu
 
 ### ✅ Customizable Templates
 
-10 client-facing email templates can be customized:
-- `gallery_shared` - When a gallery is shared
+9 client-facing email templates can be customized:
 - `gallery_shared_with_account` - Gallery shared with registered clients
 - `gallery_shared_no_account` - Gallery shared with unregistered clients
 - `new_photos_added` - New photos added notification
@@ -33,7 +32,8 @@ Dynamic variables available for each template:
 
 | Template | Variables |
 |----------|-----------|
-| `gallery_shared` | `{client_name}`, `{photographer_name}`, `{gallery_name}`, `{gallery_url}`, `{description}` |
+| `gallery_shared_with_account` | `{client_name}`, `{photographer_name}`, `{gallery_name}`, `{gallery_url}`, `{description}` |
+| `gallery_shared_no_account` | `{client_name}`, `{photographer_name}`, `{gallery_name}`, `{gallery_url}`, `{description}`, `{signup_url}` |
 | `new_photos_added` | `{client_name}`, `{photographer_name}`, `{gallery_name}`, `{gallery_url}`, `{photo_count}` |
 | `gallery_ready` | `{client_name}`, `{photographer_name}`, `{gallery_name}`, `{gallery_url}`, `{message}` |
 | `selection_reminder` | `{client_name}`, `{photographer_name}`, `{gallery_name}`, `{gallery_url}`, `{message}` |
@@ -79,14 +79,14 @@ Authorization: Bearer {token}
 {
   "templates": [
     {
-      "type": "gallery_shared",
+      "type": "gallery_shared_with_account",
       "customized": true,
       "variables": ["client_name", "photographer_name", "gallery_name", "gallery_url", "description"],
       "last_updated": "2024-11-24T10:30:00Z"
     }
   ],
   "custom_count": 3,
-  "total_available": 10
+  "total_available": 9
 }
 ```
 
@@ -101,14 +101,14 @@ Authorization: Bearer {token}
 {
   "template": {
     "user_id": "user_123",
-    "template_type": "gallery_shared",
+    "template_type": "gallery_shared_with_account",
     "subject": "New Gallery: {gallery_name}",
     "html_body": "<html>...</html>",
     "text_body": "Plain text...",
     "updated_at": "2024-11-24T10:30:00Z"
   },
   "is_custom": true,
-  "variables": ["client_name", "photographer_name", "gallery_name", "gallery_url"]
+  "variables": ["client_name", "photographer_name", "gallery_name", "gallery_url", "description"]
 }
 ```
 

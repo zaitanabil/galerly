@@ -96,33 +96,6 @@ PLANS = {
             'Analytics exports',
             'Gallery templates'
         ]
-    },
-    # Legacy plan names for backward compatibility
-    'professional': {
-        'name': 'Plus',
-        'price': 12,
-        'stripe_price_id': os.environ.get('STRIPE_PRICE_PLUS', ''),
-        'galleries_per_month': -1,
-        'storage_gb': 50,
-        'features': [
-            'Unlimited galleries',
-            '50 GB storage',
-            'Priority email support',
-            'All Starter features'
-        ]
-    },
-    'business': {
-        'name': 'Pro',
-        'price': 24,
-        'stripe_price_id': os.environ.get('STRIPE_PRICE_PRO', ''),
-        'galleries_per_month': -1,
-        'storage_gb': 200,
-        'features': [
-            'Unlimited galleries',
-            '200 GB storage',
-            'Priority support',
-            'All Plus features'
-        ]
     }
 }
 
@@ -202,7 +175,7 @@ def validate_and_execute(user, action, target_plan=None, **kwargs):
 
 def handle_change_plan(user, body):
     """Change subscription plan between paid plans (Plus <-> Pro)"""
-    plan_id = body.get('plan', 'plus')
+    plan_id = body.get('plan')
     
     if plan_id not in PLANS:
         return create_response(400, {'error': 'Invalid plan'})
@@ -243,7 +216,15 @@ def handle_change_plan(user, body):
         # Get current plan - use subscription record if canceled, otherwise use user's plan
         # This ensures reactivation works correctly (canceled users have plan='free' in user record,
         # but their subscription record still has the original plan)
-        current_plan = user.get('plan', user.get('subscription', 'free'))
+        current_plan = user.get('plan') or user.get('subscription')
+        
+        # Validate that current_plan exists
+        if not current_plan:
+            return create_response(400, {
+                'error': 'User plan not found',
+                'message': 'Your account does not have a plan assigned. Please contact support.'
+            })
+        
         if subscription.get('cancel_at_period_end'):
             subscription_plan = subscription.get('plan', current_plan)
             print(f"⚠️  Subscription is canceled. Using subscription plan '{subscription_plan}' instead of user plan '{current_plan}'")
@@ -253,9 +234,29 @@ def handle_change_plan(user, body):
         normalized_current = SubscriptionValidator.normalize_plan(current_plan)
         normalized_target = SubscriptionValidator.normalize_plan(plan_id)
         
+        # Ensure normalization succeeded
+        if not normalized_current:
+            return create_response(400, {
+                'error': 'Invalid current plan',
+                'message': f'Current plan "{current_plan}" is not recognized. Please contact support.'
+            })
+        
+        if not normalized_target:
+            return create_response(400, {
+                'error': 'Invalid target plan',
+                'message': f'Target plan "{plan_id}" is not recognized.'
+            })
+        
         # Determine if upgrade or downgrade
         current_level = SubscriptionValidator.get_plan_level(normalized_current)
         target_level = SubscriptionValidator.get_plan_level(normalized_target)
+        
+        # Validate plan levels are valid (>= 0)
+        if current_level < 0 or target_level < 0:
+            return create_response(400, {
+                'error': 'Invalid plan configuration',
+                'message': 'One or more plans have invalid levels. Please contact support.'
+            })
         
         print(f"🔍 Plan Change Validation:")
         print(f"   Current plan: {current_plan} (normalized: {normalized_current}, level: {current_level})")
@@ -331,11 +332,11 @@ def handle_change_plan(user, body):
                 user_response = users_table.get_item(Key={'email': user_email})
                 if 'Item' in user_response:
                     # Use 'plan' field (new), fallback to 'subscription' (legacy)
-                    user_plan = user_response['Item'].get('plan', user_response['Item'].get('subscription', 'free'))
+                    user_plan = user_response['Item'].get('plan') or user_response['Item'].get('subscription')
                 else:
-                    user_plan = user.get('plan', user.get('subscription', 'free'))
+                    user_plan = user.get('plan') or user.get('subscription')
             else:
-                user_plan = user.get('plan', user.get('subscription', 'free'))
+                user_plan = user.get('plan') or user.get('subscription')
             
             # Check for pending plan change
             pending_plan = subscription.get('pending_plan')
@@ -346,7 +347,8 @@ def handle_change_plan(user, body):
             is_reactivation = (
                 (pending_plan == 'free' or cancel_at_period_end) and 
                 user_plan == plan_id and 
-                user_plan in ['professional', 'business', 'plus', 'pro']  # Support both legacy and new plan names
+                user_plan is not None and
+                user_plan in ['plus', 'pro']
             )
             
             print(f"🔍 Reactivation Check:")
@@ -745,7 +747,7 @@ def handle_change_plan(user, body):
 
 def handle_create_checkout_session(user, body):
     """Create Stripe checkout session for subscription"""
-    plan_id = body.get('plan', 'plus')
+    plan_id = body.get('plan')
     
     if plan_id not in PLANS:
         return create_response(400, {'error': 'Invalid plan'})
@@ -777,15 +779,14 @@ def handle_create_checkout_session(user, body):
                 user_response = users_table.get_item(Key={'email': user_email})
                 if 'Item' in user_response:
                     # Use 'plan' field (new), fallback to 'subscription' (legacy)
-                    current_plan = user_response['Item'].get('plan', user_response['Item'].get('subscription', 'free'))
+                    current_plan = user_response['Item'].get('plan') or user_response['Item'].get('subscription')
                 else:
-                    current_plan = user.get('plan', user.get('subscription', 'free'))
+                    current_plan = user.get('plan') or user.get('subscription')
             else:
-                current_plan = user.get('plan', user.get('subscription', 'free'))
+                current_plan = user.get('plan') or user.get('subscription')
             
             # If user has a paid plan and wants to change to another paid plan, use plan change
-            # Support both legacy (professional/business) and new (plus/pro) plan names
-            if current_plan in ['professional', 'business', 'plus', 'pro'] and plan_id in ['professional', 'business', 'plus', 'pro']:
+            if current_plan in ['plus', 'pro'] and plan_id in ['plus', 'pro']:
                 if current_plan != plan_id:
                     print(f"🔄 User has {current_plan} plan, changing to {plan_id} via subscription modification")
                     return handle_change_plan(user, body)
@@ -804,10 +805,10 @@ def handle_create_checkout_session(user, body):
         return validation_error
     
     # Debug: Log environment variables
-    professional_price = os.environ.get('STRIPE_PRICE_PROFESSIONAL', '')
-    business_price = os.environ.get('STRIPE_PRICE_BUSINESS', '')
-    print(f"🔍 Debug - STRIPE_PRICE_PROFESSIONAL: {professional_price[:20] if professional_price else 'NOT SET'}...")
-    print(f"🔍 Debug - STRIPE_PRICE_BUSINESS: {business_price[:20] if business_price else 'NOT SET'}...")
+    plus_price = os.environ.get('STRIPE_PRICE_PLUS', '')
+    pro_price = os.environ.get('STRIPE_PRICE_PRO', '')
+    print(f"🔍 Debug - STRIPE_PRICE_PLUS: {plus_price[:20] if plus_price else 'NOT SET'}...")
+    print(f"🔍 Debug - STRIPE_PRICE_PRO: {pro_price[:20] if pro_price else 'NOT SET'}...")
     print(f"🔍 Debug - Plan ID: {plan_id}, Price ID: {plan.get('stripe_price_id', 'NOT SET')}")
     
     if not plan['stripe_price_id']:
@@ -921,7 +922,7 @@ def handle_create_checkout_session(user, body):
                     'message': error_msg,
                     'type': error_type,
                     'details': f'Your Stripe API key is in {api_key_mode} mode, but the Price ID is in {"live" if api_key_mode == "test" else "test"} mode. You need to create Price IDs in {api_key_mode} mode in your Stripe Dashboard.',
-                    'solution': f'Go to Stripe Dashboard → Products → Create/Edit Product → Add Price in {api_key_mode.upper()} mode, then update STRIPE_PRICE_PROFESSIONAL and STRIPE_PRICE_BUSINESS environment variables'
+                    'solution': f'Go to Stripe Dashboard → Products → Create/Edit Product → Add Price in {api_key_mode.upper()} mode, then update STRIPE_PRICE_PLUS and STRIPE_PRICE_PRO environment variables'
                 })
             else:
                 return create_response(500, {
@@ -1098,19 +1099,30 @@ def handle_get_subscription(user):
                 if 'Item' in user_response:
                     db_user = user_response['Item']
                     # Use 'plan' field (new), fallback to 'subscription' (legacy)
-                    current_plan = db_user.get('plan', db_user.get('subscription', 'free'))
+                    current_plan = db_user.get('plan') or db_user.get('subscription')
                     print(f"📋 User {user_email} plan from DB: {current_plan}")
                 else:
-                    current_plan = user.get('plan', user.get('subscription', 'free'))
+                    current_plan = user.get('plan') or user.get('subscription')
                     print(f"⚠️  User not found in DB, using session plan: {current_plan}")
             else:
-                current_plan = user.get('plan', user.get('subscription', 'free'))
+                current_plan = user.get('plan') or user.get('subscription')
                 print(f"⚠️  No email in user object, using session plan: {current_plan}")
         except Exception as e:
             print(f"⚠️  Error fetching user from DB: {str(e)}, using session plan")
-            current_plan = user.get('plan', user.get('subscription', 'free'))
+            current_plan = user.get('plan') or user.get('subscription')
         
-        plan_details = PLANS.get(current_plan, PLANS['free'])
+        # Normalize plan name and get plan details
+        from utils.subscription_validator import LEGACY_PLAN_MAP
+        normalized_plan = LEGACY_PLAN_MAP.get(current_plan, current_plan) if current_plan else 'free'
+        plan_details = PLANS.get(normalized_plan)
+        if not plan_details:
+            # Fallback to free plan if invalid/unknown plan
+            plan_details = PLANS.get('free')
+            normalized_plan = 'free'
+        
+        # Use normalized plan for current_plan
+        if current_plan != normalized_plan:
+            current_plan = normalized_plan
         
         # Check for pending plan change first
         pending_plan = None
@@ -1120,11 +1132,12 @@ def handle_get_subscription(user):
             pending_plan_change_at = subscription.get('pending_plan_change_at')
         
         # Determine status based on actual user plan and cancellation status
-        if current_plan == 'free':
+        if not current_plan or current_plan == 'free':
+            # No plan or free plan = free status
             status = 'free'
-        elif current_plan in ['plus', 'pro', 'professional', 'business']:
+        elif current_plan in ['plus', 'pro']:
             # If there's a pending plan change to another paid plan, status is 'active' (plan change, not cancellation)
-            if pending_plan and pending_plan in ['plus', 'pro', 'professional', 'business']:
+            if pending_plan and pending_plan in ['plus', 'pro']:
                 status = 'active'  # Plan change scheduled, not cancellation
             else:
                 # Check if subscription is scheduled to cancel at period end
@@ -1155,8 +1168,8 @@ def handle_get_subscription(user):
                 else:
                     status = 'active'
         else:
-            # Fallback: unknown plan, default to active
-            status = 'active'
+            # Unknown plan, treat as free
+            status = 'free'
         
         return create_response(200, {
             'subscription': subscription,
@@ -1171,29 +1184,33 @@ def handle_get_subscription(user):
         import traceback
         traceback.print_exc()
         # Use 'plan' field (new), fallback to 'subscription' (legacy)
-        current_plan = user.get('plan', user.get('subscription', 'free'))
+        current_plan = user.get('plan') or user.get('subscription')
         return create_response(200, {
             'subscription': None,
             'plan': current_plan,
-            'plan_details': PLANS.get(current_plan, PLANS['free']),
+            'plan_details': PLANS.get(current_plan) if current_plan else None,
             'status': 'free'
         })
 
 
-def handle_check_downgrade_limits(user, target_plan='free'):
+def handle_check_downgrade_limits(user, target_plan):
     """Check if user can downgrade to target plan and return what needs to be deleted"""
     from boto3.dynamodb.conditions import Key
     from utils.config import galleries_table, photos_table
     from handlers.subscription_handler import get_user_plan_limits
     
     try:
+        # Validate target plan is provided
+        if not target_plan:
+            return create_response(400, {'error': 'Target plan is required'})
+        
         # Validate target plan
         if target_plan not in PLANS:
             return create_response(400, {'error': 'Invalid target plan'})
         
         # Get current and target plan limits
         current_plan_limits = get_user_plan_limits(user)
-        target_plan_config = PLANS.get(target_plan, PLANS['free'])
+        target_plan_config = PLANS.get(target_plan) if target_plan else None
         
         # Get all galleries
         galleries_response = galleries_table.query(
@@ -1304,8 +1321,15 @@ def handle_downgrade_subscription(user, body):
             
             # Get the actual plan from the subscription record (source of truth)
             # The user object might be stale from the auth token
-            subscription_plan = subscription.get('plan', 'free')
-            user_current_plan = user.get('plan', user.get('subscription', 'free'))
+            subscription_plan = subscription.get('plan')
+            user_current_plan = user.get('plan') or user.get('subscription')
+            
+            # Validate subscription plan exists
+            if not subscription_plan:
+                return create_response(400, {
+                    'error': 'Subscription plan not found',
+                    'message': 'Unable to determine your current plan. Please contact support.'
+                })
             
             print(f"🔍 Cancel Debug - User: {user.get('email')}")
             print(f"   User plan field: {user.get('plan')}")
@@ -1539,11 +1563,14 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                 except Exception as e:
                     print(f"⚠️  Error checking for existing subscriptions: {str(e)}")
                 
-                # Update user subscription
+                # Update user subscription and plan field
                 try:
                     users_table.update_item(
                         Key={'email': customer_email},
-                        UpdateExpression='SET subscription = :plan, updated_at = :now',
+                        UpdateExpression='SET subscription = :plan, #plan = :plan, updated_at = :now',
+                        ExpressionAttributeNames={
+                            '#plan': 'plan'  # 'plan' is a reserved keyword in DynamoDB
+                        },
                         ExpressionAttributeValues={
                             ':plan': plan,
                             ':now': datetime.utcnow().isoformat() + 'Z'
@@ -1624,10 +1651,10 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
             elif data.get('items', {}).get('data'):
                 # Try to determine plan from price ID
                 price_id = data['items']['data'][0].get('price', {}).get('id', '')
-                if price_id == os.environ.get('STRIPE_PRICE_PROFESSIONAL', ''):
-                    plan = 'professional'
-                elif price_id == os.environ.get('STRIPE_PRICE_BUSINESS', ''):
-                    plan = 'business'
+                if price_id == os.environ.get('STRIPE_PRICE_PLUS', ''):
+                    plan = 'plus'
+                elif price_id == os.environ.get('STRIPE_PRICE_PRO', ''):
+                    plan = 'pro'
             
             print(f"📋 Processing customer.subscription.updated: subscription={subscription_id}, cancel_at_period_end={cancel_at_period_end}, plan={plan}")
             
@@ -1678,7 +1705,7 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                             print(f"⚠️  Error updating user plan via webhook: {str(e)}")
                 
                 # Update plan if changed (for immediate upgrades)
-                elif plan and plan in ['professional', 'business']:
+                elif plan and plan in ['plus', 'pro']:
                     # Only update immediately if no pending plan change
                     if not pending_plan:
                         subscription['plan'] = plan
@@ -1816,7 +1843,7 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                             'amount': Decimal(str(amount_paid / 100)),  # Convert cents to dollars, then to Decimal
                             'currency': data.get('currency', 'usd'),
                             'status': 'paid',
-                            'plan': data.get('subscription_details', {}).get('metadata', {}).get('plan') or 'professional',
+                            'plan': data.get('subscription_details', {}).get('metadata', {}).get('plan') or 'free',
                             'created_at': datetime.utcnow().isoformat() + 'Z'
                         })
                         print(f"✅ Created billing record for invoice {invoice_id}, user {user_id}, amount ${amount_paid / 100}")
@@ -1824,9 +1851,9 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                         # Send payment receipt email
                         try:
                             from utils.email import send_payment_receipt_email
-                            plan_name = data.get('subscription_details', {}).get('metadata', {}).get('plan') or 'professional'
+                            plan_name = data.get('subscription_details', {}).get('metadata', {}).get('plan') or 'free'
                             plan_details = PLANS.get(plan_name, {})
-                            plan_display_name = plan_details.get('name', plan_name)
+                            plan_display_name = plan_details.get('name', plan_name if plan_name else 'Free')
                             
                             # Get user email
                             user_email = None

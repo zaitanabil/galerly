@@ -21,22 +21,34 @@ def get_user_plan_limits(user):
             if 'Item' in user_response:
                 db_user = user_response['Item']
                 # Use 'plan' field (new), fallback to 'subscription' (legacy)
-                plan_id = db_user.get('plan', db_user.get('subscription', 'free'))
+                plan_id = db_user.get('plan') or db_user.get('subscription')
                 print(f"📋 get_user_plan_limits: User {user_email} plan from DB: {plan_id}")
             else:
-                plan_id = user.get('plan', user.get('subscription', 'free'))
+                plan_id = user.get('plan') or user.get('subscription')
                 print(f"⚠️  User not found in DB, using session plan: {plan_id}")
         else:
-            plan_id = user.get('plan', user.get('subscription', 'free'))
+            plan_id = user.get('plan') or user.get('subscription')
             print(f"⚠️  No email in user object, using session plan: {plan_id}")
     except Exception as e:
         print(f"⚠️  Error fetching user from DB: {str(e)}, using session plan")
-        plan_id = user.get('plan', user.get('subscription', 'free'))
+        plan_id = user.get('plan') or user.get('subscription')
     
-    plan = PLANS.get(plan_id, PLANS['free'])
+    # If no plan found, default to free
+    if not plan_id:
+        plan_id = 'free'
+    
+    # Normalize legacy plan names
+    from utils.subscription_validator import LEGACY_PLAN_MAP
+    normalized_plan_id = LEGACY_PLAN_MAP.get(plan_id, plan_id)
+    
+    plan = PLANS.get(normalized_plan_id)
+    if not plan:
+        # Fallback to free plan if plan_id is not recognized
+        normalized_plan_id = 'free'
+        plan = PLANS.get('free')
     
     return {
-        'plan': plan_id,
+        'plan': normalized_plan_id,  # Return normalized plan ID
         'plan_name': plan['name'],
         'galleries_per_month': plan['galleries_per_month'],
         'storage_gb': plan['storage_gb'],
@@ -49,7 +61,14 @@ def check_gallery_limit(user):
     # Get plan limits (which fetches from DB)
     plan_limits = get_user_plan_limits(user)
     plan_id = plan_limits['plan']
-    plan = PLANS.get(plan_id, PLANS['free'])
+    
+    # Ensure we have a valid plan
+    if not plan_id:
+        plan_id = 'free'
+    
+    plan = PLANS.get(plan_id)
+    if not plan:
+        plan = PLANS.get('free')
     
     # Check current month galleries
     try:
@@ -101,7 +120,14 @@ def check_storage_limit(user):
     # Get plan limits (which fetches from DB)
     plan_limits = get_user_plan_limits(user)
     plan_id = plan_limits['plan']
-    plan = PLANS.get(plan_id, PLANS['free'])
+    
+    # Ensure we have a valid plan
+    if not plan_id:
+        plan_id = 'free'
+    
+    plan = PLANS.get(plan_id)
+    if not plan:
+        plan = PLANS.get('free')
     
     try:
         response = galleries_table.query(

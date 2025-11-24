@@ -4,20 +4,63 @@
  * and updates UI accordingly (Sign In vs Logout button)
  * Handles both desktop header button and mobile menu
  * Shows/hides Dashboard links based on authentication
+ * Shows/hides Email Templates nav link for Pro users
+ * 
+ * SECURITY: localStorage is ONLY for UI hints. Authorization via backend API.
  */
 (function() {
     function getUserRole() {
+        // UI hint for dashboard routing
+        // Backend should always provide a valid role
         try {
             const userData = localStorage.getItem('galerly_user_data');
             if (userData) {
                 const user = JSON.parse(userData);
-                return user.role || 'photographer';
+                return user.role;
             }
         } catch (e) {
             console.error('Error parsing user data:', e);
         }
-        return 'photographer';
+        return null;
     }
+    
+    function getUserPlan() {
+        // UI HINT ONLY - actual authorization via backend API
+        try {
+            const userData = localStorage.getItem('galerly_user_data');
+            if (userData) {
+                const user = JSON.parse(userData);
+                return (user.plan || '').toLowerCase();
+            }
+        } catch (e) {
+            console.error('Error parsing user data:', e);
+        }
+        return '';
+    }
+    
+    function isProUser() {
+        // UI HINT ONLY - actual authorization via backend API
+        const plan = getUserPlan();
+        return plan === 'pro';
+    }
+    
+    function updateEmailTemplatesNav() {
+        // UI hint to show/hide nav link
+        // Backend API enforces actual access control
+        const emailTemplatesNav = document.getElementById('email-templates-nav');
+        const mobileEmailTemplatesNav = document.getElementById('mobile-email-templates-nav');
+        
+        if (isProUser()) {
+            if (emailTemplatesNav) emailTemplatesNav.style.display = '';
+            if (mobileEmailTemplatesNav) mobileEmailTemplatesNav.style.display = '';
+        } else {
+            if (emailTemplatesNav) emailTemplatesNav.style.display = 'none';
+            if (mobileEmailTemplatesNav) mobileEmailTemplatesNav.style.display = 'none';
+        }
+    }
+    
+    // Make updateEmailTemplatesNav globally accessible so billing.js can call it
+    window.updateEmailTemplatesNav = updateEmailTemplatesNav;
     
     function updateDashboardLinks(isAuthenticated) {
         const userRole = getUserRole();
@@ -57,6 +100,9 @@
                     }
                 });
             }
+            
+            // Update Email Templates nav visibility for authenticated Pro users
+            updateEmailTemplatesNav();
         } else {
             // User is not authenticated, hide all dashboard links
             photographerDashboardLinks.forEach(link => {
