@@ -114,7 +114,7 @@ echo ""
 
 # Stop any existing containers
 echo "🛑 Stopping existing containers (if any)..."
-docker-compose -f docker-compose.localstack.yml down 2>/dev/null || true
+docker-compose -f docker/docker-compose.localstack.yml down 2>/dev/null || true
 echo ""
 
 # Start LocalStack
