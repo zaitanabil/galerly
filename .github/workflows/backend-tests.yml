@@ -73,6 +73,11 @@ jobs:
         name: test-results-${{ matrix.python-version }}
         path: backend/junit.xml
     
+    - name: Combine coverage data
+      run: |
+        cd backend
+        coverage combine
+    
     - name: Check test coverage threshold
       run: |
         cd backend
