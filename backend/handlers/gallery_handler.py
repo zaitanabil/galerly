@@ -11,6 +11,7 @@ from utils.config import galleries_table, photos_table, s3_client, S3_BUCKET, cl
 from utils.response import create_response
 from handlers.subscription_handler import enforce_gallery_limit
 from utils.email import send_gallery_shared_email
+from utils.cache import cached, invalidate_user_galleries, invalidate_gallery
 
 def enrich_photos_with_any_favorites(photos, gallery):
     """Add is_favorite field to photos - TRUE if ANY client favorited it (for photographer view)"""
@@ -52,10 +53,31 @@ def enrich_photos_with_any_favorites(photos, gallery):
 
 def handle_list_galleries(user, query_params=None):
     """List all galleries for THIS USER ONLY with optional search and filters"""
+    from utils.cache import application_cache, generate_cache_key
+    
+    # Generate cache key for this request
+    user_id = user['id']
+    cache_params = query_params or {}
+    ck = generate_cache_key('gallery_list', user_id, **cache_params)
+    
+    # Try to get from cache
+    cached_result = application_cache.retrieve(ck)
+    if cached_result is not None:
+        print(f"✅ Cache HIT: gallery_list for user {user_id}")
+        return cached_result
+    
+    print(f"⚠️  Cache MISS: gallery_list for user {user_id}")
+    
     try:
-        # Query galleries by user_id (partition key) - COMPLETE ISOLATION
+        # Query galleries by user_id (partition key) with projection (only fetch needed fields for list view)
+        # This reduces data transfer and improves performance
         response = galleries_table.query(
-            KeyConditionExpression=Key('user_id').eq(user['id'])
+            KeyConditionExpression=Key('user_id').eq(user['id']),
+            ProjectionExpression='id, #n, created_at, updated_at, client_emails, cover_photo, #st, photo_count, archived, tags, description',
+            ExpressionAttributeNames={
+                '#n': 'name',  # 'name' is a reserved word in DynamoDB
+                '#st': 'status'  # 'status' is a reserved word in DynamoDB
+            }
         )
         
         user_galleries = response.get('Items', [])
@@ -111,10 +133,15 @@ def handle_list_galleries(user, query_params=None):
             user_galleries = [g for g in user_galleries if not g.get('archived', False)]
             user_galleries.sort(key=lambda x: x.get('created_at', ''), reverse=True)
         
-        return create_response(200, {
+        result = create_response(200, {
             'galleries': user_galleries,
             'total': len(user_galleries)
         })
+        
+        # Cache the result (5 minutes TTL)
+        application_cache.store(ck, result, ttl=300)
+        
+        return result
     except Exception as e:
         print(f"Error listing galleries: {str(e)}")
         return create_response(200, {'galleries': [], 'total': 0})
@@ -235,13 +262,55 @@ def handle_create_gallery(user, body):
             pass  # Don't fail gallery creation if email fails
     
     print(f"✅ Gallery created for user {user['id']}: {gallery_id} with {len(client_emails)} clients")
+    # Invalidate user's gallery list cache
+    invalidate_user_galleries(user['id'])
+    
     return create_response(201, gallery)
 
-def handle_get_gallery(gallery_id, user=None):
-    """Get gallery details - CHECK USER OWNERSHIP"""
+def handle_get_gallery(gallery_id, user=None, query_params=None):
+    """Get gallery details with optional pagination - CHECK USER OWNERSHIP"""
+    from utils.cache import application_cache, generate_cache_key
+    
     try:
         if not user:
             return create_response(401, {'error': 'Authentication required'})
+        
+        # Generate cache key for this request
+        user_id = user['id']
+        cache_params = query_params or {}
+        ck = generate_cache_key('gallery', gallery_id, user_id, **cache_params)
+        
+        # Try to get from cache
+        cached_result = application_cache.retrieve(ck)
+        if cached_result is not None:
+            print(f"✅ Cache HIT: gallery {gallery_id} for user {user_id}")
+            return cached_result
+        
+        print(f"⚠️  Cache MISS: gallery {gallery_id} for user {user_id}")
+        
+        # Parse pagination parameters
+        page_size = 50  # Default page size
+        last_evaluated_key = None
+        pagination_requested = False  # Track if pagination params were provided
+        
+        if query_params:
+            try:
+                # Check if pagination parameters were explicitly provided
+                if 'page_size' in query_params or 'last_key' in query_params:
+                    pagination_requested = True
+                
+                # Enforce min 1, max 100 for page_size
+                page_size = max(1, min(int(query_params.get('page_size', 50)), 100))
+            except:
+                page_size = 50
+            
+            # Get last evaluated key for pagination
+            if 'last_key' in query_params:
+                try:
+                    import json
+                    last_evaluated_key = json.loads(query_params['last_key'])
+                except:
+                    last_evaluated_key = None
         
         # Query with both partition key (user_id) and sort key (id)
         response = galleries_table.get_item(Key={
@@ -254,24 +323,66 @@ def handle_get_gallery(gallery_id, user=None):
         
         gallery = response['Item']
         
-        # Get photos for this gallery
+        # Get photos for this gallery with optimized projection and pagination
+        # Only fetch essential fields needed for display
+        # Initialize variables before try block to ensure they exist in except block
+        gallery_photos = []
+        next_key = None
+        has_more = False
+        
         try:
-            photos_response = photos_table.query(
-                IndexName='GalleryIdIndex',
-                KeyConditionExpression=Key('gallery_id').eq(gallery_id)
-            )
+            query_kwargs = {
+                'IndexName': 'GalleryIdIndex',
+                'KeyConditionExpression': Key('gallery_id').eq(gallery_id),
+                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, url, title, description, filename, #sz, width, height, favorites',
+                'ExpressionAttributeNames': {
+                    '#st': 'status',  # reserved word
+                    '#sz': 'size'  # reserved word
+                },
+                'Limit': page_size
+            }
+            
+            # Add pagination key if provided
+            if last_evaluated_key:
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            
+            photos_response = photos_table.query(**query_kwargs)
             gallery_photos = photos_response.get('Items', [])
             gallery_photos.sort(key=lambda x: x.get('created_at', ''))
             
             # Enrich photos with is_favorite field (shows which photos clients favorited)
             gallery_photos = enrich_photos_with_any_favorites(gallery_photos, gallery)
-        except:
+            
+            # Pagination metadata
+            next_key = photos_response.get('LastEvaluatedKey')
+            has_more = next_key is not None
+            
+        except Exception as e:
+            print(f"Error loading photos: {str(e)}")
             gallery_photos = []
+            next_key = None
+            has_more = False
         
+        # Set gallery data (works whether try succeeded or failed)
         gallery['photos'] = gallery_photos
         gallery['photo_count'] = len(gallery_photos)
         
-        return create_response(200, gallery)
+        # Add pagination metadata to response only if pagination was explicitly requested
+        response_data = gallery
+        if pagination_requested:
+            response_data['pagination'] = {
+                'page_size': page_size,
+                'has_more': has_more,
+                'next_key': next_key,
+                'returned_count': len(gallery_photos)
+            }
+        
+        result = create_response(200, response_data)
+        
+        # Cache the result (5 minutes TTL)
+        application_cache.store(ck, result, ttl=300)
+        
+        return result
     except Exception as e:
         print(f"Error getting gallery: {str(e)}")
         return create_response(404, {'error': 'Gallery not found'})
@@ -397,6 +508,10 @@ def handle_update_gallery(gallery_id, user, body):
         
         # Save back to DynamoDB
         galleries_table.put_item(Item=gallery)
+        
+        # Invalidate caches for this gallery and user's gallery list
+        invalidate_gallery(gallery_id)
+        invalidate_user_galleries(user['id'])
         
         return create_response(200, gallery)
     except Exception as e:
@@ -566,6 +681,10 @@ def handle_delete_gallery(gallery_id, user):
             'user_id': user['id'],
             'id': gallery_id
         })
+        
+        # Invalidate caches for this gallery and user's gallery list
+        invalidate_gallery(gallery_id)
+        invalidate_user_galleries(user['id'])
         
         return create_response(200, {'message': 'Gallery deleted successfully'})
     except Exception as e:

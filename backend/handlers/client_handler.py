@@ -182,9 +182,33 @@ def handle_client_galleries(user):
         traceback.print_exc()
         return create_response(500, {'error': 'Failed to load galleries'})
 
-def handle_get_client_gallery(gallery_id, user):
-    """Get single gallery for client - CHECK CLIENT EMAIL ACCESS"""
+def handle_get_client_gallery(gallery_id, user, query_params=None):
+    """Get single gallery for client with optional pagination - CHECK CLIENT EMAIL ACCESS"""
     try:
+        # Parse pagination parameters
+        page_size = 50  # Default page size
+        last_evaluated_key = None
+        pagination_requested = False  # Track if pagination params were provided
+        
+        if query_params:
+            try:
+                # Check if pagination parameters were explicitly provided
+                if 'page_size' in query_params or 'last_key' in query_params:
+                    pagination_requested = True
+                
+                # Enforce min 1, max 100 for page_size
+                page_size = max(1, min(int(query_params.get('page_size', 50)), 100))
+            except:
+                page_size = 50
+            
+            # Get last evaluated key for pagination
+            if 'last_key' in query_params:
+                try:
+                    import json
+                    last_evaluated_key = json.loads(query_params['last_key'])
+                except:
+                    last_evaluated_key = None
+        
         # Scan for the gallery (since we don't know the user_id/photographer)
         response = galleries_table.scan(
             FilterExpression='id = :gallery_id',
@@ -252,35 +276,93 @@ def handle_get_client_gallery(gallery_id, user):
             gallery['photographer_name'] = 'Unknown Photographer'
             gallery['photographer_id'] = gallery.get('user_id')
         
-        # Get ALL photos (pending + approved)
+        # Get ALL photos (pending + approved) with optimized projection and pagination
+        # Initialize variables before try block to ensure they exist in except block
+        gallery_photos = []
+        next_key = None
+        has_more = False
+        
         try:
-            photos_response = photos_table.query(
-                IndexName='GalleryIdIndex',
-                KeyConditionExpression=Key('gallery_id').eq(gallery_id)
-            )
+            query_kwargs = {
+                'IndexName': 'GalleryIdIndex',
+                'KeyConditionExpression': Key('gallery_id').eq(gallery_id),
+                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, url, title, description, filename, #sz, width, height, favorites',
+                'ExpressionAttributeNames': {
+                    '#st': 'status',
+                    '#sz': 'size'
+                },
+                'Limit': page_size
+            }
+            
+            # Add pagination key if provided
+            if last_evaluated_key:
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            
+            photos_response = photos_table.query(**query_kwargs)
             gallery_photos = photos_response.get('Items', [])
             gallery_photos.sort(key=lambda x: x.get('created_at', ''))
             
             # Enrich photos with is_favorite field for this client
             gallery_photos = enrich_photos_with_favorites(gallery_photos, user['email'], gallery_id)
             
-            gallery['photos'] = gallery_photos
-            gallery['photo_count'] = len(gallery_photos)
+            # Pagination metadata
+            next_key = photos_response.get('LastEvaluatedKey')
+            has_more = next_key is not None
+            
         except Exception as e:
             print(f"Error loading photos: {str(e)}")
-            gallery['photos'] = []
-            gallery['photo_count'] = 0
+            gallery_photos = []
+            next_key = None
+            has_more = False
         
-        return create_response(200, gallery)
+        # Set gallery data (works whether try succeeded or failed)
+        gallery['photos'] = gallery_photos
+        gallery['photo_count'] = len(gallery_photos)
+        
+        # Add pagination metadata to response only if pagination was explicitly requested
+        response_data = gallery
+        if pagination_requested:
+            response_data['pagination'] = {
+                'page_size': page_size,
+                'has_more': has_more,
+                'next_key': next_key,
+                'returned_count': len(gallery_photos)
+            }
+        
+        return create_response(200, response_data)
     except Exception as e:
         print(f"Error getting client gallery: {str(e)}")
         import traceback
         traceback.print_exc()
         return create_response(500, {'error': 'Failed to load gallery'})
 
-def handle_get_client_gallery_by_token(share_token):
-    """Get gallery by share token - PUBLIC ACCESS (no auth required)"""
+def handle_get_client_gallery_by_token(share_token, query_params=None):
+    """Get gallery by share token with optional pagination - PUBLIC ACCESS (no auth required)"""
     try:
+        # Parse pagination parameters
+        page_size = 50  # Default page size
+        last_evaluated_key = None
+        pagination_requested = False  # Track if pagination params were provided
+        
+        if query_params:
+            try:
+                # Check if pagination parameters were explicitly provided
+                if 'page_size' in query_params or 'last_key' in query_params:
+                    pagination_requested = True
+                
+                # Enforce min 1, max 100 for page_size
+                page_size = max(1, min(int(query_params.get('page_size', 50)), 100))
+            except:
+                page_size = 50
+            
+            # Get last evaluated key for pagination
+            if 'last_key' in query_params:
+                try:
+                    import json
+                    last_evaluated_key = json.loads(query_params['last_key'])
+                except:
+                    last_evaluated_key = None
+        
         # Scan for gallery with matching share_token
         response = galleries_table.scan(
             FilterExpression='share_token = :token',
@@ -363,22 +445,57 @@ def handle_get_client_gallery_by_token(share_token):
             gallery['photographer_name'] = 'Unknown Photographer'
             gallery['photographer_id'] = gallery.get('user_id')
         
-        # Get ALL photos (pending + approved)
+        # Get ALL photos (pending + approved) with optimized projection and pagination
+        # Initialize variables before try block to ensure they exist in except block
+        gallery_photos = []
+        next_key = None
+        has_more = False
+        
         try:
-            photos_response = photos_table.query(
-                IndexName='GalleryIdIndex',
-                KeyConditionExpression=Key('gallery_id').eq(gallery_id)
-            )
+            query_kwargs = {
+                'IndexName': 'GalleryIdIndex',
+                'KeyConditionExpression': Key('gallery_id').eq(gallery_id),
+                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, url, title, description, filename, #sz, width, height',
+                'ExpressionAttributeNames': {
+                    '#st': 'status',
+                    '#sz': 'size'
+                },
+                'Limit': page_size
+            }
+            
+            # Add pagination key if provided
+            if last_evaluated_key:
+                query_kwargs['ExclusiveStartKey'] = last_evaluated_key
+            
+            photos_response = photos_table.query(**query_kwargs)
             gallery_photos = photos_response.get('Items', [])
             gallery_photos.sort(key=lambda x: x.get('created_at', ''))
-            gallery['photos'] = gallery_photos
-            gallery['photo_count'] = len(gallery_photos)
+            
+            # Pagination metadata
+            next_key = photos_response.get('LastEvaluatedKey')
+            has_more = next_key is not None
+            
         except Exception as e:
             print(f"Error loading photos: {str(e)}")
-            gallery['photos'] = []
-            gallery['photo_count'] = 0
+            gallery_photos = []
+            next_key = None
+            has_more = False
         
-        return create_response(200, gallery)
+        # Set gallery data (works whether try succeeded or failed)
+        gallery['photos'] = gallery_photos
+        gallery['photo_count'] = len(gallery_photos)
+        
+        # Add pagination metadata to response only if pagination was explicitly requested
+        response_data = gallery
+        if pagination_requested:
+            response_data['pagination'] = {
+                'page_size': page_size,
+                'has_more': has_more,
+                'next_key': next_key,
+                'returned_count': len(gallery_photos)
+            }
+        
+        return create_response(200, response_data)
     except Exception as e:
         print(f"Error getting gallery by token: {str(e)}")
         import traceback
