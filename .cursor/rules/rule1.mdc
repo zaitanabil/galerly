@@ -3,6 +3,7 @@ alwaysApply: true
 ---
 
 ## File Handling
+* No emojis only svg icons if needed.
 * Each backend and frontend endpoint or pipeline must have its own test in the test folder.
 * No hardcoded values in repo
 * Works with GitHub secrets
