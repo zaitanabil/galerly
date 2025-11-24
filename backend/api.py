@@ -115,6 +115,13 @@ from handlers.bulk_download_handler import (
     handle_bulk_download,
     handle_bulk_download_by_token
 )
+from handlers.email_template_handler import (
+    handle_list_templates,
+    handle_get_template,
+    handle_save_template,
+    handle_delete_template,
+    handle_preview_template
+)
 
 def handler(event, context):
     """Main Lambda handler with clean routing"""
@@ -594,6 +601,38 @@ def handler(event, context):
         # Send selection reminder to client (matches frontend call)
         if path == '/v1/notifications/send-selection-reminder' and method == 'POST':
             return handle_send_selection_reminder(user, body)
+        
+        # ================================================================
+        # EMAIL TEMPLATES (Pro Feature Only)
+        # ================================================================
+        
+        # List all email templates
+        if path == '/v1/email-templates' and method == 'GET':
+            return handle_list_templates(user)
+        
+        # Get specific template
+        if path.startswith('/v1/email-templates/') and method == 'GET' and '/preview' not in path:
+            parts = path.split('/')
+            template_type = parts[-1]
+            return handle_get_template(user, template_type)
+        
+        # Save/update template
+        if path.startswith('/v1/email-templates/') and method == 'PUT':
+            parts = path.split('/')
+            template_type = parts[-1]
+            return handle_save_template(user, template_type, body)
+        
+        # Delete custom template (revert to default)
+        if path.startswith('/v1/email-templates/') and method == 'DELETE':
+            parts = path.split('/')
+            template_type = parts[-1]
+            return handle_delete_template(user, template_type)
+        
+        # Preview template with sample data
+        if path.startswith('/v1/email-templates/') and '/preview' in path and method == 'POST':
+            parts = path.split('/')
+            template_type = parts[parts.index('email-templates') + 1]
+            return handle_preview_template(user, template_type, body)
         
         # Manual expiry check (photographer can test expiry notifications)
         if path == '/v1/galleries/check-expiring' and method == 'POST':

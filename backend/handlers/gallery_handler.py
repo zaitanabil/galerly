@@ -252,7 +252,8 @@ def handle_create_gallery(user, body):
                             photographer_name,
                             name,
                             gallery['share_url'],
-                            description
+                            description,
+                            user_id=user['id']  # Pass user_id for custom templates
                         )
                     except Exception as e:
                         print(f"Failed to send email to {client_email}: {str(e)}")

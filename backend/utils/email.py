@@ -30,8 +30,16 @@ from .email_templates_branded import BRANDED_EMAIL_TEMPLATES
 EMAIL_TEMPLATES = BRANDED_EMAIL_TEMPLATES
 
 
-def send_email(to_email, template_name, template_vars=None):
-    """Send email using SMTP (Namecheap Private Email)"""
+def send_email(to_email, template_name, template_vars=None, user_id=None):
+    """
+    Send email using SMTP (Namecheap Private Email)
+    
+    Args:
+        to_email: Recipient email address
+        template_name: Template type to use
+        template_vars: Variables to substitute in template
+        user_id: If provided, uses custom Pro user templates
+    """
     if template_vars is None:
         template_vars = {}
     
@@ -49,16 +57,21 @@ def send_email(to_email, template_name, template_vars=None):
         print(f"   SMTP_PASSWORD ends with: ...{SMTP_PASSWORD[-3:]}")
     # ================================================
     
-    if template_name not in EMAIL_TEMPLATES:
-        print(f"⚠️  Email template '{template_name}' not found")
-        return False
+    # Get template (custom if user_id provided and they're Pro)
+    if user_id:
+        from handlers.email_template_handler import get_user_template
+        template = get_user_template(user_id, template_name)
+    else:
+        if template_name not in EMAIL_TEMPLATES:
+            print(f"⚠️  Email template '{template_name}' not found")
+            return False
+        template = EMAIL_TEMPLATES[template_name]
     
     # Check if SMTP password is configured
     if not SMTP_PASSWORD:
         print(f"❌ SMTP_PASSWORD not configured. Cannot send email.")
         return False
     
-    template = EMAIL_TEMPLATES[template_name]
     subject = template['subject'].format(**template_vars)
     html_body = template['html'].format(**template_vars)
     text_body = template['text'].format(**template_vars)
@@ -114,13 +127,16 @@ def send_welcome_email(user_email, user_name):
     )
 
 
-def send_gallery_shared_email(client_email, client_name, photographer_name, gallery_name, gallery_url, description=''):
+def send_gallery_shared_email(client_email, client_name, photographer_name, gallery_name, gallery_url, description='', user_id=None):
     """
     Send notification when gallery is shared with client
     
     Checks if client has an account:
     - If YES: Sends email encouraging them to sign in to interact (approve, comment)
     - If NO: Sends email encouraging them to create account for full interaction, otherwise view-only
+    
+    Args:
+        user_id: If provided, uses custom Pro user templates
     """
     from utils.config import users_table
     
@@ -153,7 +169,8 @@ def send_gallery_shared_email(client_email, client_name, photographer_name, gall
             'description': description or 'Check out your photos!',
             'signup_url': signup_url,
             'has_account': has_account
-        }
+        },
+        user_id=user_id  # Pass user_id for custom templates
     )
 
 
