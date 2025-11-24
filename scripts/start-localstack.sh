@@ -119,7 +119,7 @@ echo ""
 
 # Start LocalStack
 echo "🐳 Starting LocalStack..."
-docker-compose -f docker-compose.localstack.yml up -d localstack
+docker-compose -f docker/docker-compose.localstack.yml up -d localstack
 echo ""
 
 # Wait for LocalStack to be ready
