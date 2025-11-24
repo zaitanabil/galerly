@@ -3,7 +3,7 @@ alwaysApply: true
 ---
 
 ## File Handling
-* No manual correction, always github action must do automatically
+* Each backend and frontend endpoint or pipeline must have its own test in the test folder.
 * No hardcoded values in repo
 * Works with GitHub secrets
 * Only modify the specified file(s)
