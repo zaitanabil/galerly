@@ -63,7 +63,10 @@ PLANS = {
     'starter': {
         'name': 'Starter',
         'price': 12,
-        'stripe_price_id': os.environ.get('STRIPE_PRICE_STARTER', ''),
+        'price_annual': 120,
+        'stripe_price_id': os.environ.get('STRIPE_PRICE_STARTER_MONTHLY', ''),
+        'stripe_price_id_monthly': os.environ.get('STRIPE_PRICE_STARTER_MONTHLY', ''),
+        'stripe_price_id_annual': os.environ.get('STRIPE_PRICE_STARTER_ANNUAL', ''),
         'galleries_per_month': -1,  # Unlimited
         'storage_gb': 25,
         'feature_ids': ['storage_25gb', 'video_30min_hd', 'unlimited_galleries', 'no_branding', 'client_proofing', 'analytics_basic'],
@@ -79,7 +82,10 @@ PLANS = {
     'plus': {
         'name': 'Plus',
         'price': 29,
-        'stripe_price_id': os.environ.get('STRIPE_PRICE_PLUS', ''),
+        'price_annual': 290,
+        'stripe_price_id': os.environ.get('STRIPE_PRICE_PLUS_MONTHLY', ''),
+        'stripe_price_id_monthly': os.environ.get('STRIPE_PRICE_PLUS_MONTHLY', ''),
+        'stripe_price_id_annual': os.environ.get('STRIPE_PRICE_PLUS_ANNUAL', ''),
         'galleries_per_month': -1,  # Unlimited
         'storage_gb': 100,
         'feature_ids': ['storage_100gb', 'video_60min_hd', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_advanced', 'watermarking', 'client_proofing'],
@@ -95,7 +101,10 @@ PLANS = {
     'pro': {
         'name': 'Pro',
         'price': 59,
-        'stripe_price_id': os.environ.get('STRIPE_PRICE_PRO', ''),
+        'price_annual': 590,
+        'stripe_price_id': os.environ.get('STRIPE_PRICE_PRO_MONTHLY', ''),
+        'stripe_price_id_monthly': os.environ.get('STRIPE_PRICE_PRO_MONTHLY', ''),
+        'stripe_price_id_annual': os.environ.get('STRIPE_PRICE_PRO_ANNUAL', ''),
         'galleries_per_month': -1,  # Unlimited
         'storage_gb': 500,
         'feature_ids': ['storage_500gb', 'video_4hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_pro', 'raw_support', 'email_templates', 'smart_invoicing', 'scheduler', 'seo_tools', 'client_proofing', 'watermarking', 'lightroom_workflow'],
@@ -112,7 +121,10 @@ PLANS = {
     'ultimate': {
         'name': 'Ultimate',
         'price': 119,
-        'stripe_price_id': os.environ.get('STRIPE_PRICE_ULTIMATE', ''),
+        'price_annual': 1190,
+        'stripe_price_id': os.environ.get('STRIPE_PRICE_ULTIMATE_MONTHLY', ''),
+        'stripe_price_id_monthly': os.environ.get('STRIPE_PRICE_ULTIMATE_MONTHLY', ''),
+        'stripe_price_id_annual': os.environ.get('STRIPE_PRICE_ULTIMATE_ANNUAL', ''),
         'galleries_per_month': -1,  # Unlimited
         'storage_gb': 2000,
         'feature_ids': ['storage_2tb', 'video_10hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_pro', 'raw_support', 'email_templates', 'smart_invoicing', 'scheduler', 'seo_tools', 'client_proofing', 'watermarking', 'lightroom_workflow', 'vip_support', 'raw_vault', 'api_access', 'concierge_onboarding'],
@@ -776,6 +788,7 @@ def handle_change_plan(user, body):
 def handle_create_checkout_session(user, body):
     """Create Stripe checkout session for subscription"""
     plan_id = body.get('plan')
+    interval = body.get('interval', 'monthly')  # Default to monthly
     
     if plan_id not in PLANS:
         return create_response(400, {'error': 'Invalid plan'})
@@ -784,6 +797,22 @@ def handle_create_checkout_session(user, body):
     
     if plan_id == 'free':
         return create_response(400, {'error': 'Free plan does not require payment'})
+
+    # Determine Price ID based on interval
+    price_id = plan.get('stripe_price_id_annual') if interval == 'annual' else plan.get('stripe_price_id_monthly')
+    
+    # Fallback to legacy field if specific interval ID not set
+    if not price_id:
+        price_id = plan.get('stripe_price_id')
+
+    if not price_id:
+        error_msg = f'Plan "{plan_id}" ({interval}) not configured. Missing STRIPE_PRICE_{plan_id.upper()}_{interval.upper()} environment variable.'
+        print(f"❌ {error_msg}")
+        return create_response(500, {
+            'error': 'Plan not configured',
+            'message': f'Stripe Price ID for {plan_id} ({interval}) is not configured.',
+            'plan': plan_id
+        })
     
     # Check if user already has a paid subscription - if so, use plan change instead
     subscription_data = None
@@ -833,19 +862,17 @@ def handle_create_checkout_session(user, body):
         return validation_error
     
     # Debug: Log environment variables
-    plus_price = os.environ.get('STRIPE_PRICE_PLUS', '')
-    pro_price = os.environ.get('STRIPE_PRICE_PRO', '')
-    print(f"🔍 Debug - STRIPE_PRICE_PLUS: {plus_price[:20] if plus_price else 'NOT SET'}...")
-    print(f"🔍 Debug - STRIPE_PRICE_PRO: {pro_price[:20] if pro_price else 'NOT SET'}...")
-    print(f"🔍 Debug - Plan ID: {plan_id}, Price ID: {plan.get('stripe_price_id', 'NOT SET')}")
+    # Use interval specific or legacy var for debug log
+    price_env_var = f"STRIPE_PRICE_{plan_id.upper()}_{interval.upper()}"
+    price_val = os.environ.get(price_env_var, '')
+    print(f"🔍 Debug - {price_env_var}: {price_val[:20] if price_val else 'NOT SET'}...")
+    print(f"🔍 Debug - Plan ID: {plan_id}, Interval: {interval}, Price ID: {price_id}")
     
-    if not plan['stripe_price_id']:
-        error_msg = f'Plan "{plan_id}" not configured. Missing STRIPE_PRICE_{plan_id.upper()} environment variable.'
-        print(f"❌ {error_msg}")
+    if not price_id:
+        # Error handling already done above, but for safety in flow
         return create_response(500, {
             'error': 'Plan not configured',
-            'message': f'Stripe Price ID for {plan_id} plan is not configured. Please set STRIPE_PRICE_{plan_id.upper()} in Lambda environment variables.',
-            'plan': plan_id
+            'message': f'Stripe Price ID for {plan_id} ({interval}) is not configured.'
         })
     
     # Detailed diagnostics
@@ -891,7 +918,8 @@ def handle_create_checkout_session(user, body):
         
         print(f"🔍 Creating checkout session:")
         print(f"   Plan: {plan_id}")
-        print(f"   Price ID: {plan['stripe_price_id']}")
+        print(f"   Interval: {interval}")
+        print(f"   Price ID: {price_id}")
         print(f"   Customer email: {user['email']}")
         print(f"   Success URL: {success_url}")
         print(f"   Cancel URL: {cancel_url}")
@@ -900,7 +928,7 @@ def handle_create_checkout_session(user, body):
             customer_email=user['email'],
             payment_method_types=['card'],
             line_items=[{
-                'price': plan['stripe_price_id'],
+                'price': price_id,
                 'quantity': 1,
             }],
             mode='subscription',
@@ -908,7 +936,8 @@ def handle_create_checkout_session(user, body):
             cancel_url=cancel_url,
             metadata={
                 'user_id': user['id'],
-                'plan': plan_id
+                'plan': plan_id,
+                'interval': interval
             }
         )
         

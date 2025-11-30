@@ -15,6 +15,13 @@ def create_response(status_code, body):
     """Create API Gateway response with CORS headers (supports credentials) and CSP"""
     frontend_url = get_required_env('FRONTEND_URL')
     
+    # Local Development CORS Fix
+    # If we are in local environment, ensure we allow localhost
+    if os.environ.get('ENVIRONMENT') == 'local':
+        # Check if configured URL is production (misconfiguration safeguard)
+        if 'galerly.com' in frontend_url:
+            frontend_url = 'http://localhost:5173'
+            
     return {
         'statusCode': status_code,
         'headers': {

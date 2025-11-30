@@ -179,7 +179,7 @@ export default function BillingPage() {
       // Assuming backend handles creating correct session type (setup or subscription)
       
       // TODO: Pass billingPeriod to backend once supported
-      const response = await billingService.createCheckoutSession(planId); 
+      const response = await billingService.createCheckoutSession(planId, billingPeriod); 
       
       // Note: Backend handle_create_checkout_session expects { plan: 'plus' }
       // It resolves price ID internally. The TS signature might be misleading if it says (priceId, tier).

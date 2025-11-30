@@ -248,7 +248,7 @@ def handle_verify_domain(user, body):
         domain = body.get('domain', '').strip().lower()
         if not domain or '.' not in domain:
              return create_response(400, {'error': 'Invalid domain format. Example: photos.yourdomain.com'})
-        
+             
         # Remove protocol if present
         domain = domain.replace('http://', '').replace('https://', '').split('/')[0]
         

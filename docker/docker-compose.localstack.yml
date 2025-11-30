@@ -88,6 +88,8 @@ services:
     environment:
       # Override for container networking (use container name for LocalStack)
       - AWS_ENDPOINT_URL=http://localstack:${LOCALSTACK_PORT:-4566}
+      # Ensure FRONTEND_URL is set for local CORS
+      - FRONTEND_URL=http://localhost:5173
     volumes:
       - ../backend:/app
     depends_on:

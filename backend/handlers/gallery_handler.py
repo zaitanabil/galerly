@@ -540,7 +540,7 @@ def handle_update_gallery(gallery_id, user, body):
                         return create_response(409, {'error': 'This URL slug is already taken.'})
                 
                 gallery['slug'] = new_slug
-
+        
         # Handle expiry_days and calculate expiry_date
         if 'expiry_days' in body:
             expiry_days = body.get('expiry_days')

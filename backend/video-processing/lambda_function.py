@@ -18,6 +18,7 @@ dynamodb = boto3.resource('dynamodb')
 photos_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_PHOTOS', 'galerly-photos'))
 
 def lambda_handler(event, context):
+    global mediaconvert
     try:
         # Get MediaConvert endpoint if not set (best practice is to cache this)
         endpoint_url = os.environ.get('MEDIACONVERT_ENDPOINT')
@@ -26,7 +27,6 @@ def lambda_handler(event, context):
                 endpoints = mediaconvert.describe_endpoints()
                 endpoint_url = endpoints['Endpoints'][0]['Url']
                 # Re-init client with endpoint
-                global mediaconvert
                 mediaconvert = boto3.client('mediaconvert', endpoint_url=endpoint_url)
             except Exception as e:
                 print(f"Failed to get MediaConvert endpoint: {e}")

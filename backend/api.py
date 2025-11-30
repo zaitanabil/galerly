@@ -853,6 +853,12 @@ if __name__ == '__main__':
     import os
     from flask import Flask, request
     from flask_cors import CORS
+    from dotenv import load_dotenv
+    
+    # Force load .env.local for local execution
+    # override=False ensures Docker environment variables (like AWS_ENDPOINT_URL) are preserved
+    load_dotenv('.env.local', override=False)
+    load_dotenv() # Load .env if exists
     
     def get_required_env(key):
         """Get required environment variable or raise error"""

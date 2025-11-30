@@ -52,7 +52,7 @@ def extract_image_metadata(image_data, filename):
     try:
         from io import BytesIO
         try:
-        image = Image.open(BytesIO(image_data))
+            image = Image.open(BytesIO(image_data))
         except Exception as e:
             # Try explicit HEIC support if standard open fails
             try:

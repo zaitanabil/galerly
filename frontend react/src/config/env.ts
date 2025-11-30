@@ -53,7 +53,18 @@ export const config = {
     'image/webp',
     'image/tiff',
     'image/raw',
-    'image/heic'
+    'image/heic',
+    'image/heif',
+    'image/x-adobe-dng',
+    'image/x-canon-cr2',
+    'image/x-canon-cr3',
+    'image/x-nikon-nef',
+    'image/x-sony-arw',
+    'image/x-fuji-raf',
+    'image/x-olympus-orf',
+    'image/x-panasonic-rw2',
+    'image/x-pentax-pef',
+    'image/x-hasselblad-3fr',
   ],
 };
 

@@ -45,10 +45,11 @@ export interface UsageStats {
 }
 
 // Create Stripe checkout session
-export async function createCheckoutSession(planId: string) {
+export async function createCheckoutSession(planId: string, interval: 'monthly' | 'annual' = 'monthly') {
   // Backend expects 'plan' in the body (e.g., 'plus', 'pro')
   return api.post<{ sessionId: string; url: string }>('/billing/checkout', {
     plan: planId,
+    interval,
   });
 }
 

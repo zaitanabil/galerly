@@ -7,9 +7,9 @@ import boto3
 from botocore.config import Config
 from dotenv import load_dotenv
 
-# Load environment variables from .env.local first (for local dev overrides), then .env
-# This needs to happen before any get_required_env calls
-load_dotenv('.env.local')
+# Load environment variables from .env.local first (for local dev overrides)
+# override=False ensures Docker environment variables (like AWS_ENDPOINT_URL=http://localstack:4566) are NOT overwritten by .env.local (localhost)
+load_dotenv('.env.local', override=False)
 load_dotenv()
 
 def get_required_env(key):

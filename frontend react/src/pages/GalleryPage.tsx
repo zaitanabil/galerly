@@ -824,7 +824,7 @@ export default function GalleryPage() {
           <input
             type="file"
             multiple
-            accept="image/*,video/*"
+            accept="image/*,video/*,.dng,.cr2,.cr3,.nef,.arw,.raf,.orf,.rw2,.pef,.3fr,.raw"
             ref={fileInputRef}
             onChange={handleFileSelect}
             style={{ display: 'none' }}

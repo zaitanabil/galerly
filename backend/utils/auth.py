@@ -77,7 +77,7 @@ def get_user_from_api_key(event):
         
     except Exception as e:
         print(f"Error authenticating with API key: {str(e)}")
-        return None
+    return None
 
 def get_user_from_token(event):
     """Extract user from Cookie/Authorization and fetch from DynamoDB"""

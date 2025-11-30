@@ -58,7 +58,7 @@ def generate_renditions(s3_key, bucket=None, image_data=None):
         try:
             # Try standard PIL open (works for JPEG, PNG)
             # Create a NEW BytesIO for each attempt to avoid stream position issues
-        original_image = Image.open(io.BytesIO(original_data))
+            original_image = Image.open(io.BytesIO(original_data))
             
             # Verify it's actually loaded
             original_image.load()

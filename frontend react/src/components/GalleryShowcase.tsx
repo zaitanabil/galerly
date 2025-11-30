@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 import gsap from 'gsap';
 import ScrollTrigger from 'gsap/ScrollTrigger';
 
@@ -9,21 +9,23 @@ if (typeof window !== 'undefined') {
 export default function GalleryShowcase() {
   const sectionRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!sectionRef.current || typeof window === 'undefined') return;
 
-    const mm = gsap.matchMedia();
-
+    // Use gsap.context for scoping
     const ctx = gsap.context(() => {
+      const mm = gsap.matchMedia();
       
+      // Desktop/Tablet: Staggered animation
       mm.add("(min-width: 768px)", () => {
-        // Desktop/Tablet: Staggered animation
+        // Select elements within the scope of sectionRef
         const cards = gsap.utils.toArray('[data-showcase-card]');
         
+        if (cards.length > 0) {
         // Set initial state
         gsap.set(cards, { opacity: 0, y: 50 });
         
-        // Create scroll trigger with stagger
+          // Create scroll trigger
         gsap.to(cards, {
           opacity: 1,
           y: 0,
@@ -37,10 +39,11 @@ export default function GalleryShowcase() {
             once: true
           }
         });
+        }
       });
 
+      // Mobile: Individual card animations
       mm.add("(max-width: 767px)", () => {
-        // Mobile: Individual card animations
         const cards = gsap.utils.toArray('[data-showcase-card]') as Element[];
         
         cards.forEach((card) => {
@@ -61,6 +64,10 @@ export default function GalleryShowcase() {
         });
       });
 
+      return () => {
+        // Cleanup matchMedia when context reverts
+        // mm.revert(); // Not strictly necessary as context revert handles it, but good practice if mixed
+      };
     }, sectionRef);
 
     return () => ctx.revert();

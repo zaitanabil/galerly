@@ -57,7 +57,7 @@ export default function AnalyticsPage() {
   
   // Plan check
   const hasAdvancedAnalytics = ['plus', 'pro', 'ultimate'].includes(user?.plan || '');
-
+  
   // Calculate dates based on range
   const endDate = new Date().toISOString();
   const startDate = new Date();

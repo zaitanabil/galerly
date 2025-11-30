@@ -42,7 +42,7 @@ export default function ContractsPage() {
 
   useEffect(() => {
     if (isAllowed) {
-      fetchContracts();
+    fetchContracts();
     } else {
       setLoading(false);
     }

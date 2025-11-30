@@ -48,7 +48,7 @@ export default function InvoicesPage() {
 
   useEffect(() => {
     if (isAllowed) {
-      fetchInvoices();
+    fetchInvoices();
     } else {
       setLoading(false);
     }
