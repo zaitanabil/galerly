@@ -65,14 +65,6 @@ def get_user_from_api_key(event):
         from handlers.subscription_handler import get_user_features
         features, _, _ = get_user_features(user)
         
-        # Developer API is usually an Ultimate feature (or Pro)
-        # We'll use the 'developer_api' feature flag if it exists, or fallback to plan check
-        # Checking 'api_access' or relying on plan.
-        # Based on BillingPage.tsx, "Developer API Access" is Ultimate only.
-        if plan != 'ultimate' and not features.get('api_access'):
-             print(f"⛔ Blocked API access for user {user.get('email')} on plan {plan}")
-             return None
-             
         return user
         
     except Exception as e:
