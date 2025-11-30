@@ -5,6 +5,7 @@ import uuid
 import secrets
 import re
 import random
+import os
 from datetime import datetime
 from utils.config import users_table, sessions_table
 from utils.response import create_response
@@ -246,27 +247,21 @@ def handle_register(body):
     # Set HttpOnly cookie for security
     # 7 days expiration (Swiss law compliance)
     max_age = 60 * 60 * 24 * 7  # 7 days in seconds
-    cookie_value = f'galerly_session={token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age={max_age}'
     
-    return {
-        'statusCode': 201,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': 'https://galerly.com',
-            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type,Authorization,Cookie',
-            'Access-Control-Allow-Credentials': 'true',
-            'Set-Cookie': cookie_value
-        },
-        'body': __import__('json').dumps({
-            'id': user_id,
-            'email': email,
-            'username': username,
-            'role': role,
-            'subscription': 'free',
-            'plan': 'free'
-        })
-    }
+    # Check environment for Secure flag
+    is_local = os.environ.get('ENVIRONMENT') == 'local'
+    secure_flag = '; Secure' if not is_local else ''
+    
+    cookie_value = f'galerly_session={token}; HttpOnly{secure_flag}; SameSite=Strict; Path=/; Max-Age={max_age}'
+    
+    return create_response(201, {
+        'id': user_id,
+        'email': email,
+        'username': username,
+        'role': role,
+        'subscription': 'free',
+        'plan': 'free'
+    }, headers={'Set-Cookie': cookie_value})
 
 def handle_login(body):
     """Login user"""
@@ -302,27 +297,21 @@ def handle_login(body):
     # Set HttpOnly cookie for security
     # 7 days expiration (Swiss law compliance)
     max_age = 60 * 60 * 24 * 7  # 7 days in seconds
-    cookie_value = f'galerly_session={token}; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age={max_age}'
     
-    return {
-        'statusCode': 200,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': 'https://galerly.com',
-            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type,Authorization,Cookie',
-            'Access-Control-Allow-Credentials': 'true',
-            'Set-Cookie': cookie_value
-        },
-        'body': __import__('json').dumps({
-            'id': user['id'],
-            'email': user['email'],
-            'username': user.get('username', email.split('@')[0] if '@' in email else email),
-            'role': user.get('role', 'photographer'),
-            'subscription': user.get('subscription', 'free'),
-            'plan': user.get('plan') or user.get('subscription', 'free')
-        })
-    }
+    # Check environment for Secure flag
+    is_local = os.environ.get('ENVIRONMENT') == 'local'
+    secure_flag = '; Secure' if not is_local else ''
+    
+    cookie_value = f'galerly_session={token}; HttpOnly{secure_flag}; SameSite=Strict; Path=/; Max-Age={max_age}'
+    
+    return create_response(200, {
+        'id': user['id'],
+        'email': user['email'],
+        'username': user.get('username', email.split('@')[0] if '@' in email else email),
+        'role': user.get('role', 'photographer'),
+        'subscription': user.get('subscription', 'free'),
+        'plan': user.get('plan') or user.get('subscription', 'free')
+    }, headers={'Set-Cookie': cookie_value})
 
 def handle_get_me(user):
     """Get current user info"""
@@ -375,22 +364,14 @@ def handle_logout(event):
             print(f"Error deleting session: {str(e)}")
     
     # Clear cookie by setting Max-Age=0
-    cookie_value = 'galerly_session=; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=0'
+    is_local = os.environ.get('ENVIRONMENT') == 'local'
+    secure_flag = '; Secure' if not is_local else ''
     
-    return {
-        'statusCode': 200,
-        'headers': {
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': 'https://galerly.com',
-            'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type,Authorization,Cookie',
-            'Access-Control-Allow-Credentials': 'true',
-            'Set-Cookie': cookie_value
-        },
-        'body': __import__('json').dumps({
-            'message': 'Logged out successfully'
-        })
-    }
+    cookie_value = f'galerly_session=; HttpOnly{secure_flag}; SameSite=Strict; Path=/; Max-Age=0'
+    
+    return create_response(200, {
+        'message': 'Logged out successfully'
+    }, headers={'Set-Cookie': cookie_value})
 
 
 def handle_request_password_reset(body):

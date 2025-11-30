@@ -5,25 +5,6 @@ from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table, users_table
 from utils.response import create_response
 
-# Plan storage limits in GB - DEPRECATED: Now handled in subscription_handler
-PLAN_STORAGE_LIMITS = {
-    'free': 5,
-    'starter': 5,
-    'plus': 50,
-    'pro': 200,
-    # Legacy names for backward compatibility
-    'professional': 50,  # Maps to plus
-    'business': 200  # Maps to pro
-}
-
-def normalize_plan_name(plan):
-    """Normalize legacy plan names to current names"""
-    legacy_map = {
-        'professional': 'plus',
-        'business': 'pro'
-    }
-    return legacy_map.get(plan, plan) if plan else 'free'
-
 def handle_dashboard_stats(user):
     """Get dashboard statistics for THIS USER ONLY"""
     try:

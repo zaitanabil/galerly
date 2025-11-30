@@ -59,15 +59,9 @@ def get_upgrade_path(user_id, subscription_created_at):
         from_plan = first_upgrade.get('from_plan', 'none').lower()
         to_plan = first_upgrade.get('to_plan', '').lower()
         
-        # Normalize plan names (handle legacy values in audit log)
+        # Normalize plan names
         if from_plan in ['none', 'free', 'starter']:
             from_plan = 'starter'
-        
-        # Map legacy plan names to current ones
-        if to_plan == 'professional':
-            to_plan = 'plus'
-        elif to_plan == 'business':
-            to_plan = 'pro'
         
         # Determine path
         if from_plan == 'starter' and to_plan == 'plus':
@@ -77,9 +71,9 @@ def get_upgrade_path(user_id, subscription_created_at):
         elif from_plan == 'plus' and to_plan == 'pro':
             return 'plus_to_pro'
         
-        # Check if user had plus before going to pro (including legacy 'professional')
+        # Check if user had plus before going to pro
         has_plus_history = any(
-            h.get('to_plan', '').lower() in ['plus', 'professional'] 
+            h.get('to_plan', '').lower() == 'plus' 
             for h in relevant_history
         )
         

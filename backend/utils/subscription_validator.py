@@ -28,16 +28,12 @@ from typing import Dict, Optional, Tuple, List
 # Plan hierarchy for upgrade/downgrade logic
 PLAN_HIERARCHY = {
     'free': 0,
-    'plus': 1,
-    'pro': 2
+    'starter': 1,
+    'plus': 2,
+    'pro': 3,
+    'ultimate': 4
 }
 
-# Legacy plan mappings
-# Keep these for backward compatibility with old data in database
-LEGACY_PLAN_MAP = {
-    'professional': 'plus',
-    'business': 'pro'
-}
 
 class SubscriptionState:
     """Represents the current state of a subscription"""
@@ -45,9 +41,9 @@ class SubscriptionState:
         self.subscription = subscription_data
         self.user = user_data
         
-        # Normalize plan names (handle legacy)
+        # Normalize plan names
         raw_plan = user_data.get('plan') or user_data.get('subscription')
-        self.current_plan = LEGACY_PLAN_MAP.get(raw_plan, raw_plan) if raw_plan else None
+        self.current_plan = raw_plan
         
         # State flags
         self.has_stripe_subscription = bool(subscription_data.get('stripe_subscription_id'))
@@ -88,8 +84,8 @@ class SubscriptionValidator:
     
     @staticmethod
     def normalize_plan(plan_id: str) -> str:
-        """Normalize plan name (handle legacy)"""
-        return LEGACY_PLAN_MAP.get(plan_id, plan_id)
+        """Normalize plan name"""
+        return plan_id
     
     @staticmethod
     def get_plan_level(plan_id: str) -> int:
@@ -470,7 +466,7 @@ def get_allowed_transitions(current_state: SubscriptionState) -> List[Dict]:
     
     # Check subscribe (only if on free)
     if current_state.current_plan == 'free':
-        for plan in ['plus', 'pro']:
+        for plan in ['starter', 'plus', 'pro', 'ultimate']:
             result = validator.validate_subscribe(current_state, plan)
             if result.valid:
                 allowed.append({
@@ -480,7 +476,7 @@ def get_allowed_transitions(current_state: SubscriptionState) -> List[Dict]:
                 })
     
     # Check upgrades
-    for plan in ['plus', 'pro']:
+    for plan in ['starter', 'plus', 'pro', 'ultimate']:
         result = validator.validate_upgrade(current_state, plan)
         if result.valid:
             allowed.append({
@@ -490,7 +486,7 @@ def get_allowed_transitions(current_state: SubscriptionState) -> List[Dict]:
             })
     
     # Check downgrades
-    for plan in ['free', 'plus']:
+    for plan in ['free', 'starter', 'plus', 'pro']:
         result = validator.validate_downgrade(current_state, plan)
         if result.valid:
             allowed.append({

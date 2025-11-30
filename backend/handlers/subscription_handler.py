@@ -60,8 +60,7 @@ def get_user_features(user):
             user_plan_id = user.get('plan') or user.get('subscription') or 'free'
         
         # Normalize plan
-        from utils.subscription_validator import LEGACY_PLAN_MAP
-        normalized_plan_id = LEGACY_PLAN_MAP.get(user_plan_id, user_plan_id)
+        normalized_plan_id = user_plan_id
         plan_def = PLANS.get(normalized_plan_id, PLANS.get('free'))
         
         # Start with defaults from the plan definition

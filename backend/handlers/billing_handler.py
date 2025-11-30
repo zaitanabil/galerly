@@ -388,7 +388,7 @@ def handle_change_plan(user, body):
                 (pending_plan == 'free' or cancel_at_period_end) and 
                 user_plan == plan_id and 
                 user_plan is not None and
-                user_plan in ['plus', 'pro']
+                user_plan in ['starter', 'plus', 'pro', 'ultimate']
             )
             
             print(f"🔍 Reactivation Check:")
@@ -843,7 +843,8 @@ def handle_create_checkout_session(user, body):
                 current_plan = user.get('plan') or user.get('subscription')
             
             # If user has a paid plan and wants to change to another paid plan, use plan change
-            if current_plan in ['plus', 'pro'] and plan_id in ['plus', 'pro']:
+            paid_plans = ['starter', 'plus', 'pro', 'ultimate']
+            if current_plan in paid_plans and plan_id in paid_plans:
                 if current_plan != plan_id:
                     print(f"🔄 User has {current_plan} plan, changing to {plan_id} via subscription modification")
                     return handle_change_plan(user, body)
@@ -1169,8 +1170,7 @@ def handle_get_subscription(user):
             current_plan = user.get('plan') or user.get('subscription')
         
         # Normalize plan name and get plan details
-        from utils.subscription_validator import LEGACY_PLAN_MAP
-        normalized_plan = LEGACY_PLAN_MAP.get(current_plan, current_plan) if current_plan else 'free'
+        normalized_plan = current_plan if current_plan else 'free'
         plan_details = PLANS.get(normalized_plan)
         if not plan_details:
             # Fallback to free plan if invalid/unknown plan
@@ -1192,9 +1192,9 @@ def handle_get_subscription(user):
         if not current_plan or current_plan == 'free':
             # No plan or free plan = free status
             status = 'free'
-        elif current_plan in ['plus', 'pro']:
+        elif current_plan in ['starter', 'plus', 'pro', 'ultimate']:
             # If there's a pending plan change to another paid plan, status is 'active' (plan change, not cancellation)
-            if pending_plan and pending_plan in ['plus', 'pro']:
+            if pending_plan and pending_plan in ['starter', 'plus', 'pro', 'ultimate']:
                 status = 'active'  # Plan change scheduled, not cancellation
             else:
                 # Check if subscription is scheduled to cancel at period end
@@ -1762,7 +1762,7 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                             print(f"⚠️  Error updating user plan via webhook: {str(e)}")
                 
                 # Update plan if changed (for immediate upgrades)
-                elif plan and plan in ['plus', 'pro']:
+                elif plan and plan in ['starter', 'plus', 'pro', 'ultimate']:
                     # Only update immediately if no pending plan change
                     if not pending_plan:
                         subscription['plan'] = plan

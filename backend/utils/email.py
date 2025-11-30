@@ -64,14 +64,14 @@ def send_email(to_email=None, template_name=None, template_vars=None, user_id=No
     if template_name:
     # Get template (custom if user_id provided and they're Pro)
         template = None
-    if user_id:
-        from handlers.email_template_handler import get_user_template
-        try:
-            template = get_user_template(user_id, template_name)
-            if not template:
-                print(f"⚠️  Custom template '{template_name}' not found for user {user_id}, using default")
-        except Exception as e:
-            print(f"❌ Error loading custom template '{template_name}' for user {user_id}: {str(e)}")
+        if user_id:
+            from handlers.email_template_handler import get_user_template
+            try:
+                template = get_user_template(user_id, template_name)
+                if not template:
+                    print(f"⚠️  Custom template '{template_name}' not found for user {user_id}, using default")
+            except Exception as e:
+                print(f"❌ Error loading custom template '{template_name}' for user {user_id}: {str(e)}")
         
         # Fallback to default if no custom template found or requested
         if not template:
