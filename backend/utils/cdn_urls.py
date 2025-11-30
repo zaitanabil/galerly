@@ -99,7 +99,11 @@ def get_rendition_url(s3_key, size_name):
         # http://localhost:4566/bucket-name/key
         from utils.config import S3_RENDITIONS_BUCKET
         # Replace 'localstack' hostname with 'localhost' for browser access
-        endpoint = AWS_ENDPOINT_URL.replace('http://localstack:', 'http://localhost:')
+        if AWS_ENDPOINT_URL:
+            endpoint = AWS_ENDPOINT_URL.replace('http://localstack:', 'http://localhost:')
+        else:
+            endpoint = 'http://localhost:4566'
+            
         return f"{endpoint}/{S3_RENDITIONS_BUCKET}/{rendition_key}"
     else:
         # Production CloudFront URL
@@ -118,7 +122,10 @@ def get_original_url(s3_key):
     if IS_LOCALSTACK_S3:
         # LocalStack: Direct S3 URL to photos bucket
         bucket = get_required_env('S3_PHOTOS_BUCKET')
-        return f"http://localhost:4566/{bucket}/{s3_key}"
+        endpoint = 'http://localhost:4566'
+        if AWS_ENDPOINT_URL:
+             endpoint = AWS_ENDPOINT_URL.replace('http://localstack:', 'http://localhost:')
+        return f"{endpoint}/{bucket}/{s3_key}"
     else:
         # Production: CloudFront URL to photos bucket
         return f"https://{CDN_DOMAIN}/{s3_key}"

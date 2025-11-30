@@ -10,6 +10,7 @@ from decimal import Decimal
 from utils.config import s3_client, S3_BUCKET
 from utils.response import create_response
 from utils.cdn_urls import get_photo_urls  # CloudFront CDN URL helper
+from handlers.subscription_handler import enforce_storage_limit, get_user_features
 
 def handle_get_upload_url(gallery_id, user, event):
     """
@@ -39,9 +40,34 @@ def handle_get_upload_url(gallery_id, user, event):
         file_size = body.get('file_size', 0)
         use_multipart = body.get('use_multipart', False)
         
-        # Extract file extension from original filename to preserve format
+        # 1. Enforce Storage Limit
+        additional_mb = float(file_size) / (1024 * 1024)
+        allowed, error_message = enforce_storage_limit(user, additional_mb)
+        if not allowed:
+            return create_response(403, {'error': error_message})
+            
+        # Extract file extension
         import os
-        file_extension = os.path.splitext(filename)[1] or '.jpg'  # Default to .jpg if no extension
+        file_extension = (os.path.splitext(filename)[1] or '.jpg').lower()
+        
+        # 2. Enforce Feature Limits (Video & RAW)
+        features, _, _ = get_user_features(user)
+        
+        # Video Check
+        video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.m4v']
+        if file_extension in video_extensions:
+            if features.get('video_quality') == 'none':
+                 return create_response(403, {
+                     'error': 'Video uploads are not available on your current plan. Please upgrade to upload videos.'
+                 })
+        
+        # RAW Check
+        raw_extensions = ['.cr2', '.nef', '.arw', '.dng', '.raw', '.raf', '.orf', '.rw2']
+        if file_extension in raw_extensions:
+            if not features.get('raw_support', False):
+                 return create_response(403, {
+                     'error': 'RAW photo uploads are only available on Pro and Ultimate plans. Please upgrade to upload RAW files.'
+                 })
         
         # Generate unique photo ID and S3 key with original extension
         photo_id = str(uuid.uuid4())
@@ -313,12 +339,20 @@ def handle_confirm_upload(gallery_id, user, event):
         
         # Convert any float values in metadata to Decimal or string
         def convert_floats_to_decimal(obj):
-            """Recursively convert float to Decimal for DynamoDB"""
+            """Recursively convert float/rational to Decimal for DynamoDB"""
             if isinstance(obj, float):
                 return Decimal(str(round(obj, 6)))
+            # Handle PIL IFDRational (numerator/denominator)
+            elif hasattr(obj, 'numerator') and hasattr(obj, 'denominator'):
+                try:
+                    return Decimal(str(round(float(obj), 6)))
+                except:
+                    return str(obj)
             elif isinstance(obj, dict):
                 return {k: convert_floats_to_decimal(v) for k, v in obj.items()}
             elif isinstance(obj, list):
+                return [convert_floats_to_decimal(item) for item in obj]
+            elif isinstance(obj, tuple):
                 return [convert_floats_to_decimal(item) for item in obj]
             return obj
         
@@ -335,6 +369,18 @@ def handle_confirm_upload(gallery_id, user, event):
         # Generate CDN URLs for renditions (will be populated after processing)
         photo_urls = get_photo_urls(s3_key)
         
+        # Determine if original is web-safe (JPEG, PNG, WebP)
+        # If not (e.g. HEIC, RAW), we must use a converted rendition for the main 'url'
+        ext = filename.lower().split('.')[-1] if '.' in filename else ''
+        is_web_safe = ext in ['jpg', 'jpeg', 'png', 'webp', 'gif']
+        
+        # Main display URL: use original if web-safe, otherwise use large rendition (JPEG)
+        display_url = photo_urls['url']
+        if not is_web_safe:
+            # For HEIC/RAW, the 'url' field must point to a JPEG
+            # We use the large rendition (4000px) as the main view
+            display_url = photo_urls.get('large_url')
+        
         # Generate download URL for original file (if different from converted)
         if original_s3_key:
             from utils.cdn_urls import IS_LOCALSTACK_S3, AWS_ENDPOINT_URL, S3_PHOTOS_BUCKET
@@ -345,7 +391,10 @@ def handle_confirm_upload(gallery_id, user, event):
                 from utils.cdn_urls import CDN_DOMAIN
                 original_download_url = f"https://{CDN_DOMAIN}/{original_s3_key}"
         else:
-            original_download_url = photo_urls['url']  # Same as converted if no original
+            # If no separate original_s3_key, the s3_key IS the original
+            # If it's web safe, download url is same as display.
+            # If not web safe (e.g. HEIC uploaded directly), it's the s3_key
+            original_download_url = photo_urls['url'] # This comes from get_photo_urls which returns original S3 URL
         
         photo = {
             'id': photo_id,
@@ -359,8 +408,8 @@ def handle_confirm_upload(gallery_id, user, event):
             'original_filename': original_filename if original_filename else filename,
             
             # URLs (CloudFront CDN)
-            'url': photo_urls['url'],  # Converted file for viewing
-            'original_download_url': original_download_url,  # Original for download
+            'url': display_url,  # WEB-SAFE URL for viewing (JPEG if original was HEIC)
+            'original_download_url': original_download_url,  # Original for download (HEIC/RAW/JPEG)
             'medium_url': photo_urls['medium_url'],  # 2000x2000
             'thumbnail_url': photo_urls['thumbnail_url'],  # 800x600
             'small_thumb_url': photo_urls.get('small_url'),  # 400x400 (key is 'small_url' in get_photo_urls)
@@ -376,6 +425,8 @@ def handle_confirm_upload(gallery_id, user, event):
             'size_mb': size_mb,
             'format': clean_metadata.get('format'),
             'dimensions': clean_metadata.get('dimensions'),
+            'width': clean_metadata.get('dimensions', {}).get('width') if isinstance(clean_metadata.get('dimensions'), dict) else None,
+            'height': clean_metadata.get('dimensions', {}).get('height') if isinstance(clean_metadata.get('dimensions'), dict) else None,
             
             # Camera and EXIF metadata (cleaned for DynamoDB)
             'camera': clean_metadata.get('camera', {}),
@@ -407,7 +458,8 @@ def handle_confirm_upload(gallery_id, user, event):
             try:
                 from utils.image_processor import process_upload_async
                 print(f"🔄 Processing image for LocalStack: {s3_key}")
-                result = process_upload_async(s3_key, S3_BUCKET)
+                # Pass image_data to avoid re-downloading from S3
+                result = process_upload_async(s3_key, S3_BUCKET, image_data=image_data)
                 if result.get('success'):
                     print(f"✅ Renditions generated successfully")
                     # Update photo status to 'active' since processing is complete
@@ -434,18 +486,14 @@ def handle_confirm_upload(gallery_id, user, event):
         gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
         galleries_table.put_item(Item=gallery)
         
-        # Regenerate gallery ZIP file (synchronous - wait for completion)
+        # Invalidate gallery ZIP file (delete it so it's regenerated on next download)
+        # This is much faster than regenerating it synchronously
         try:
-            from utils.zip_generator import generate_gallery_zip
-            print(f"🔄 Starting ZIP regeneration for gallery {gallery_id}...")
-            result = generate_gallery_zip(gallery_id)
-            if result.get('success'):
-                print(f"✅ ZIP regeneration completed: {result.get('photo_count')} photos, {result.get('zip_size_mb', 0):.2f}MB")
-            else:
-                print(f"⚠️  ZIP regeneration failed: {result.get('error', 'unknown')}")
+            zip_key = f"{gallery_id}/gallery-all-photos.zip"
+            print(f"🗑️  Invalidating gallery ZIP: {zip_key}")
+            s3_client.delete_object(Bucket=S3_BUCKET, Key=zip_key)
         except Exception as zip_error:
-            print(f"⚠️  Failed to regenerate ZIP: {str(zip_error)}")
-            # Don't fail upload if ZIP generation fails
+            print(f"⚠️  Failed to invalidate ZIP: {str(zip_error)}")
         
         # ✅ SEND "GALLERY READY" NOTIFICATION - When FIRST photo is uploaded
         if previous_photo_count == 0 and new_photo_count == 1:
@@ -454,31 +502,36 @@ def handle_confirm_upload(gallery_id, user, event):
                 from utils.config import users_table
                 
                 # Get photographer details
-                photographer_response = users_table.get_item(Key={'id': user['id']})
-                if 'Item' in photographer_response:
-                    photographer = photographer_response['Item']
-                    photographer_name = photographer.get('name') or photographer.get('username', 'Your photographer')
-                    
-                    # Get client emails and details
-                    client_emails = gallery.get('client_emails', [])
-                    client_name = gallery.get('client_name', 'Client')
-                    gallery_url = gallery.get('share_url', '')
-                    
-                    # Send to ALL clients
-                    for client_email in client_emails:
-                        try:
-                            notify_gallery_ready(
-                                user_id=user['id'],
-                                gallery_id=gallery_id,
-                                client_email=client_email,
-                                client_name=client_name,
-                                photographer_name=photographer_name,
-                                gallery_url=gallery_url,
-                                message='Your gallery is now ready for viewing!'
-                            )
-                            print(f"✅ Sent 'Gallery Ready' notification to {client_email}")
-                        except Exception as email_error:
-                            print(f"⚠️  Failed to send Gallery Ready email to {client_email}: {str(email_error)}")
+                # Check user ID presence to avoid DynamoDB errors
+                user_id = user.get('id')
+                if not user_id:
+                    print(f"⚠️  Skipping notification: User ID missing in token")
+                else:
+                    photographer_response = users_table.get_item(Key={'id': user_id})
+                    if 'Item' in photographer_response:
+                        photographer = photographer_response['Item']
+                        photographer_name = photographer.get('name') or photographer.get('username', 'Your photographer')
+                        
+                        # Get client emails and details
+                        client_emails = gallery.get('client_emails', [])
+                        client_name = gallery.get('client_name', 'Client')
+                        gallery_url = gallery.get('share_url', '')
+                        
+                        # Send to ALL clients
+                        for client_email in client_emails:
+                            try:
+                                notify_gallery_ready(
+                                    user_id=user_id,
+                                    gallery_id=gallery_id,
+                                    client_email=client_email,
+                                    client_name=client_name,
+                                    photographer_name=photographer_name,
+                                    gallery_url=gallery_url,
+                                    message='Your gallery is now ready for viewing!'
+                                )
+                                print(f"✅ Sent 'Gallery Ready' notification to {client_email}")
+                            except Exception as email_error:
+                                print(f"⚠️  Failed to send Gallery Ready email to {client_email}: {str(email_error)}")
             except Exception as notif_error:
                 print(f"⚠️  Failed to send Gallery Ready notifications: {str(notif_error)}")
                 # Don't fail the upload if notification fails

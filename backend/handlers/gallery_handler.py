@@ -12,8 +12,8 @@ from utils.response import create_response
 from handlers.subscription_handler import enforce_gallery_limit
 from utils.email import send_gallery_shared_email
 
-def enrich_photos_with_any_favorites(photos, gallery):
-    """Add is_favorite field to photos - TRUE if ANY client favorited it (for photographer view)"""
+def enrich_photos_with_any_favorites(photos, gallery, photographer_email=None):
+    """Add is_favorite field and favorites_count to photos - TRUE if ANY client (or photographer) favorited it"""
     if not photos:
         return photos
     
@@ -22,32 +22,49 @@ def enrich_photos_with_any_favorites(photos, gallery):
         # Get client emails array
         client_emails = gallery.get('client_emails', [])
         
-        if not gallery_id or not client_emails:
-            # No clients assigned, no favorites
+        # Add photographer email to the list to check if they also favorited
+        emails_to_check = set(client_emails)
+        if photographer_email:
+            emails_to_check.add(photographer_email.lower())
+        
+        emails_list = list(emails_to_check)
+        
+        if not gallery_id or not emails_list:
+            # No clients/emails assigned, no favorites
             for photo in photos:
                 photo['is_favorite'] = False
+                photo['favorites_count'] = 0
             return photos
         
-        # Get favorites from ALL clients
+        # Get favorites from ALL clients + photographer
         favorited_photo_ids = set()
-        for client_email in client_emails:
+        photo_fav_counts = {}  # Map photo_id -> count
+
+        for email in emails_list:
             favorites_response = client_favorites_table.query(
-                KeyConditionExpression=Key('client_email').eq(client_email.lower()),
+                KeyConditionExpression=Key('client_email').eq(email.lower()),
                 FilterExpression='gallery_id = :gid',
                 ExpressionAttributeValues={':gid': gallery_id}
             )
-            favorited_photo_ids.update(fav['photo_id'] for fav in favorites_response.get('Items', []))
+            
+            for fav in favorites_response.get('Items', []):
+                pid = fav['photo_id']
+                favorited_photo_ids.add(pid)
+                photo_fav_counts[pid] = photo_fav_counts.get(pid, 0) + 1
         
-        # Add is_favorite field to each photo
+        # Add is_favorite and favorites_count fields to each photo
         for photo in photos:
-            photo['is_favorite'] = photo['id'] in favorited_photo_ids
+            pid = photo['id']
+            photo['is_favorite'] = pid in favorited_photo_ids
+            photo['favorites_count'] = photo_fav_counts.get(pid, 0)
         
         return photos
     except Exception as e:
         print(f"Error enriching photos with favorites: {str(e)}")
-        # If error, just set all to False
+        # If error, just set all to False/0
         for photo in photos:
             photo['is_favorite'] = False
+            photo['favorites_count'] = 0
         return photos
 
 def handle_list_galleries(user, query_params=None):
@@ -57,7 +74,7 @@ def handle_list_galleries(user, query_params=None):
         # This reduces data transfer and improves performance
         response = galleries_table.query(
             KeyConditionExpression=Key('user_id').eq(user['id']),
-            ProjectionExpression='id, #n, created_at, updated_at, client_emails, cover_photo, #st, photo_count, archived, tags, description',
+            ProjectionExpression='id, #n, created_at, updated_at, client_name, client_emails, cover_photo, thumbnail_url, cover_photo_url, #st, photo_count, archived, tags, description',
             ExpressionAttributeNames={
                 '#n': 'name',  # 'name' is a reserved word in DynamoDB
                 '#st': 'status'  # 'status' is a reserved word in DynamoDB
@@ -185,6 +202,23 @@ def handle_create_gallery(user, body):
         expiry_days = 7
         expiry_date = (datetime.utcnow() + timedelta(days=7)).isoformat() + 'Z'
         print(f"🆓 FREE PLAN: Enforcing 7-day maximum expiration (expires: {expiry_date})")
+    else:
+        # PAID PLAN: Respect user's choice from body
+        requested_expiry = body.get('expiry_days') or body.get('expiry')
+        if requested_expiry:
+            try:
+                if str(requested_expiry).lower() == 'never':
+                    expiry_days = None
+                    expiry_date = None
+                else:
+                    days = int(requested_expiry)
+                    if days > 0:
+                        expiry_days = days
+                        expiry_date = (datetime.utcnow() + timedelta(days=days)).isoformat() + 'Z'
+            except (ValueError, TypeError):
+                # Invalid format, default to None (Never)
+                print(f"⚠️ Invalid expiry value '{requested_expiry}', defaulting to Never")
+                pass
     
     gallery = {
         'user_id': user['id'],  # PARTITION KEY - ensures isolation
@@ -201,6 +235,7 @@ def handle_create_gallery(user, body):
         'password': body.get('password', ''),
         'allow_downloads': body.get('allowDownload', True),
         'allow_comments': body.get('allowComments', True),
+        'allow_edits': body.get('allowEdits', True),
         'expiry_days': expiry_days,  # 7 for free plan, null for paid plans
         'expiry_date': expiry_date,  # ISO timestamp for free plan, null for paid
         'photo_count': 0,
@@ -297,10 +332,11 @@ def handle_get_gallery(gallery_id, user=None, query_params=None):
             query_kwargs = {
                 'IndexName': 'GalleryIdIndex',
                 'KeyConditionExpression': Key('gallery_id').eq(gallery_id),
-                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, url, title, description, filename, #sz, width, height, favorites',
+                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, #url, original_download_url, title, description, filename, #sz, width, height, favorites, comments',
                 'ExpressionAttributeNames': {
                     '#st': 'status',  # reserved word
-                    '#sz': 'size'  # reserved word
+                    '#sz': 'size',  # reserved word
+                    '#url': 'url'  # reserved word
                 },
                 'Limit': page_size
             }
@@ -314,7 +350,12 @@ def handle_get_gallery(gallery_id, user=None, query_params=None):
             gallery_photos.sort(key=lambda x: x.get('created_at', ''))
             
             # Enrich photos with is_favorite field (shows which photos clients favorited)
-            gallery_photos = enrich_photos_with_any_favorites(gallery_photos, gallery)
+            gallery_photos = enrich_photos_with_any_favorites(gallery_photos, gallery, user.get('email'))
+            
+            # Ensure favorites_count is not negative
+            for p in gallery_photos:
+                if p.get('favorites_count', 0) < 0:
+                    p['favorites_count'] = 0
             
             # Pagination metadata
             next_key = photos_response.get('LastEvaluatedKey')
@@ -328,7 +369,73 @@ def handle_get_gallery(gallery_id, user=None, query_params=None):
         
         # Set gallery data (works whether try succeeded or failed)
         gallery['photos'] = gallery_photos
-        gallery['photo_count'] = len(gallery_photos)
+        
+        # Inject Plan-based Features (Branding, Favorites)
+        from handlers.subscription_handler import get_user_features
+        features, _, _ = get_user_features(user)
+        
+        gallery['hide_branding'] = features.get('remove_branding', False)
+        # We override the setting if the plan doesn't support it
+        if not features.get('client_favorites', False):
+            gallery['settings'] = gallery.get('settings', {})
+            gallery['settings']['favorites_enabled'] = False
+            gallery['allow_favorites'] = False # Legacy/frontend compat
+        
+        # 🔧 SELF-HEALING: Verify and fix photo_count if needed
+        # This ensures the dashboard and list views show the correct number
+        try:
+            count_response = photos_table.query(
+                IndexName='GalleryIdIndex',
+                KeyConditionExpression=Key('gallery_id').eq(gallery_id),
+                Select='COUNT'
+            )
+            actual_count = count_response.get('Count', 0)
+            
+            # If stored count is different (or missing), update it in DB
+            stored_count = gallery.get('photo_count')
+            update_updates = []
+            update_values = {}
+            
+            if stored_count != actual_count:
+                print(f"🔧 Fixing photo count for gallery {gallery_id}: {stored_count} -> {actual_count}")
+                gallery['photo_count'] = actual_count
+                update_updates.append("photo_count = :c")
+                update_values[':c'] = actual_count
+
+            # Check if thumbnail_url is missing but we have photos
+            if not gallery.get('thumbnail_url') and gallery_photos:
+                 # Find first photo with thumbnail
+                 for p in gallery_photos:
+                     if p.get('thumbnail_url'):
+                         print(f"🔧 Fixing thumbnail_url for gallery {gallery_id}")
+                         gallery['thumbnail_url'] = p['thumbnail_url'] # Update local object
+                         update_updates.append("thumbnail_url = :t")
+                         update_values[':t'] = p['thumbnail_url']
+                         break
+            
+            # Check if cover_photo_url is missing but we have photos
+            if not gallery.get('cover_photo_url') and gallery_photos:
+                 # Find first photo with medium_url or large_url
+                 for p in gallery_photos:
+                     cover = p.get('large_url') or p.get('medium_url') or p.get('url')
+                     if cover:
+                         print(f"🔧 Fixing cover_photo_url for gallery {gallery_id}")
+                         gallery['cover_photo_url'] = cover
+                         update_updates.append("cover_photo_url = :c")
+                         update_values[':c'] = cover
+                         break
+            
+            if update_updates:
+                galleries_table.update_item(
+                    Key={'user_id': user['id'], 'id': gallery_id},
+                    UpdateExpression="SET " + ", ".join(update_updates),
+                    ExpressionAttributeValues=update_values
+                )
+        except Exception as e:
+            print(f"⚠️ Failed to verify photo count: {e}")
+            # Fallback: if photo_count is missing, use len of fetched photos (better than nothing)
+            if 'photo_count' not in gallery:
+                gallery['photo_count'] = len(gallery_photos)
         
         # Add pagination metadata to response only if pagination was explicitly requested
         response_data = gallery
@@ -395,7 +502,45 @@ def handle_update_gallery(gallery_id, user, body):
         if 'allow_comments' in body or 'allowComments' in body:
             val = body.get('allow_comments') or body.get('allowComments')
             gallery['allow_comments'] = val
+        if 'allow_edits' in body or 'allowEdits' in body:
+            val = body.get('allow_edits') or body.get('allowEdits')
+            gallery['allow_edits'] = val
         
+        # SEO Settings (Pro Feature)
+        if 'seo' in body:
+            from handlers.subscription_handler import get_user_features
+            features, _, _ = get_user_features(user)
+            
+            if not features.get('seo_tools'):
+                 return create_response(403, {
+                     'error': 'SEO tools are available on Pro and Ultimate plans.',
+                     'upgrade_required': True
+                 })
+            
+            seo_data = body['seo']
+            gallery['seo_title'] = str(seo_data.get('title', '')).strip()
+            gallery['seo_description'] = str(seo_data.get('description', '')).strip()
+            
+            # Slug handling
+            new_slug = str(seo_data.get('slug', '')).strip().lower()
+            if new_slug and new_slug != gallery.get('slug'):
+                import re
+                if not re.match(r'^[a-z0-9-]+$', new_slug):
+                     return create_response(400, {'error': 'Slug must contain only lowercase letters, numbers, and hyphens'})
+                
+                # Check uniqueness (scan is expensive but slugs are rare/Pro only feature)
+                # Ideally use a separate GSI or table for slugs
+                scan_resp = galleries_table.scan(
+                    FilterExpression='slug = :s',
+                    ExpressionAttributeValues={':s': new_slug}
+                )
+                if scan_resp.get('Count', 0) > 0:
+                    # Check if it's the same gallery
+                    if scan_resp['Items'][0]['id'] != gallery_id:
+                        return create_response(409, {'error': 'This URL slug is already taken.'})
+                
+                gallery['slug'] = new_slug
+
         # Handle expiry_days and calculate expiry_date
         if 'expiry_days' in body:
             expiry_days = body.get('expiry_days')
@@ -518,6 +663,7 @@ def handle_duplicate_gallery(gallery_id, user, body):
             'password': original_gallery.get('password', ''),
             'allow_downloads': original_gallery.get('allow_downloads', True),  # Standardized to plural
             'allow_comments': original_gallery.get('allow_comments', True),
+            'allow_edits': original_gallery.get('allow_edits', True),
             'photo_count': 0,
             'view_count': 0,
             'storage_used': 0,
@@ -641,3 +787,56 @@ def handle_delete_gallery(gallery_id, user):
     except Exception as e:
         print(f"Error deleting gallery: {str(e)}")
         return create_response(500, {'error': 'Failed to delete gallery'})
+
+def handle_archive_originals(gallery_id, user):
+    """
+    Move original files (RAWs) to Glacier Vault
+    Ultimate Plan Feature
+    """
+    try:
+        # 1. Check Plan
+        from handlers.subscription_handler import get_user_features
+        features, _, _ = get_user_features(user)
+
+        if not features.get('raw_vault'):
+             return create_response(403, {
+                 'error': 'RAW Vault Archival is available on the Ultimate plan.',
+                 'upgrade_required': True
+             })
+        
+        # 2. Get Gallery Photos
+        photos_response = photos_table.query(
+            IndexName='GalleryIdIndex',
+            KeyConditionExpression=Key('gallery_id').eq(gallery_id)
+        )
+        
+        items = photos_response.get('Items', [])
+        archived_count = 0
+        
+        for photo in items:
+            original_key = photo.get('original_s3_key')
+            # Only archive explicit originals (likely RAWs), not the main display/converted JPEG if it's the same
+            if original_key and original_key != photo.get('s3_key'):
+                try:
+                    # Move to Glacier Instant Retrieval
+                    # We use copy_object to change storage class in place
+                    s3_client.copy_object(
+                        Bucket=S3_BUCKET,
+                        CopySource={'Bucket': S3_BUCKET, 'Key': original_key},
+                        Key=original_key,
+                        StorageClass='GLACIER_IR',
+                        MetadataDirective='COPY',
+                        TaggingDirective='COPY'
+                    )
+                    archived_count += 1
+                except Exception as s3_e:
+                    print(f"Failed to archive {original_key}: {s3_e}")
+        
+        return create_response(200, {
+            'message': f'Successfully moved {archived_count} files to RAW Vault (Glacier).',
+            'archived_count': archived_count
+        })
+        
+    except Exception as e:
+        print(f"Error archiving originals: {str(e)}")
+        return create_response(500, {'error': 'Failed to archive files'})

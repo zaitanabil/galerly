@@ -221,18 +221,14 @@ def handle_confirm_upload(gallery_id, user, event):
         gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
         galleries_table.put_item(Item=gallery)
         
-        # Regenerate gallery ZIP file (synchronous - wait for completion)
+        # Invalidate gallery ZIP file (delete it so it's regenerated on next download)
+        # This is much faster than regenerating it synchronously
         try:
-            from utils.zip_generator import generate_gallery_zip
-            print(f"🔄 Starting ZIP regeneration for gallery {gallery_id}...")
-            result = generate_gallery_zip(gallery_id)
-            if result.get('success'):
-                print(f"✅ ZIP regeneration completed: {result.get('photo_count')} photos, {result.get('zip_size_mb', 0):.2f}MB")
-            else:
-                print(f"⚠️  ZIP regeneration failed: {result.get('error', 'unknown')}")
+            zip_key = f"{gallery_id}/gallery-all-photos.zip"
+            print(f"🗑️  Invalidating gallery ZIP: {zip_key}")
+            s3_client.delete_object(Bucket=S3_BUCKET, Key=zip_key)
         except Exception as zip_error:
-            print(f"⚠️  Failed to regenerate ZIP: {str(zip_error)}")
-            # Don't fail upload if ZIP generation fails
+            print(f"⚠️  Failed to invalidate ZIP: {str(zip_error)}")
         
         # ✅ SEND "GALLERY READY" NOTIFICATION - When FIRST photo is uploaded
         if previous_photo_count == 0 and new_photo_count == 1:
@@ -241,31 +237,36 @@ def handle_confirm_upload(gallery_id, user, event):
                 from utils.config import users_table
                 
                 # Get photographer details
-                photographer_response = users_table.get_item(Key={'id': user['id']})
-                if 'Item' in photographer_response:
-                    photographer = photographer_response['Item']
-                    photographer_name = photographer.get('name') or photographer.get('username', 'Your photographer')
-                    
-                    # Get client emails and details
-                    client_emails = gallery.get('client_emails', [])
-                    client_name = gallery.get('client_name', 'Client')
-                    gallery_url = gallery.get('share_url', '')
-                    
-                    # Send to ALL clients
-                    for client_email in client_emails:
-                        try:
-                            notify_gallery_ready(
-                                user_id=user['id'],
-                                gallery_id=gallery_id,
-                                client_email=client_email,
-                                client_name=client_name,
-                                photographer_name=photographer_name,
-                                gallery_url=gallery_url,
-                                message='Your gallery is now ready for viewing!'
-                            )
-                            print(f"✅ Sent 'Gallery Ready' notification to {client_email}")
-                        except Exception as email_error:
-                            print(f"⚠️  Failed to send Gallery Ready email to {client_email}: {str(email_error)}")
+                # Check user ID presence to avoid DynamoDB errors
+                user_id = user.get('id')
+                if not user_id:
+                    print(f"⚠️  Skipping notification: User ID missing in token")
+                else:
+                    photographer_response = users_table.get_item(Key={'id': user_id})
+                    if 'Item' in photographer_response:
+                        photographer = photographer_response['Item']
+                        photographer_name = photographer.get('name') or photographer.get('username', 'Your photographer')
+                        
+                        # Get client emails and details
+                        client_emails = gallery.get('client_emails', [])
+                        client_name = gallery.get('client_name', 'Client')
+                        gallery_url = gallery.get('share_url', '')
+                        
+                        # Send to ALL clients
+                        for client_email in client_emails:
+                            try:
+                                notify_gallery_ready(
+                                    user_id=user_id,
+                                    gallery_id=gallery_id,
+                                    client_email=client_email,
+                                    client_name=client_name,
+                                    photographer_name=photographer_name,
+                                    gallery_url=gallery_url,
+                                    message='Your gallery is now ready for viewing!'
+                                )
+                                print(f"✅ Sent 'Gallery Ready' notification to {client_email}")
+                            except Exception as email_error:
+                                print(f"⚠️  Failed to send Gallery Ready email to {client_email}: {str(email_error)}")
             except Exception as notif_error:
                 print(f"⚠️  Failed to send Gallery Ready notifications: {str(notif_error)}")
                 # Don't fail the upload if notification fails

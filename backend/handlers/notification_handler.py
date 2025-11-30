@@ -18,10 +18,8 @@ from utils.email import (
 )
 
 # DynamoDB setup
-dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+from utils.config import dynamodb, users_table, galleries_table
 preferences_table = dynamodb.Table('galerly-notification-preferences')
-users_table = dynamodb.Table('galerly-users')
-galleries_table = dynamodb.Table('galerly-galleries')
 
 # Default notification preferences for new users
 DEFAULT_PREFERENCES = {
@@ -107,7 +105,7 @@ def should_send_notification(user_id, notification_type, notification_category='
         return True  # Default to sending if error
 
 
-def notify_gallery_shared(gallery_id, client_email, client_name, photographer_name, gallery_url, description=''):
+def notify_gallery_shared(gallery_id, client_email, client_name, photographer_name, gallery_url, description='', user_id=None):
     """Send notification when gallery is shared with client"""
     try:
         # Check if client wants this notification (if they have an account)
@@ -115,7 +113,7 @@ def notify_gallery_shared(gallery_id, client_email, client_name, photographer_na
         from utils.email import send_gallery_shared_email
         return send_gallery_shared_email(
             client_email, client_name, photographer_name,
-            gallery_id, gallery_url, description
+            gallery_id, gallery_url, description, user_id=user_id
         )
     except Exception as e:
         print(f"Error sending gallery shared notification: {str(e)}")
@@ -128,7 +126,7 @@ def notify_new_photos_added(user_id, gallery_id, client_email, client_name, phot
         if should_send_notification(user_id, 'new_photos_added'):
             return send_new_photos_added_email(
                 client_email, client_name, photographer_name,
-                gallery_id, gallery_url, photo_count
+                gallery_id, gallery_url, photo_count, user_id=user_id
             )
         return False
     except Exception as e:
@@ -142,7 +140,7 @@ def notify_gallery_ready(user_id, gallery_id, client_email, client_name, photogr
         if should_send_notification(user_id, 'gallery_ready'):
             return send_gallery_ready_email(
                 client_email, client_name, photographer_name,
-                gallery_id, gallery_url, message
+                gallery_id, gallery_url, message, user_id=user_id
             )
         return False
     except Exception as e:
@@ -156,7 +154,7 @@ def notify_selection_reminder(user_id, gallery_id, client_email, client_name, ph
         if should_send_notification(user_id, 'selection_reminder'):
             return send_selection_reminder_email(
                 client_email, client_name, photographer_name,
-                gallery_id, gallery_url, message
+                gallery_id, gallery_url, message, user_id=user_id
             )
         return False
     except Exception as e:
@@ -170,7 +168,7 @@ def notify_gallery_expiring(user_id, gallery_id, client_email, client_name, phot
         if should_send_notification(user_id, 'gallery_expiring'):
             return send_gallery_expiring_email(
                 client_email, client_name, photographer_name,
-                gallery_id, gallery_url, days_remaining
+                gallery_id, gallery_url, days_remaining, user_id=user_id
             )
         return False
     except Exception as e:
@@ -184,7 +182,7 @@ def notify_custom_message(user_id, client_email, client_name, photographer_name,
         if should_send_notification(user_id, 'custom_messages'):
             return send_custom_email(
                 client_email, client_name, photographer_name,
-                subject, title, message, button_text, button_url
+                subject, title, message, button_text, button_url, user_id=user_id
             )
         return False
     except Exception as e:
@@ -226,7 +224,7 @@ def notify_payment_received(user_id, client_email, client_name, photographer_nam
         if should_send_notification(user_id, 'payment_received'):
             return send_payment_received_email(
                 client_email, client_name, photographer_name,
-                gallery_name, amount, payment_date, message
+                gallery_name, amount, payment_date, message, user_id=user_id
             )
         return False
     except Exception as e:

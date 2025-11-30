@@ -46,55 +46,83 @@ except Exception as e:
 # Plan configurations
 PLANS = {
     'free': {
-        'name': 'Starter',
+        'name': 'Free',
         'price': 0,
         'stripe_price_id': None,
-        'galleries_per_month': 5,
-        'storage_gb': 5,
+        'galleries_per_month': 3,
+        'storage_gb': 2,
+        'feature_ids': ['storage_2gb', 'video_none', 'analytics_basic', 'branding_on'],
         'features': [
-            '5 galleries per month',
-            '5 GB storage',
-            'Client downloads',
-            'Photo approval',
-            'Comments & feedback',
-            'Email notifications',
-            'Public profile',
-            'Basic analytics'
+            '2 GB Smart Storage',
+            '3 Active Galleries',
+            'Basic Portfolio',
+            'Community Support',
+            'Galerly Branding'
+        ]
+    },
+    'starter': {
+        'name': 'Starter',
+        'price': 12,
+        'stripe_price_id': os.environ.get('STRIPE_PRICE_STARTER', ''),
+        'galleries_per_month': -1,  # Unlimited
+        'storage_gb': 25,
+        'feature_ids': ['storage_25gb', 'video_30min_hd', 'unlimited_galleries', 'no_branding', 'client_proofing', 'analytics_basic'],
+        'features': [
+            '25 GB Smart Storage',
+            'Unlimited Galleries',
+            '30 Min Video (HD)',
+            'Remove Branding',
+            'Client Favorites',
+            'Basic Analytics'
         ]
     },
     'plus': {
         'name': 'Plus',
-        'price': 12,
+        'price': 29,
         'stripe_price_id': os.environ.get('STRIPE_PRICE_PLUS', ''),
         'galleries_per_month': -1,  # Unlimited
-        'storage_gb': 50,
+        'storage_gb': 100,
+        'feature_ids': ['storage_100gb', 'video_60min_hd', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_advanced', 'watermarking', 'client_proofing'],
         'features': [
-            'Unlimited galleries',
-            '50 GB storage',
-            'Video support (30 min, up to HD)',
-            'Priority email support',
-            'All Starter features',
-            'Batch photo uploads',
-            'Advanced analytics',
-            'Custom notifications'
+            '100 GB Smart Storage',
+            'Unlimited Galleries',
+            '1 Hour Video (HD)',
+            'Custom Domain',
+            'Automated Watermarking',
+            'Advanced Analytics'
         ]
     },
     'pro': {
         'name': 'Pro',
-        'price': 24,
+        'price': 59,
         'stripe_price_id': os.environ.get('STRIPE_PRICE_PRO', ''),
         'galleries_per_month': -1,  # Unlimited
-        'storage_gb': 200,
+        'storage_gb': 500,
+        'feature_ids': ['storage_500gb', 'video_4hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_pro', 'raw_support', 'email_templates', 'smart_invoicing', 'scheduler', 'seo_tools', 'client_proofing', 'watermarking', 'lightroom_workflow'],
         'features': [
-            'Unlimited galleries',
-            '200 GB storage',
-            'Video support (2 hours, up to 4K)',
-            'Priority support (12-24h)',
-            'Phone/video support',
-            'All Plus features',
-            'Custom email branding',
-            'Analytics exports',
-            'Gallery templates'
+            '500 GB Smart Storage',
+            'Unlimited Galleries',
+            '4 Hours Video (4K)',
+            'RAW Photo Support',
+            'Client Invoicing',
+            'Email Automation',
+            'SEO Tools'
+        ]
+    },
+    'ultimate': {
+        'name': 'Ultimate',
+        'price': 119,
+        'stripe_price_id': os.environ.get('STRIPE_PRICE_ULTIMATE', ''),
+        'galleries_per_month': -1,  # Unlimited
+        'storage_gb': 2000,
+        'feature_ids': ['storage_2tb', 'video_10hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_pro', 'raw_support', 'email_templates', 'smart_invoicing', 'scheduler', 'seo_tools', 'client_proofing', 'watermarking', 'lightroom_workflow', 'vip_support', 'raw_vault', 'api_access', 'concierge_onboarding'],
+        'features': [
+            '2 TB Smart Storage',
+            'Unlimited 4K Video',
+            'RAW Vault Archival',
+            'VIP Priority Support',
+            'API Access',
+            'Concierge Onboarding'
         ]
     }
 }

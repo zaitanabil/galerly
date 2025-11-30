@@ -1,6 +1,10 @@
 # Galerly Backend Dependencies
 # Python 3.9+
 
+# Web Framework (Flask for local development)
+Flask>=3.0.0
+Flask-CORS>=4.0.0
+
 # AWS SDK
 boto3>=1.28.0
 
@@ -28,3 +32,4 @@ rawpy>=0.18.0  # RAW format support (CR2, NEF, ARW, DNG, etc.)
 # Development/Setup Tools
 # boto3 is already included above for Lambda configuration script
 
+dnspython>=2.0.0

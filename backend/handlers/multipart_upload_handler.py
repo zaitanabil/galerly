@@ -66,6 +66,10 @@ def handle_initialize_multipart_upload(gallery_id, user, event):
                 ExpiresIn=3600  # 1 hour per part
             )
             
+            # LocalStack fix: Replace internal Docker hostname with localhost for browser access
+            if 'localstack' in part_url:
+                part_url = part_url.replace('http://localstack:', 'http://localhost:')
+            
             upload_parts.append({
                 'part_number': part_number,
                 'url': part_url
@@ -113,10 +117,20 @@ def handle_complete_multipart_upload(gallery_id, user, event):
         if not photo_id or not upload_id or not parts:
             return create_response(400, {'error': 'photo_id, upload_id, and parts required'})
         
-        # Get S3 key from photo_id
-        # Note: In production, store this in a temporary session table
-        # For now, reconstruct from gallery_id/photo_id
-        s3_key = f"{gallery_id}/{photo_id}"
+        # Get S3 key from request (preferred) or reconstruct
+        s3_key = body.get('s3_key')
+        
+        if not s3_key:
+            # Fallback: Try to reconstruct (requires filename to be accurate)
+            filename = body.get('filename')
+            if filename:
+                import os
+                file_extension = os.path.splitext(filename)[1] or '.jpg'
+                s3_key = f"{gallery_id}/{photo_id}{file_extension}"
+            else:
+                # Last resort fallback (often fails for files with extensions)
+                # This was the cause of the NoSuchUpload error
+                s3_key = f"{gallery_id}/{photo_id}"
         
         # Complete multipart upload
         s3_client.complete_multipart_upload(

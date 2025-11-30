@@ -8,6 +8,11 @@ from decimal import Decimal
 try:
     from PIL import Image
     from PIL.ExifTags import TAGS, GPSTAGS
+    try:
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+    except ImportError:
+        pass
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
@@ -46,7 +51,28 @@ def extract_image_metadata(image_data, filename):
     
     try:
         from io import BytesIO
+        try:
         image = Image.open(BytesIO(image_data))
+        except Exception as e:
+            # Try explicit HEIC support if standard open fails
+            try:
+                import pillow_heif
+                if pillow_heif.is_supported(image_data):
+                    heif_file = pillow_heif.read_heif(BytesIO(image_data))
+                    image = Image.frombytes(
+                        heif_file.mode,
+                        heif_file.size,
+                        heif_file.data,
+                        "raw",
+                    )
+                else:
+                    raise e
+            except ImportError:
+                print("⚠️ pillow-heif not installed or import failed")
+                raise e
+            except Exception as heic_e:
+                print(f"❌ explicit pillow_heif metadata extraction failed: {str(heic_e)}")
+                raise e
         
         # Basic image info
         metadata['format'] = image.format
@@ -65,10 +91,22 @@ def extract_image_metadata(image_data, filename):
         exif_data = image._getexif() if hasattr(image, '_getexif') else None
         
         if exif_data:
+            # Helper to clean EXIF values (handle Rationals, bytes, etc.)
+            def clean_val(v):
+                if v is None: return None
+                # Handle IFDRational
+                if hasattr(v, 'numerator') and hasattr(v, 'denominator'):
+                    return float(v)
+                # Handle bytes
+                if isinstance(v, bytes):
+                    try: return v.decode('utf-8').strip('\x00')
+                    except: return str(v)
+                return v
+
             # Extract camera info
-            camera_make = exif_data.get(271)  # Make
-            camera_model = exif_data.get(272)  # Model
-            lens_model = exif_data.get(42036)  # LensModel
+            camera_make = clean_val(exif_data.get(271))  # Make
+            camera_model = clean_val(exif_data.get(272))  # Model
+            lens_model = clean_val(exif_data.get(42036))  # LensModel
             
             if camera_make or camera_model:
                 metadata['camera'] = {
@@ -79,14 +117,14 @@ def extract_image_metadata(image_data, filename):
             
             # Extract shooting settings
             metadata['exif'] = {
-                'iso': exif_data.get(34855),  # ISOSpeedRatings
-                'aperture': exif_data.get(33437),  # FNumber
-                'shutter_speed': exif_data.get(33434),  # ExposureTime
-                'focal_length': exif_data.get(37386),  # FocalLength
-                'exposure_mode': exif_data.get(34850),  # ExposureProgram
-                'metering_mode': exif_data.get(37383),  # MeteringMode
-                'flash': exif_data.get(37385),  # Flash
-                'white_balance': exif_data.get(41987)  # WhiteBalance
+                'iso': clean_val(exif_data.get(34855)),  # ISOSpeedRatings
+                'aperture': clean_val(exif_data.get(33437)),  # FNumber
+                'shutter_speed': clean_val(exif_data.get(33434)),  # ExposureTime
+                'focal_length': clean_val(exif_data.get(37386)),  # FocalLength
+                'exposure_mode': clean_val(exif_data.get(34850)),  # ExposureProgram
+                'metering_mode': clean_val(exif_data.get(37383)),  # MeteringMode
+                'flash': clean_val(exif_data.get(37385)),  # Flash
+                'white_balance': clean_val(exif_data.get(41987))  # WhiteBalance
             }
             
             # Extract timestamps

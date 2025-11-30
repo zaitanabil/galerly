@@ -229,18 +229,14 @@ def handle_upload_photo(gallery_id, user, event):
         gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
         galleries_table.put_item(Item=gallery)
         
-        # Regenerate gallery ZIP file (synchronous - wait for completion)
+        # Invalidate gallery ZIP file (delete it so it's regenerated on next download)
+        # This is much faster than regenerating it synchronously
         try:
-            from utils.zip_generator import generate_gallery_zip
-            print(f"🔄 Starting ZIP regeneration for gallery {gallery_id}...")
-            result = generate_gallery_zip(gallery_id)
-            if result.get('success'):
-                print(f"✅ ZIP regeneration completed: {result.get('photo_count')} photos, {result.get('zip_size_mb', 0):.2f}MB")
-            else:
-                print(f"⚠️  ZIP regeneration failed: {result.get('error', 'unknown')}")
+            zip_key = f"{gallery_id}/gallery-all-photos.zip"
+            print(f"🗑️  Invalidating gallery ZIP: {zip_key}")
+            s3_client.delete_object(Bucket=S3_BUCKET, Key=zip_key)
         except Exception as zip_error:
-            print(f"⚠️  Failed to regenerate ZIP: {str(zip_error)}")
-            # Don't fail upload if ZIP generation fails
+            print(f"⚠️  Failed to invalidate ZIP: {str(zip_error)}")
         
         # EMAIL NOTIFICATIONS DISABLED FOR AUTO-SEND
         # Photographer must manually send batch notification via "Send Email Notification" button
@@ -823,18 +819,14 @@ def handle_delete_photos(gallery_id, user, event):
             galleries_table.put_item(Item=gallery)
             print(f"✅ Updated gallery: photo_count={new_photo_count}, storage={new_storage_mb}MB (freed {total_size_mb_deleted}MB)")
             
-            # Regenerate gallery ZIP file (synchronous - wait for completion)
+            # Invalidate gallery ZIP file (delete it so it's regenerated on next download)
+            # This is much faster than regenerating it synchronously
             try:
-                from utils.zip_generator import generate_gallery_zip
-                print(f"🔄 Starting ZIP regeneration for gallery {gallery_id}...")
-                result = generate_gallery_zip(gallery_id)
-                if result.get('success'):
-                    print(f"✅ ZIP regeneration completed: {result.get('photo_count')} photos, {result.get('zip_size_mb', 0):.2f}MB")
-                else:
-                    print(f"⚠️  ZIP regeneration failed: {result.get('error', 'unknown')}")
+                zip_key = f"{gallery_id}/gallery-all-photos.zip"
+                print(f"🗑️  Invalidating gallery ZIP: {zip_key}")
+                s3_client.delete_object(Bucket=S3_BUCKET, Key=zip_key)
             except Exception as zip_error:
-                print(f"⚠️  Failed to regenerate ZIP: {str(zip_error)}")
-                # Don't fail deletion if ZIP generation fails
+                print(f"⚠️  Failed to invalidate ZIP: {str(zip_error)}")
         
         response_data = {
             'deleted_count': deleted_count,

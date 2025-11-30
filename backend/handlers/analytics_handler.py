@@ -62,6 +62,8 @@ def handle_get_gallery_analytics(user, gallery_id):
         
         # Time series data (last 30 days)
         daily_stats = {}
+        photo_stats = {}
+        
         for event in events:
             date = event['timestamp'][:10]  # YYYY-MM-DD
             if date not in daily_stats:
@@ -72,12 +74,45 @@ def handle_get_gallery_analytics(user, gallery_id):
                 daily_stats[date]['views'] += 1
             elif event_type == 'photo_view':
                 daily_stats[date]['photo_views'] += 1
+                
+                # Aggregate photo views
+                meta = event.get('metadata', {})
+                pid = meta.get('photo_id')
+                if pid:
+                    if pid not in photo_stats:
+                        photo_stats[pid] = 0
+                    photo_stats[pid] += 1
+                    
             elif event_type == 'photo_download':
                 daily_stats[date]['downloads'] += 1
             elif event_type == 'bulk_download':
                 if 'bulk_downloads' not in daily_stats[date]:
                     daily_stats[date]['bulk_downloads'] = 0
                 daily_stats[date]['bulk_downloads'] += 1
+                
+        # Get top photos
+        top_photo_ids = sorted(photo_stats.keys(), key=lambda x: photo_stats[x], reverse=True)[:10]
+        
+        # Fetch photo details
+        top_photos = []
+        if top_photo_ids:
+            try:
+                for pid in top_photo_ids:
+                    try:
+                        p_item = photos_table.get_item(Key={'id': pid}).get('Item')
+                        if p_item:
+                            top_photos.append({
+                                'id': pid,
+                                'url': p_item.get('url'),
+                                'thumbnail_url': p_item.get('thumbnail_url') or p_item.get('url'),
+                                'name': p_item.get('filename', 'Untitled'),
+                                'views': photo_stats[pid],
+                                'avg_time_seconds': 0  # Placeholder
+                            })
+                    except:
+                        continue
+            except Exception as e:
+                print(f"Error fetching photo details: {e}")
         
         return create_response(200, {
             'gallery_id': gallery_id,
@@ -93,7 +128,8 @@ def handle_get_gallery_analytics(user, gallery_id):
                 'downloads': downloads,
                 'bulk_downloads': bulk_downloads
             },
-            'daily_stats': daily_stats
+            'daily_stats': daily_stats,
+            'top_photos': top_photos
         })
     except Exception as e:
         print(f"Error getting gallery analytics: {str(e)}")
@@ -146,22 +182,79 @@ def handle_get_overall_analytics(user):
         
         # Per-gallery stats
         gallery_stats = []
+        daily_stats = {}
+        photo_stats = {}
+        
+        # Initialize last 30 days in daily_stats
+        for i in range(30):
+            d = (start_date + timedelta(days=i)).strftime('%Y-%m-%d')
+            daily_stats[d] = {'views': 0, 'downloads': 0}
+
+        for event in all_events:
+            date = event['timestamp'][:10]
+            event_type = event.get('event_type')
+            
+            # Populate daily stats if date is within range
+            if date in daily_stats:
+                if event_type == 'gallery_view':
+                    daily_stats[date]['views'] += 1
+                elif event_type in ['photo_download', 'bulk_download']:
+                    daily_stats[date]['downloads'] += 1
+            
+            # Aggregate photo views
+            if event_type == 'photo_view':
+                meta = event.get('metadata', {})
+                pid = meta.get('photo_id')
+                if pid:
+                    if pid not in photo_stats:
+                        photo_stats[pid] = 0
+                    photo_stats[pid] += 1
+
+        # Get top photos across all galleries
+        top_photo_ids = sorted(photo_stats.keys(), key=lambda x: photo_stats[x], reverse=True)[:10]
+        
+        # Fetch photo details
+        top_photos = []
+        if top_photo_ids:
+            try:
+                for pid in top_photo_ids:
+                    try:
+                        p_item = photos_table.get_item(Key={'id': pid}).get('Item')
+                        if p_item:
+                            top_photos.append({
+                                'id': pid,
+                                'url': p_item.get('url'),
+                                'thumbnail_url': p_item.get('thumbnail_url') or p_item.get('url'),
+                                'name': p_item.get('filename', 'Untitled'),
+                                'views': photo_stats[pid],
+                                'avg_time_seconds': 0  # Placeholder
+                            })
+                    except:
+                        continue
+            except Exception as e:
+                print(f"Error fetching photo details: {e}")
+
         for gallery in galleries:
             gallery_id = gallery['id']
             gallery_events = [e for e in all_events if e.get('gallery_id') == gallery_id]
             gallery_views = sum(1 for e in gallery_events if e.get('event_type') == 'gallery_view')
+            gallery_downloads = sum(1 for e in gallery_events if e.get('event_type') in ['photo_download', 'bulk_download'])
             
             gallery_stats.append({
                 'gallery_id': gallery_id,
                 'gallery_name': gallery.get('name', 'Untitled'),
+                'cover_photo': gallery.get('cover_photo') or gallery.get('cover_photo_url') or gallery.get('thumbnail_url'),
                 'views': gallery_views,
                 'photo_views': sum(1 for e in gallery_events if e.get('event_type') == 'photo_view'),
-                'downloads': sum(1 for e in gallery_events if e.get('event_type') == 'photo_download'),
+                'downloads': gallery_downloads,
                 'bulk_downloads': sum(1 for e in gallery_events if e.get('event_type') == 'bulk_download')
             })
         
         # Sort by views
         gallery_stats.sort(key=lambda x: x['views'], reverse=True)
+        
+        # Convert daily_stats to list for frontend
+        daily_stats_list = [{'date': k, 'views': v['views'], 'downloads': v['downloads']} for k, v in sorted(daily_stats.items())]
         
         return create_response(200, {
             'total_galleries': len(galleries),
@@ -174,7 +267,9 @@ def handle_get_overall_analytics(user):
                 'end': end_date.isoformat() + 'Z',
                 'days': 30
             },
-            'gallery_stats': gallery_stats[:10]  # Top 10 galleries
+            'daily_stats': daily_stats_list,
+            'gallery_stats': gallery_stats[:10],  # Top 10 galleries
+            'top_photos': top_photos
         })
     except Exception as e:
         print(f"Error getting overall analytics: {str(e)}")
@@ -205,6 +300,17 @@ def handle_track_gallery_view(gallery_id, viewer_user_id=None, metadata=None):
         # Track the view (owner_user_id is the photographer who owns the gallery)
         if owner_user_id:
             track_event(owner_user_id, gallery_id, 'gallery_view', metadata)
+            
+            # Increment gallery view count atomically
+            try:
+                galleries_table.update_item(
+                    Key={'user_id': owner_user_id, 'id': gallery_id},
+                    UpdateExpression='SET view_count = if_not_exists(view_count, :zero) + :inc',
+                    ExpressionAttributeValues={':inc': 1, ':zero': 0}
+                )
+            except Exception as update_err:
+                print(f"Failed to increment view_count: {update_err}")
+                
             return create_response(200, {'status': 'tracked'})
         else:
             return create_response(404, {'error': 'Gallery owner not found'})
@@ -281,6 +387,18 @@ def handle_track_photo_download(photo_id, gallery_id, viewer_user_id=None, metad
                 'photo_id': photo_id,
                 **(metadata or {})
             })
+            
+            # Increment gallery download count atomically (optional but useful)
+            try:
+                galleries_table.update_item(
+                    Key={'user_id': owner_user_id, 'id': gallery_id},
+                    UpdateExpression='SET download_count = if_not_exists(download_count, :zero) + :inc',
+                    ExpressionAttributeValues={':inc': 1, ':zero': 0}
+                )
+            except Exception as update_err:
+                # Ignore if field doesn't exist or other error, not critical
+                pass
+                
             return create_response(200, {'status': 'tracked'})
         else:
             return create_response(404, {'error': 'Gallery owner not found'})
@@ -465,6 +583,16 @@ def handle_track_bulk_download(gallery_id, viewer_user_id=None, metadata=None, c
             print(f"   Tracking event for owner {owner_user_id}")
             print(f"   Is owner download: {is_owner_download}")
             track_event(owner_user_id, gallery_id, 'bulk_download', download_metadata)
+            
+            # Increment gallery download count atomically
+            try:
+                galleries_table.update_item(
+                    Key={'user_id': owner_user_id, 'id': gallery_id},
+                    UpdateExpression='SET download_count = if_not_exists(download_count, :zero) + :inc',
+                    ExpressionAttributeValues={':inc': 1, ':zero': 0}
+                )
+            except Exception as update_err:
+                pass
             
             # Send email notification to photographer
             try:

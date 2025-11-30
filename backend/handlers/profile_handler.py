@@ -55,6 +55,36 @@ def handle_update_profile(user, body):
             except (ValueError, TypeError):
                 pass  # Invalid rating, skip
         
+        # Watermark settings
+        if 'watermark_enabled' in body or 'watermark_text' in body or 'watermark_position' in body:
+            from handlers.subscription_handler import get_user_features
+            features, _, _ = get_user_features(user)
+            
+            # Watermarking requires Plus plan or higher
+            if not features.get('remove_branding') and not features.get('watermarking'):
+                 # Allow disabling watermark, but not enabling or customizing if not allowed
+                 if body.get('watermark_enabled') is True:
+                     return create_response(403, {
+                         'error': 'Custom watermarking is available on Plus, Pro, and Ultimate plans.',
+                         'upgrade_required': True
+                     })
+
+        if 'watermark_enabled' in body:
+            user_data['watermark_enabled'] = bool(body['watermark_enabled'])
+        if 'watermark_text' in body:
+            user_data['watermark_text'] = str(body['watermark_text']).strip()
+        if 'watermark_position' in body:
+            position = str(body['watermark_position']).strip()
+            if position in ['bottom-right', 'bottom-left', 'top-right', 'top-left', 'center']:
+                user_data['watermark_position'] = position
+        if 'watermark_opacity' in body:
+            try:
+                opacity = float(body['watermark_opacity'])
+                if 0.0 <= opacity <= 1.0:
+                    user_data['watermark_opacity'] = opacity
+            except (ValueError, TypeError):
+                pass
+
         user_data['updated_at'] = datetime.utcnow().isoformat() + 'Z'
         
         # Save to DynamoDB

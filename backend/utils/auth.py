@@ -3,17 +3,18 @@ Authentication utilities
 """
 import hashlib
 from datetime import datetime, timedelta
-from .config import sessions_table
+from boto3.dynamodb.conditions import Key
+from .config import sessions_table, users_table
 
 def hash_password(password):
     """Hash password using SHA-256"""
     return hashlib.sha256(password.encode()).hexdigest()
 
 def get_token_from_event(event):
-    """Extract session token from Cookie header or Authorization header (fallback)"""
-    headers = event.get('headers', {})
+    """Extract session token from Cookie header"""
+    headers = event.get('headers', {}) or {}
     
-    # First, try to get token from Cookie header (HttpOnly cookie)
+    # Only accept token from Cookie header (Strict HttpOnly enforcement)
     cookie_header = headers.get('Cookie') or headers.get('cookie', '')
     if cookie_header:
         # Parse cookies
@@ -23,44 +24,86 @@ def get_token_from_event(event):
             if '=' in cookie:
                 key, value = cookie.split('=', 1)
                 cookies[key] = value
-        token = cookies.get('galerly_session')
-        if token:
-            return token
-    
-    # Fallback: try Authorization header (for backward compatibility)
-    auth_header = headers.get('Authorization', '') or headers.get('authorization', '')
-    if auth_header.startswith('Bearer '):
-        return auth_header.replace('Bearer ', '')
+        return cookies.get('galerly_session')
     
     return None
 
+def get_api_key_from_event(event):
+    """Extract API key from Authorization header"""
+    headers = event.get('headers', {}) or {}
+    auth_header = headers.get('Authorization') or headers.get('authorization', '')
+    
+    if auth_header and auth_header.startswith('Bearer '):
+        return auth_header.split(' ')[1]
+    
+    # Also support X-API-Key header
+    return headers.get('X-API-Key') or headers.get('x-api-key')
+
+def get_user_from_api_key(event):
+    """Authenticate user via API Key"""
+    api_key = get_api_key_from_event(event)
+    if not api_key:
+        return None
+        
+    try:
+        # Query users table by API key using GSI
+        # Assuming GSI 'ApiKeyIndex' exists on 'api_key' field
+        response = users_table.query(
+            IndexName='ApiKeyIndex',
+            KeyConditionExpression=Key('api_key').eq(api_key)
+        )
+        
+        items = response.get('Items', [])
+        if not items:
+            return None
+            
+        user = items[0]
+        
+        # Enforce Plan Limits: Check if plan still supports API access
+        # Users might downgrade but keep the key - block access if not Ultimate/Pro
+        plan = user.get('plan') or user.get('subscription') or 'free'
+        from handlers.subscription_handler import get_user_features
+        features, _, _ = get_user_features(user)
+        
+        # Developer API is usually an Ultimate feature (or Pro)
+        # We'll use the 'developer_api' feature flag if it exists, or fallback to plan check
+        # Checking 'api_access' or relying on plan.
+        # Based on BillingPage.tsx, "Developer API Access" is Ultimate only.
+        if plan != 'ultimate' and not features.get('api_access'):
+             print(f"⛔ Blocked API access for user {user.get('email')} on plan {plan}")
+             return None
+             
+        return user
+        
+    except Exception as e:
+        print(f"Error authenticating with API key: {str(e)}")
+        return None
+
 def get_user_from_token(event):
     """Extract user from Cookie/Authorization and fetch from DynamoDB"""
+    # 1. Try Session Token (Cookie)
     token = get_token_from_event(event)
     
-    if not token:
-        return None
-    
-    try:
-        response = sessions_table.get_item(Key={'token': token})
-        
-        if 'Item' not in response:
-            return None
-        
-        session = response['Item']
-        
-        # Check if session is expired (7 days - Swiss law compliance)
-        created_at = datetime.fromisoformat(session.get('created_at', '2000-01-01').replace('Z', ''))
-        age = datetime.utcnow() - created_at
-        
-        if age > timedelta(days=7):
-            sessions_table.delete_item(Key={'token': token})
-            return None
-        
-        return session.get('user')
-    except Exception as e:
-        print(f"Error in auth: {str(e)}")
-        return None
+    if token:
+        try:
+            response = sessions_table.get_item(Key={'token': token})
+            
+            if 'Item' in response:
+                session = response['Item']
+                
+                # Check if session is expired (7 days - Swiss law compliance)
+                created_at = datetime.fromisoformat(session.get('created_at', '2000-01-01').replace('Z', ''))
+                age = datetime.utcnow() - created_at
+                
+                if age <= timedelta(days=7):
+                    return session.get('user')
+                else:
+                    sessions_table.delete_item(Key={'token': token})
+        except Exception as e:
+            print(f"Error in auth (session): {str(e)}")
+            
+    # 2. Try API Key (Bearer Token)
+    return get_user_from_api_key(event)
 
 def get_session(token):
     """Get session from token - for security decorator"""
@@ -89,5 +132,3 @@ def get_session(token):
     except Exception as e:
         print(f"Error getting session: {str(e)}")
         return None
-
-

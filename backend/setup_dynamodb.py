@@ -202,6 +202,72 @@ TABLES = {
             }
         ]
     },
+    get_table_name('galerly-invoices'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'user_id', 'AttributeType': 'S'},
+            {'AttributeName': 'client_email', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'UserIdIndex',
+                'KeySchema': [{'AttributeName': 'user_id', 'KeyType': 'HASH'}],
+                'Projection': {'ProjectionType': 'ALL'}
+            },
+            {
+                'IndexName': 'ClientEmailIndex',
+                'KeySchema': [{'AttributeName': 'client_email', 'KeyType': 'HASH'}],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    get_table_name('galerly-appointments'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'user_id', 'AttributeType': 'S'},
+            {'AttributeName': 'client_email', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'UserIdIndex',
+                'KeySchema': [{'AttributeName': 'user_id', 'KeyType': 'HASH'}],
+                'Projection': {'ProjectionType': 'ALL'}
+            },
+            {
+                'IndexName': 'ClientEmailIndex',
+                'KeySchema': [{'AttributeName': 'client_email', 'KeyType': 'HASH'}],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    get_table_name('galerly-contracts'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'user_id', 'AttributeType': 'S'},
+            {'AttributeName': 'client_email', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'UserIdIndex',
+                'KeySchema': [{'AttributeName': 'user_id', 'KeyType': 'HASH'}],
+                'Projection': {'ProjectionType': 'ALL'}
+            },
+            {
+                'IndexName': 'ClientEmailIndex',
+                'KeySchema': [{'AttributeName': 'client_email', 'KeyType': 'HASH'}],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
     get_table_name('galerly-subscriptions'): {
         'AttributeDefinitions': [
             {'AttributeName': 'id', 'AttributeType': 'S'},
@@ -388,6 +454,32 @@ TABLES = {
                     {'AttributeName': 'user_id', 'KeyType': 'HASH'},
                     {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
                 ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    get_table_name('galerly-features'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': []
+    },
+    get_table_name('galerly-user-features'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'user_id', 'AttributeType': 'S'},
+            {'AttributeName': 'feature_id', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'user_id', 'KeyType': 'HASH'},
+            {'AttributeName': 'feature_id', 'KeyType': 'RANGE'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'FeatureIdIndex',
+                'KeySchema': [{'AttributeName': 'feature_id', 'KeyType': 'HASH'}],
                 'Projection': {'ProjectionType': 'ALL'}
             }
         ]

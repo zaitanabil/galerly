@@ -10,7 +10,13 @@ from utils.response import create_response
 from utils.auth import get_user_from_token
 
 # Import handlers
-from handlers.auth_handler import handle_register, handle_login, handle_logout, handle_get_me, handle_request_password_reset, handle_reset_password, handle_request_verification_code, handle_verify_code, handle_delete_account
+from handlers.auth_handler import (
+    handle_register, handle_login, handle_logout, handle_get_me, 
+    handle_request_password_reset, handle_reset_password, 
+    handle_request_verification_code, handle_verify_code, 
+    handle_delete_account, handle_generate_api_key, handle_get_api_key
+)
+
 from handlers.city_handler import handle_city_search
 from handlers.profile_handler import handle_update_profile
 from handlers.gallery_handler import (
@@ -20,10 +26,12 @@ from handlers.gallery_handler import (
     handle_update_gallery,
     handle_delete_gallery,
     handle_duplicate_gallery,
-    handle_archive_gallery
+    handle_archive_gallery,
+    handle_archive_originals
 )
 from handlers.photo_handler import (
     handle_upload_photo,
+    handle_get_photo,
     handle_check_duplicates,
     handle_update_photo,
     handle_add_comment,
@@ -80,12 +88,14 @@ from handlers.client_favorites_handler import (
     handle_add_favorite,
     handle_remove_favorite,
     handle_get_favorites,
-    handle_check_favorite
+    handle_check_favorite,
+    handle_submit_favorites
 )
 from handlers.portfolio_handler import (
     handle_get_portfolio_settings,
     handle_update_portfolio_settings,
-    handle_get_public_portfolio
+    handle_get_public_portfolio,
+    handle_verify_domain
 )
 from handlers.social_handler import (
     handle_get_gallery_share_info,
@@ -110,6 +120,30 @@ from handlers.notification_handler import (
 from handlers.gallery_expiration_handler import (
     handle_check_expiring_galleries,
     handle_manual_expiry_check
+)
+from handlers.invoice_handler import (
+    handle_list_invoices,
+    handle_create_invoice,
+    handle_get_invoice,
+    handle_update_invoice,
+    handle_delete_invoice,
+    handle_send_invoice
+)
+from handlers.appointment_handler import (
+    handle_list_appointments,
+    handle_create_appointment,
+    handle_update_appointment,
+    handle_delete_appointment,
+    handle_create_public_appointment_request
+)
+from handlers.contract_handler import (
+    handle_list_contracts,
+    handle_create_contract,
+    handle_get_contract,
+    handle_update_contract,
+    handle_delete_contract,
+    handle_send_contract,
+    handle_sign_contract
 )
 from handlers.bulk_download_handler import (
     handle_bulk_download,
@@ -197,6 +231,17 @@ def handler(event, context):
                 return create_response(401, {'error': 'Authentication required'})
             return handle_delete_account(user)
         
+        # API Keys (Protected)
+        if path == '/v1/auth/api-key' and method == 'POST':
+            user = get_user_from_token(event)
+            if not user: return create_response(401, {'error': 'Authentication required'})
+            return handle_generate_api_key(user)
+            
+        if path == '/v1/auth/api-key' and method == 'GET':
+            user = get_user_from_token(event)
+            if not user: return create_response(401, {'error': 'Authentication required'})
+            return handle_get_api_key(user)
+        
         if path == '/v1/auth/forgot-password' and method == 'POST':
             return handle_request_password_reset(body)
         
@@ -249,6 +294,31 @@ def handler(event, context):
             gallery_id = path.split('/')[-1]
             return handle_submit_client_feedback(gallery_id, body)
         
+        # Client favorites endpoints (PUBLIC - allows guest access via email in body/query)
+        if path == '/v1/client/favorites' and method == 'GET':
+            # user might be None
+            user = get_user_from_token(event)
+            query_params = event.get('queryStringParameters') or {}
+            return handle_get_favorites(user, query_params)
+        
+        if path == '/v1/client/favorites' and method == 'POST':
+            user = get_user_from_token(event)
+            return handle_add_favorite(user, body)
+
+        if path == '/v1/client/favorites/submit' and method == 'POST':
+            user = get_user_from_token(event)
+            return handle_submit_favorites(user, body)
+        
+        if path == '/v1/client/favorites' and method == 'DELETE':
+            user = get_user_from_token(event)
+            return handle_remove_favorite(user, body)
+        
+        if path.startswith('/v1/client/favorites/') and method == 'GET':
+            photo_id = path.split('/')[-1]
+            user = get_user_from_token(event)
+            query_params = event.get('queryStringParameters') or {}
+            return handle_check_favorite(user, photo_id, query_params)
+
         # Client gallery by token endpoint (PUBLIC - anyone with token can view)
         if path.startswith('/v1/client/galleries/by-token/') and method == 'GET':
             share_token = path.split('/')[-1]
@@ -324,6 +394,29 @@ def handler(event, context):
             client_ip = identity.get('sourceIp', 'unknown')
             return handle_track_bulk_download(gallery_id, viewer_user_id, metadata, client_ip)
         
+        # Photo comments (PUBLIC - Allows guests to comment)
+        if path.startswith('/v1/photos/') and '/comments' in path:
+            parts = path.split('/')
+            photo_id = parts[parts.index('photos') + 1]
+            
+            # Check if it's a specific comment (update/delete)
+            if len(parts) > parts.index('comments') + 1:
+                comment_id = parts[parts.index('comments') + 1]
+                
+                # Update/Delete still require auth or ownership proof (handled in handler or restricted)
+                # For now, we'll keep update/delete authenticated-only in the AUTH section below
+                # or we can move them here and check user inside handler
+                pass 
+            elif method == 'POST':
+                # Add new comment - Publicly accessible (handler checks gallery settings)
+                user = get_user_from_token(event) # Optional user
+                return handle_add_comment(photo_id, user, body)
+
+        # Photo details (PUBLIC - for polling comments etc)
+        if path.startswith('/v1/photos/') and '/comments' not in path and method == 'GET':
+             photo_id = path.split('/')[-1]
+             return handle_get_photo(photo_id)
+
         # Visitor tracking endpoints (PUBLIC - tracks ALL visitors for UX improvement)
         # These are mandatory for understanding user behavior and improving UX
         if path == '/v1/visitor/track/visit' and method == 'POST':
@@ -334,6 +427,25 @@ def handler(event, context):
         
         if path == '/v1/visitor/track/session-end' and method == 'POST':
             return handle_track_session_end(body)
+        
+        # Public contract signing
+        if path.startswith('/v1/public/contracts/') and method == 'GET':
+            contract_id = path.split('/')[-1]
+            return handle_get_contract(contract_id, user=None)
+            
+        if path.startswith('/v1/public/contracts/') and path.endswith('/sign') and method == 'POST':
+             parts = path.split('/')
+             contract_id = parts[-2]
+             request_context = event.get('requestContext', {})
+             identity = request_context.get('identity', {})
+             ip_address = identity.get('sourceIp', 'unknown')
+             return handle_sign_contract(contract_id, body, ip_address)
+
+        # Public Booking Request
+        if path.startswith('/v1/public/photographers/') and path.endswith('/appointments') and method == 'POST':
+            parts = path.split('/')
+            photographer_id = parts[-2]
+            return handle_create_public_appointment_request(photographer_id, body)
         
         # ================================================================
         # AUTHENTICATED ENDPOINTS (Require valid token)
@@ -360,6 +472,9 @@ def handler(event, context):
         
         if path == '/v1/portfolio/settings' and method == 'PUT':
             return handle_update_portfolio_settings(user, body)
+            
+        if path == '/v1/portfolio/verify-domain' and method == 'POST':
+            return handle_verify_domain(user, body)
         
         # Dashboard
         if path == '/v1/dashboard' and method == 'GET':
@@ -378,19 +493,6 @@ def handler(event, context):
             gallery_id = path.split('/')[-1]
             return handle_get_client_gallery(gallery_id, user)
         
-        # Client favorites endpoints
-        if path == '/v1/client/favorites' and method == 'GET':
-            return handle_get_favorites(user)
-        
-        if path == '/v1/client/favorites' and method == 'POST':
-            return handle_add_favorite(user, body)
-        
-        if path == '/v1/client/favorites' and method == 'DELETE':
-            return handle_remove_favorite(user, body)
-        
-        if path.startswith('/v1/client/favorites/') and method == 'GET':
-            photo_id = path.split('/')[-1]
-            return handle_check_favorite(user, photo_id)
         
         # Photos endpoints (MUST come BEFORE gallery endpoints to avoid path collision)
         if path.startswith('/v1/galleries/') and '/photos' in path:
@@ -465,6 +567,9 @@ def handler(event, context):
                 
                 if action == 'unarchive' and method == 'POST':
                     return handle_archive_gallery(gallery_id, user, archive=False)
+                
+                if action == 'archive-originals' and method == 'POST':
+                    return handle_archive_originals(gallery_id, user)
             
             # Regular gallery operations
             gallery_id = parts[-1]
@@ -478,7 +583,7 @@ def handler(event, context):
             if method == 'DELETE':
                 return handle_delete_gallery(gallery_id, user)
         
-        # Photo comments
+        # Photo comments (moved to PUBLIC section above for add)
         if path.startswith('/v1/photos/') and '/comments' in path:
             parts = path.split('/')
             photo_id = parts[parts.index('photos') + 1]
@@ -493,9 +598,9 @@ def handler(event, context):
                 if method == 'DELETE':
                     return handle_delete_comment(photo_id, comment_id, user)
             
-            # Add new comment
-            if method == 'POST':
-                return handle_add_comment(photo_id, user, body)
+            # Add new comment (moved to public section)
+            # if method == 'POST':
+            #    return handle_add_comment(photo_id, user, body)
         
         # Photo search endpoint
         if path == '/v1/photos/search' and method == 'GET':
@@ -556,6 +661,70 @@ def handler(event, context):
         
         if path == '/v1/billing/refund/status' and method == 'GET':
             return handle_get_refund_status(user)
+        
+        # Invoice management
+        if path == '/v1/invoices' and method == 'GET':
+            query_params = event.get('queryStringParameters') or {}
+            return handle_list_invoices(user, query_params)
+        
+        if path == '/v1/invoices' and method == 'POST':
+            return handle_create_invoice(user, body)
+        
+        if path.startswith('/v1/invoices/'):
+            parts = path.split('/')
+            # Check for specific actions like /v1/invoices/{id}/send
+            if parts[-1] == 'send' and method == 'POST':
+                invoice_id = parts[-2]
+                return handle_send_invoice(invoice_id, user)
+            
+            invoice_id = parts[-1]
+            
+            if method == 'GET':
+                return handle_get_invoice(invoice_id, user)
+                
+            if method == 'PUT':
+                return handle_update_invoice(invoice_id, user, body)
+                
+            if method == 'DELETE':
+                return handle_delete_invoice(invoice_id, user)
+
+        # Appointment scheduler
+        if path == '/v1/appointments' and method == 'GET':
+            query_params = event.get('queryStringParameters') or {}
+            return handle_list_appointments(user, query_params)
+        
+        if path == '/v1/appointments' and method == 'POST':
+            return handle_create_appointment(user, body)
+            
+        if path.startswith('/v1/appointments/'):
+            appt_id = path.split('/')[-1]
+            if method == 'PUT':
+                return handle_update_appointment(appt_id, user, body)
+            if method == 'DELETE':
+                return handle_delete_appointment(appt_id, user)
+
+        # Contract management
+        if path == '/v1/contracts' and method == 'GET':
+            query_params = event.get('queryStringParameters') or {}
+            return handle_list_contracts(user, query_params)
+        
+        if path == '/v1/contracts' and method == 'POST':
+            return handle_create_contract(user, body)
+            
+        if path.startswith('/v1/contracts/'):
+            parts = path.split('/')
+            # Check for specific actions
+            if parts[-1] == 'send' and method == 'POST':
+                contract_id = parts[-2]
+                return handle_send_contract(contract_id, user)
+            
+            contract_id = parts[-1]
+            if method == 'GET':
+                return handle_get_contract(contract_id, user)
+            if method == 'PUT':
+                return handle_update_contract(contract_id, user, body)
+            if method == 'DELETE':
+                return handle_delete_contract(contract_id, user)
         
         # Subscription/Usage endpoints
         if path == '/v1/subscription/usage' and method == 'GET':

@@ -34,23 +34,20 @@ aws --endpoint-url="$AWS_ENDPOINT_URL" s3 mb "s3://$S3_PHOTOS_BUCKET" || true
 aws --endpoint-url="$AWS_ENDPOINT_URL" s3 mb "s3://$S3_BUCKET" || true
 aws --endpoint-url="$AWS_ENDPOINT_URL" s3 mb "s3://$S3_RENDITIONS_BUCKET" || true
 
-# Get CORS allowed origins from environment
-CORS_ORIGINS="${FRONTEND_URL:-*}"
-
-# Enable CORS on S3 buckets
+# Enable CORS on S3 buckets (allow all origins for LocalStack development)
 echo "🔧 Configuring S3 CORS..."
 for bucket in "$S3_PHOTOS_BUCKET" "$S3_BUCKET" "$S3_RENDITIONS_BUCKET"; do
     aws --endpoint-url="$AWS_ENDPOINT_URL" s3api put-bucket-cors \
         --bucket "$bucket" \
-        --cors-configuration "{
-            \"CORSRules\": [{
-                \"AllowedOrigins\": [\"$CORS_ORIGINS\"],
-                \"AllowedMethods\": [\"GET\", \"HEAD\", \"POST\", \"PUT\", \"DELETE\"],
-                \"AllowedHeaders\": [\"*\"],
-                \"ExposeHeaders\": [\"ETag\", \"Content-Length\"],
-                \"MaxAgeSeconds\": 3600
+        --cors-configuration '{
+            "CORSRules": [{
+                "AllowedOrigins": ["*"],
+                "AllowedMethods": ["GET", "HEAD", "POST", "PUT", "DELETE"],
+                "AllowedHeaders": ["*"],
+                "ExposeHeaders": ["ETag", "Content-Length"],
+                "MaxAgeSeconds": 3600
             }]
-        }" || true
+        }' || true
 done
 
 echo "✅ LocalStack initialization complete"

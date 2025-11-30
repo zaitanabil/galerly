@@ -254,14 +254,116 @@ def delete_old_archived_galleries(event=None, context=None):
         return create_response(500, {'error': f'Failed to delete old archived galleries: {str(e)}'})
 
 
+from handlers.notification_handler import notify_gallery_expiring
+
+def send_expiry_reminders(event=None, context=None):
+    """
+    Send reminders to clients for galleries expiring in 7 days or 1 day.
+    This should run daily via CloudWatch Events (cron).
+    """
+    try:
+        print("📧 Sending gallery expiration reminders...")
+        today = datetime.utcnow().date()
+        reminders_sent = 0
+        
+        # Scan all galleries
+        all_galleries = []
+        last_key = None
+        
+        while True:
+            if last_key:
+                response = galleries_table.scan(ExclusiveStartKey=last_key)
+            else:
+                response = galleries_table.scan()
+            
+            all_galleries.extend(response.get('Items', []))
+            
+            last_key = response.get('LastEvaluatedKey')
+            if not last_key:
+                break
+        
+        for gallery in all_galleries:
+            # Skip if archived or never expires
+            if gallery.get('archived', False):
+                continue
+            
+            expiry_days = gallery.get('expiry_days')
+            if not expiry_days or expiry_days == 'never':
+                continue
+                
+            created_at = gallery.get('created_at')
+            if not created_at:
+                continue
+                
+            try:
+                created_date = datetime.fromisoformat(created_at.replace('Z', '+00:00')).date()
+                expiry_days_int = int(expiry_days)
+                expiration_date = created_date + timedelta(days=expiry_days_int)
+                
+                days_until = (expiration_date - today).days
+                
+                # Send reminder at 7 days and 1 day
+                if days_until == 7 or days_until == 1:
+                    print(f"  🔔 Gallery '{gallery.get('name')}' expires in {days_until} days")
+                    
+                    user_id = gallery.get('user_id')
+                    gallery_id = gallery.get('id')
+                    client_email = gallery.get('client_email')
+                    
+                    if not client_email:
+                        continue
+                        
+                    # Get photographer name
+                    photographer_name = "Photographer" # Default
+                    # In a real app, we might fetch user to get name, or store it in gallery
+                    # optimizing by not fetching user if possible, or fetch batch.
+                    # For now, let's try to get it from gallery if stored, or fetch user
+                    from utils.config import users_table
+                    user_resp = users_table.get_item(Key={'id': user_id})
+                    if 'Item' in user_resp:
+                        user = user_resp['Item']
+                        photographer_name = user.get('name') or user.get('username') or "Photographer"
+                    
+                    client_name = gallery.get('client_name', 'Client')
+                    
+                    # Build URL
+                    import os
+                    frontend_url = os.environ.get('FRONTEND_URL', 'https://galerly.com')
+                    share_token = gallery.get('share_token')
+                    gallery_url = f"{frontend_url}/client-gallery?token={share_token}" if share_token else f"{frontend_url}/gallery/{gallery_id}"
+                    
+                    # Send notification
+                    success = notify_gallery_expiring(
+                        user_id, gallery_id, client_email, client_name,
+                        photographer_name, gallery_url, days_until
+                    )
+                    
+                    if success:
+                        reminders_sent += 1
+                        
+            except Exception as e:
+                print(f"⚠️ Error processing reminder for gallery {gallery.get('id')}: {e}")
+                continue
+                
+        print(f"✅ Sent {reminders_sent} expiration reminders")
+        return reminders_sent
+        
+    except Exception as e:
+        print(f"❌ Error sending expiry reminders: {str(e)}")
+        return 0
+
 def run_daily_cleanup(event=None, context=None):
     """
     Combined daily cleanup job:
-    1. Archive expired galleries
-    2. Delete galleries archived for 30+ days
+    1. Send expiry reminders (7 days / 1 day before)
+    2. Archive expired galleries
+    3. Delete galleries archived for 30+ days
     """
     try:
         print("🔄 Running daily gallery cleanup...")
+        
+        # Step 0: Send expiry reminders
+        reminders_count = send_expiry_reminders()
         
         # Step 1: Archive expired galleries
         archive_result = check_and_archive_expired_galleries()
@@ -292,6 +394,7 @@ def run_daily_cleanup(event=None, context=None):
         
         return create_response(200, {
             'message': 'Daily cleanup completed successfully',
+            'reminders_sent': reminders_count,
             'archived': archived_count,
             'deleted': deleted_count
         })

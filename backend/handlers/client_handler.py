@@ -86,6 +86,57 @@ def enrich_photos_with_favorites(photos, client_email, gallery_id):
             photo['is_favorite'] = False
         return photos
 
+def enrich_photos_with_total_favorites(photos, gallery, photographer_email=None):
+    """
+    Calculate and update favorites_count for all photos based on actual favorites table data.
+    This ensures the client sees the same accurate count as the photographer.
+    """
+    if not photos:
+        return photos
+    
+    try:
+        gallery_id = gallery.get('id')
+        client_emails = gallery.get('client_emails', [])
+        
+        # Also check legacy client_email
+        legacy_email = gallery.get('client_email')
+        if legacy_email and legacy_email not in client_emails:
+            client_emails.append(legacy_email)
+        
+        # Build set of emails to check (clients + photographer)
+        emails_to_check = set(email.lower() for email in client_emails if email)
+        if photographer_email:
+            emails_to_check.add(photographer_email.lower())
+            
+        # Query favorites for all users
+        photo_fav_counts = {}
+        
+        for email in emails_to_check:
+            favorites_response = client_favorites_table.query(
+                KeyConditionExpression=Key('client_email').eq(email),
+                FilterExpression='gallery_id = :gid',
+                ExpressionAttributeValues={':gid': gallery_id}
+            )
+            for fav in favorites_response.get('Items', []):
+                pid = fav['photo_id']
+                photo_fav_counts[pid] = photo_fav_counts.get(pid, 0) + 1
+                
+        # Update photos with real calculated count
+        for photo in photos:
+            pid = photo['id']
+            real_count = photo_fav_counts.get(pid, 0)
+            photo['favorites_count'] = real_count
+            
+        return photos
+        
+    except Exception as e:
+        print(f"Error calculating real favorites count: {e}")
+        # Fallback to existing counts (clamped to 0) if calculation fails
+        for photo in photos:
+            if photo.get('favorites_count', 0) < 0:
+                photo['favorites_count'] = 0
+        return photos
+
 def handle_client_galleries(user):
     """Get all galleries where client has access (client in client_emails array)"""
     try:
@@ -223,6 +274,8 @@ def handle_get_client_gallery(gallery_id, user, query_params=None):
         
         # Check if gallery owner's account is deleted - BEFORE checking client access
         photographer_id = gallery.get('user_id')
+        photographer_email = None
+        
         if photographer_id:
             try:
                 photographer_response = users_table.scan(
@@ -232,6 +285,7 @@ def handle_get_client_gallery(gallery_id, user, query_params=None):
                 
                 if photographer_response.get('Items'):
                     photographer = photographer_response['Items'][0]
+                    photographer_email = photographer.get('email')
                     account_status = photographer.get('account_status', 'ACTIVE')
                     
                     if account_status == 'PENDING_DELETION':
@@ -257,24 +311,43 @@ def handle_get_client_gallery(gallery_id, user, query_params=None):
         if user_email not in [email.lower() for email in client_emails]:
             return create_response(403, {'error': 'Access denied. This gallery is not shared with you.'})
         
-        # Get photographer info
-        try:
-            photographer_id = gallery.get('user_id')
-            photographer_response = users_table.scan(
-                FilterExpression='id = :id',
-                ExpressionAttributeValues={':id': photographer_id}
-            )
-            photographers = photographer_response.get('Items', [])
-            if photographers:
-                photographer = photographers[0]
-                gallery['photographer_name'] = photographer.get('name') or photographer.get('username')
-                gallery['photographer_id'] = photographer['id']
-            else:
+        # Get photographer info (if not already fetched/failed above)
+        if 'photographer_name' not in gallery:
+            try:
+                if photographer_id:
+                    # Reuse photographer obj if available from status check
+                    if 'photographer' in locals():
+                        gallery['photographer_name'] = photographer.get('name') or photographer.get('username')
+                        gallery['photographer_id'] = photographer['id']
+                        # Check branding setting based on plan
+                        plan = photographer.get('plan') or photographer.get('subscription', 'free')
+                        gallery['hide_branding'] = plan in ['starter', 'plus', 'pro', 'ultimate']
+                    else:
+                        # Refetch if needed
+                        photographer_response = users_table.scan(
+                            FilterExpression='id = :id',
+                            ExpressionAttributeValues={':id': photographer_id}
+                        )
+                        photographers = photographer_response.get('Items', [])
+                        if photographers:
+                            photographer = photographers[0]
+                            photographer_email = photographer.get('email')
+                            gallery['photographer_name'] = photographer.get('name') or photographer.get('username')
+                            gallery['photographer_id'] = photographer['id']
+                            plan = photographer.get('plan') or photographer.get('subscription', 'free')
+                            gallery['hide_branding'] = plan in ['starter', 'plus', 'pro', 'ultimate']
+                        else:
+                            gallery['photographer_name'] = 'Unknown Photographer'
+                            gallery['photographer_id'] = photographer_id
+                            gallery['hide_branding'] = False
+                else:
+                     gallery['photographer_name'] = 'Unknown Photographer'
+                     gallery['photographer_id'] = None
+                     gallery['hide_branding'] = False
+            except:
                 gallery['photographer_name'] = 'Unknown Photographer'
-                gallery['photographer_id'] = photographer_id
-        except:
-            gallery['photographer_name'] = 'Unknown Photographer'
-            gallery['photographer_id'] = gallery.get('user_id')
+                gallery['photographer_id'] = gallery.get('user_id')
+                gallery['hide_branding'] = False
         
         # Get ALL photos (pending + approved) with optimized projection and pagination
         # Initialize variables before try block to ensure they exist in except block
@@ -286,10 +359,11 @@ def handle_get_client_gallery(gallery_id, user, query_params=None):
             query_kwargs = {
                 'IndexName': 'GalleryIdIndex',
                 'KeyConditionExpression': Key('gallery_id').eq(gallery_id),
-                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, url, title, description, filename, #sz, width, height, favorites',
+                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, #url, original_download_url, title, description, filename, #sz, width, height, favorites, favorites_count, comments',
                 'ExpressionAttributeNames': {
                     '#st': 'status',
-                    '#sz': 'size'
+                    '#sz': 'size',
+                    '#url': 'url'  # reserved word
                 },
                 'Limit': page_size
             }
@@ -304,6 +378,10 @@ def handle_get_client_gallery(gallery_id, user, query_params=None):
             
             # Enrich photos with is_favorite field for this client
             gallery_photos = enrich_photos_with_favorites(gallery_photos, user['email'], gallery_id)
+            
+            # 🔧 CRITICAL FIX: Recalculate accurate total favorites count
+            # Use real data from favorites table instead of potentially stale/buggy photos_table count
+            gallery_photos = enrich_photos_with_total_favorites(gallery_photos, gallery, photographer_email)
             
             # Pagination metadata
             next_key = photos_response.get('LastEvaluatedKey')
@@ -377,6 +455,8 @@ def handle_get_client_gallery_by_token(share_token, query_params=None):
         
         # Check if gallery owner's account is deleted
         photographer_id = gallery.get('user_id')
+        photographer_email = None
+        
         if photographer_id:
             try:
                 photographer_response = users_table.scan(
@@ -386,6 +466,7 @@ def handle_get_client_gallery_by_token(share_token, query_params=None):
                 
                 if photographer_response.get('Items'):
                     photographer = photographer_response['Items'][0]
+                    photographer_email = photographer.get('email')
                     account_status = photographer.get('account_status', 'ACTIVE')
                     
                     if account_status == 'PENDING_DELETION':
@@ -427,19 +508,28 @@ def handle_get_client_gallery_by_token(share_token, query_params=None):
         
         # Get photographer info
         try:
-            photographer_id = gallery.get('user_id')
-            photographer_response = users_table.scan(
-                FilterExpression='id = :id',
-                ExpressionAttributeValues={':id': photographer_id}
-            )
-            photographers = photographer_response.get('Items', [])
-            if photographers:
-                photographer = photographers[0]
-                gallery['photographer_name'] = photographer.get('name') or photographer.get('username') or 'Unknown'
-                gallery['photographer_id'] = photographer['id']
+            if photographer_id:
+                # Reuse photographer obj if available
+                if 'photographer' in locals():
+                    gallery['photographer_name'] = photographer.get('name') or photographer.get('username') or 'Unknown'
+                    gallery['photographer_id'] = photographer['id']
+                else:
+                    photographer_response = users_table.scan(
+                        FilterExpression='id = :id',
+                        ExpressionAttributeValues={':id': photographer_id}
+                    )
+                    photographers = photographer_response.get('Items', [])
+                    if photographers:
+                        photographer = photographers[0]
+                        photographer_email = photographer.get('email')
+                        gallery['photographer_name'] = photographer.get('name') or photographer.get('username') or 'Unknown'
+                        gallery['photographer_id'] = photographer['id']
+                    else:
+                        gallery['photographer_name'] = 'Unknown Photographer'
+                        gallery['photographer_id'] = photographer_id
             else:
                 gallery['photographer_name'] = 'Unknown Photographer'
-                gallery['photographer_id'] = photographer_id
+                gallery['photographer_id'] = gallery.get('user_id')
         except Exception as e:
             print(f"Error looking up photographer: {str(e)}")
             gallery['photographer_name'] = 'Unknown Photographer'
@@ -455,10 +545,11 @@ def handle_get_client_gallery_by_token(share_token, query_params=None):
             query_kwargs = {
                 'IndexName': 'GalleryIdIndex',
                 'KeyConditionExpression': Key('gallery_id').eq(gallery_id),
-                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, url, title, description, filename, #sz, width, height',
+                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, #url, original_download_url, title, description, filename, #sz, width, height, comments, favorites_count',
                 'ExpressionAttributeNames': {
                     '#st': 'status',
-                    '#sz': 'size'
+                    '#sz': 'size',
+                    '#url': 'url'  # reserved word
                 },
                 'Limit': page_size
             }
@@ -474,6 +565,10 @@ def handle_get_client_gallery_by_token(share_token, query_params=None):
             # Pagination metadata
             next_key = photos_response.get('LastEvaluatedKey')
             has_more = next_key is not None
+            
+            # 🔧 CRITICAL FIX: Recalculate accurate total favorites count
+            # Use real data from favorites table instead of potentially stale/buggy photos_table count
+            gallery_photos = enrich_photos_with_total_favorites(gallery_photos, gallery, photographer_email)
             
         except Exception as e:
             print(f"Error loading photos: {str(e)}")
@@ -501,4 +596,3 @@ def handle_get_client_gallery_by_token(share_token, query_params=None):
         import traceback
         traceback.print_exc()
         return create_response(500, {'error': 'Failed to load gallery'})
-

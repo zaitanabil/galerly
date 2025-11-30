@@ -18,6 +18,21 @@ from utils.duplicate_detector import (
 # Image validation removed - no PIL dependency needed
 from utils.cdn_urls import get_photo_urls  # CloudFront CDN URL helper
 
+def handle_get_photo(photo_id):
+    """Get single photo details (Public for client galleries)"""
+    try:
+        response = photos_table.get_item(Key={'id': photo_id})
+        if 'Item' not in response:
+            return create_response(404, {'error': 'Photo not found'})
+            
+        photo = response['Item']
+        return create_response(200, photo)
+    except Exception as e:
+        print(f"❌ Error getting photo: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': f'Failed to get photo: {str(e)}'})
+
 def handle_check_duplicates(gallery_id, user, event):
     """
     Check if uploaded photo is a duplicate based on METADATA ONLY
@@ -179,6 +194,8 @@ def handle_upload_photo(gallery_id, user, event):
             's3_key': s3_key_full,
             'url': photo_urls['url'],  # CloudFront URL for original
             'medium_url': photo_urls['medium_url'],  # CloudFront URL for medium (2000x2000)
+            'small_url': photo_urls['small_url'],  # CloudFront URL for small (800x600)
+            'large_url': photo_urls['large_url'],  # CloudFront URL for large (4000x4000)
             'thumbnail_url': photo_urls['thumbnail_url'],  # CloudFront URL for thumbnail (800x600)
             'title': body.get('title', ''),
             'description': body.get('description', ''),
@@ -194,28 +211,31 @@ def handle_upload_photo(gallery_id, user, event):
         
         photos_table.put_item(Item=photo)
         
-        # Update gallery photo count and storage
-        new_photo_count = gallery.get('photo_count', 0) + 1
-        current_storage_mb = float(gallery.get('storage_used', 0))
-        new_storage_mb = current_storage_mb + size_mb
-        
-        gallery['photo_count'] = new_photo_count
-        gallery['storage_used'] = Decimal(str(round(new_storage_mb, 2)))  # Use Decimal for DynamoDB
-        gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
-        galleries_table.put_item(Item=gallery)
-        
-        # Regenerate gallery ZIP file (synchronous - wait for completion)
+        # Update gallery photo count and storage ATOMICALLY
+        # Also set thumbnail_url if it doesn't exist (sets the preview image for new galleries)
         try:
-            from utils.zip_generator import generate_gallery_zip
-            print(f"🔄 Starting ZIP regeneration for gallery {gallery_id}...")
-            result = generate_gallery_zip(gallery_id)
-            if result.get('success'):
-                print(f"✅ ZIP regeneration completed: {result.get('photo_count')} photos, {result.get('zip_size_mb', 0):.2f}MB")
-            else:
-                print(f"⚠️  ZIP regeneration failed: {result.get('error', 'unknown')}")
+            galleries_table.update_item(
+                Key={'user_id': user['id'], 'id': gallery_id},
+                UpdateExpression="SET photo_count = if_not_exists(photo_count, :zero) + :inc, storage_used = if_not_exists(storage_used, :zero) + :size, updated_at = :time, thumbnail_url = if_not_exists(thumbnail_url, :thumb)",
+                ExpressionAttributeValues={
+                    ':inc': 1,
+                    ':size': Decimal(str(round(size_mb, 2))),
+                    ':time': datetime.utcnow().isoformat() + 'Z',
+                    ':thumb': photo_urls['thumbnail_url'],
+                    ':zero': 0
+                }
+            )
+        except Exception as e:
+            print(f"⚠️ Failed to update gallery stats: {e}")
+        
+        # Invalidate gallery ZIP file (delete it so it's regenerated on next download)
+        # This is much faster than regenerating it synchronously
+        try:
+            zip_key = f"{gallery_id}/gallery-all-photos.zip"
+            print(f"🗑️  Invalidating gallery ZIP: {zip_key}")
+            s3_client.delete_object(Bucket=S3_BUCKET, Key=zip_key)
         except Exception as zip_error:
-            print(f"⚠️  Failed to regenerate ZIP: {str(zip_error)}")
-            # Don't fail upload if ZIP generation fails
+            print(f"⚠️  Failed to invalidate ZIP: {str(zip_error)}")
         
         # EMAIL NOTIFICATIONS DISABLED FOR AUTO-SEND
         # Photographer must manually send batch notification via "Send Email Notification" button
@@ -327,6 +347,21 @@ def handle_add_comment(photo_id, user, body):
         if not comment_text:
             return create_response(400, {'error': 'Comment text required'})
         
+        # Determine author
+        if user:
+            author_name = user.get('username') or user.get('email') or 'Anonymous'
+            user_id = user['id']
+            user_email = user.get('email', '')
+        else:
+            # Guest user
+            author_name = body.get('author_name', 'Guest').strip() or 'Guest'
+            user_email = body.get('author_email', '').strip()
+            # Generate a consistent ID for guest if email provided, else random
+            if user_email:
+                user_id = f"guest-{user_email}"
+            else:
+                user_id = f"guest-{str(uuid.uuid4())[:8]}"
+        
         # Parse @mentions from comment text
         import re
         mention_pattern = r'@(\w+)'
@@ -337,12 +372,14 @@ def handle_add_comment(photo_id, user, body):
         comment = {
             'id': comment_id,
             'text': comment_text,
-            'author': user.get('username', user.get('email', 'Anonymous')),
-            'user_id': user['id'],
-            'user_email': user.get('email', ''),
+            'author': author_name,
+            'user_name': author_name, # Standardize on user_name
+            'user_id': user_id,
+            'user_email': user_email,
             'parent_id': body.get('parent_id'),  # For threaded comments (replies)
             'mentions': mentions,  # List of mentioned usernames
             'reactions': {},  # Format: {'like': [user_ids], 'heart': [user_ids]}
+            'annotation': body.get('annotation'), # Store annotation data (points, color, etc.)
             'is_edited': False,
             'created_at': datetime.utcnow().isoformat() + 'Z',
             'updated_at': datetime.utcnow().isoformat() + 'Z'
@@ -373,11 +410,14 @@ def handle_add_comment(photo_id, user, body):
                 if gallery_response.get('Items'):
                     gallery = gallery_response['Items'][0]
                     photographer_id = gallery.get('user_id')
-                    user_email_lower = user.get('email', '').lower()
-                    client_emails = [email.lower() for email in gallery.get('client_emails', [])]
                     
-                    # SCENARIO 1: CLIENT comments → Notify PHOTOGRAPHER (Client Feedback)
-                    if photographer_id and user['id'] != photographer_id and user_email_lower in client_emails:
+                    # Determine if commenter is the photographer
+                    is_photographer = False
+                    if user and photographer_id and user['id'] == photographer_id:
+                        is_photographer = True
+                    
+                    # SCENARIO 1: CLIENT/GUEST comments → Notify PHOTOGRAPHER (Client Feedback)
+                    if photographer_id and not is_photographer:
                         try:
                             from handlers.notification_handler import notify_client_feedback
                             
@@ -388,14 +428,17 @@ def handle_add_comment(photo_id, user, body):
                                 photographer_email = photographer.get('email')
                                 photographer_name = photographer.get('name') or photographer.get('username', 'Photographer')
                                 
-                                # Get client name from gallery
+                                # Get client name from gallery or comment
                                 client_name = gallery.get('client_name', 'Client')
+                                if author_name != 'Guest':
+                                    client_name = f"{author_name} ({client_name})"
+                                    
                                 gallery_name = gallery.get('name', 'Your gallery')
                                 
                                 # Build photo URL
                                 import os
                                 frontend_url = os.environ.get('FRONTEND_URL', 'https://galerly.com')
-                                photo_url = f"{frontend_url}/gallery?id={gallery_id}&photo={photo_id}"
+                                photo_url = f"{frontend_url}/gallery/{gallery_id}" # Direct to gallery as photo links might vary
                                 
                                 # Send notification (function checks preferences internally)
                                 notify_client_feedback(
@@ -413,7 +456,7 @@ def handle_add_comment(photo_id, user, body):
                             print(f"⚠️  Failed to send client feedback notification: {str(notif_error)}")
                     
                     # SCENARIO 2: PHOTOGRAPHER comments → Notify ALL CLIENTS (Custom Message)
-                    elif photographer_id and user['id'] == photographer_id:
+                    elif is_photographer:
                         try:
                             from handlers.notification_handler import notify_custom_message
                             
@@ -425,7 +468,7 @@ def handle_add_comment(photo_id, user, body):
                             # Build photo URL
                             import os
                             frontend_url = os.environ.get('FRONTEND_URL', 'https://galerly.com')
-                            photo_url = f"{frontend_url}/gallery?id={gallery_id}&photo={photo_id}"
+                            photo_url = f"{frontend_url}/client-gallery/{gallery_id}"
                             
                             # Send to ALL clients
                             for client_email in gallery.get('client_emails', []):
@@ -435,9 +478,9 @@ def handle_add_comment(photo_id, user, body):
                                         client_email=client_email,
                                         client_name=client_name,
                                         photographer_name=photographer_name,
-                                        subject=f"New message from {photographer_name}",
-                                        title=f"Message about {gallery_name}",
-                                        message=comment_text,
+                                        subject=f"New comment from {photographer_name}",
+                                        title=f"New comment on {gallery_name}",
+                                        message=f"\"{comment_text}\"",
                                         button_text="View Photo",
                                         button_url=photo_url
                                     )
@@ -450,7 +493,7 @@ def handle_add_comment(photo_id, user, body):
             except Exception as gallery_error:
                 print(f"⚠️  Failed to process notifications: {str(gallery_error)}")
         
-        print(f"✅ Comment added to photo {photo_id} by {user.get('email')} (parent: {comment.get('parent_id')})")
+        print(f"✅ Comment added to photo {photo_id} by {author_name} (parent: {comment.get('parent_id')})")
         return create_response(201, comment)
         
     except Exception as e:
@@ -786,30 +829,30 @@ def handle_delete_photos(gallery_id, user, event):
                 failed_count += 1
                 failed_photos.append({'id': photo_id, 'error': str(photo_error)})
         
-        # Update gallery photo count and storage
+        # Update gallery photo count and storage ATOMICALLY
         if deleted_count > 0:
-            new_photo_count = max(0, gallery.get('photo_count', 0) - deleted_count)
-            current_storage_mb = float(gallery.get('storage_used', 0))
-            new_storage_mb = max(0, current_storage_mb - total_size_mb_deleted)
-            
-            gallery['photo_count'] = new_photo_count
-            gallery['storage_used'] = Decimal(str(round(new_storage_mb, 2)))  # Use Decimal for DynamoDB
-            gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
-            galleries_table.put_item(Item=gallery)
-            print(f"✅ Updated gallery: photo_count={new_photo_count}, storage={new_storage_mb}MB (freed {total_size_mb_deleted}MB)")
-            
-            # Regenerate gallery ZIP file (synchronous - wait for completion)
             try:
-                from utils.zip_generator import generate_gallery_zip
-                print(f"🔄 Starting ZIP regeneration for gallery {gallery_id}...")
-                result = generate_gallery_zip(gallery_id)
-                if result.get('success'):
-                    print(f"✅ ZIP regeneration completed: {result.get('photo_count')} photos, {result.get('zip_size_mb', 0):.2f}MB")
-                else:
-                    print(f"⚠️  ZIP regeneration failed: {result.get('error', 'unknown')}")
+                galleries_table.update_item(
+                    Key={'user_id': user['id'], 'id': gallery_id},
+                    UpdateExpression="SET photo_count = photo_count - :dec, storage_used = storage_used - :size, updated_at = :time",
+                    ExpressionAttributeValues={
+                        ':dec': deleted_count,
+                        ':size': Decimal(str(round(total_size_mb_deleted, 2))),
+                        ':time': datetime.utcnow().isoformat() + 'Z'
+                    }
+                )
+                print(f"✅ Updated gallery stats (removed {deleted_count} photos, {total_size_mb_deleted}MB)")
+            except Exception as e:
+                print(f"⚠️ Failed to update gallery stats: {e}")
+            
+            # Invalidate gallery ZIP file (delete it so it's regenerated on next download)
+            # This is much faster than regenerating it synchronously
+            try:
+                zip_key = f"{gallery_id}/gallery-all-photos.zip"
+                print(f"🗑️  Invalidating gallery ZIP: {zip_key}")
+                s3_client.delete_object(Bucket=S3_BUCKET, Key=zip_key)
             except Exception as zip_error:
-                print(f"⚠️  Failed to regenerate ZIP: {str(zip_error)}")
-                # Don't fail deletion if ZIP generation fails
+                print(f"⚠️  Failed to invalidate ZIP: {str(zip_error)}")
         
         response_data = {
             'deleted_count': deleted_count,
@@ -920,7 +963,8 @@ def handle_send_batch_notification(gallery_id, user):
                     photographer_name,
                     gallery_name,
                     gallery_url,
-                    photo_count
+                    photo_count,
+                    user_id=user['id']  # Pass user_id for custom templates
                 )
                 
                 if email_sent:

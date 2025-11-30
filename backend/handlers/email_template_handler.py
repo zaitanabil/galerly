@@ -38,35 +38,10 @@ TEMPLATE_VARIABLES = {
 
 
 def check_pro_plan(user):
-    """Check if user has Pro plan - fetch fresh data from DB"""
-    user_email = user.get('email')
-    if not user_email:
-        print(f"⚠️  Email Templates - No email in user object")
-        return False
-    
-    # Fetch fresh user data from DynamoDB to get current plan
-    try:
-        response = users_table.get_item(Key={'email': user_email})
-        if 'Item' not in response:
-            print(f"⚠️  Email Templates - User not found in DB: {user_email}")
-            return False
-        
-        db_user = response['Item']
-        # Check both plan and subscription fields (for legacy data)
-        user_plan = (db_user.get('plan') or db_user.get('subscription') or '').lower()
-        
-        print(f"🔍 Email Templates - Pro Plan Check:")
-        print(f"   User ID: {user.get('id')}")
-        print(f"   User Email: {user_email}")
-        print(f"   User plan from DB: {db_user.get('plan')}")
-        print(f"   User subscription from DB: {db_user.get('subscription')}")
-        print(f"   User plan (resolved): {user_plan}")
-        print(f"   Is Pro: {user_plan in ['pro']}")
-        
-        return user_plan in ['pro']
-    except Exception as e:
-        print(f"❌ Email Templates - Error checking plan: {str(e)}")
-        return False
+    """Check if user has Pro/Ultimate plan feature"""
+    from handlers.subscription_handler import get_user_features
+    features, _, _ = get_user_features(user)
+    return features.get('email_templates', False)
 
 
 def handle_list_templates(user):

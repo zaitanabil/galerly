@@ -6,6 +6,18 @@ This simulates steps 9-15 of the production pipeline
 import os
 import io
 from PIL import Image
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except ImportError:
+    print("⚠️ pillow-heif not installed, HEIC support disabled")
+
+try:
+    import rawpy
+    import numpy as np
+except ImportError:
+    rawpy = None
+
 from utils.config import s3_client, S3_BUCKET, S3_RENDITIONS_BUCKET
 
 # Rendition sizes matching production
@@ -16,7 +28,7 @@ RENDITION_SIZES = {
     'large': (4000, 4000)          # High-res zoom
 }
 
-def generate_renditions(s3_key, bucket=None):
+def generate_renditions(s3_key, bucket=None, image_data=None):
     """
     Generate all renditions for an uploaded image
     Steps 10-15: Process, generate, store, update database
@@ -24,6 +36,7 @@ def generate_renditions(s3_key, bucket=None):
     Args:
         s3_key: S3 key of original image (gallery_id/photo_id.ext)
         bucket: Source bucket (defaults to S3_BUCKET)
+        image_data: Optional raw bytes of image (avoids re-download)
     
     Returns:
         dict with rendition URLs and metadata
@@ -34,12 +47,60 @@ def generate_renditions(s3_key, bucket=None):
     try:
         print(f"📸 Generating renditions for {s3_key}...")
         
-        # Step 10a: Download original from S3
-        response = s3_client.get_object(Bucket=bucket, Key=s3_key)
-        original_data = response['Body'].read()
+        # Step 10a: Get image data (use provided or download)
+        if image_data is None:
+            response = s3_client.get_object(Bucket=bucket, Key=s3_key)
+            original_data = response['Body'].read()
+        else:
+            original_data = image_data
         
         # Step 10b: Open image with PIL
+        try:
+            # Try standard PIL open (works for JPEG, PNG)
+            # Create a NEW BytesIO for each attempt to avoid stream position issues
         original_image = Image.open(io.BytesIO(original_data))
+            
+            # Verify it's actually loaded
+            original_image.load()
+        except Exception as e:
+            print(f"⚠️ Standard PIL open failed for {s3_key}: {str(e)}")
+            
+            # If standard open fails, try explicit pillow_heif for HEIC
+            heic_success = False
+            try:
+                import pillow_heif
+                # Check if it's HEIC content
+                if pillow_heif.is_supported(original_data):
+                    print(f"🔄 Detected HEIC content for {s3_key}, using pillow_heif...")
+                    heif_file = pillow_heif.read_heif(io.BytesIO(original_data))
+                    original_image = Image.frombytes(
+                        heif_file.mode,
+                        heif_file.size,
+                        heif_file.data,
+                        "raw",
+                    )
+                    heic_success = True
+                    print(f"✅ Successfully opened HEIC with pillow_heif")
+            except ImportError:
+                print("⚠️ pillow-heif not installed or import failed")
+            except Exception as heic_e:
+                print(f"❌ explicit pillow_heif failed: {str(heic_e)}")
+
+            if not heic_success:
+                # If both failed, try rawpy for RAW formats
+                if rawpy:
+                    try:
+                        print(f"🔄 PIL/HEIC failed, trying rawpy for {s3_key}...")
+                        with rawpy.imread(io.BytesIO(original_data)) as raw:
+                            rgb = raw.postprocess()
+                            original_image = Image.fromarray(rgb)
+                        print(f"✅ Successfully opened RAW with rawpy")
+                    except Exception as raw_e:
+                        print(f"❌ rawpy also failed: {str(raw_e)}")
+                        # Re-raise the original error if everything fails
+                        raise e
+                else:
+                    raise e
         
         # Convert RGBA to RGB if needed
         if original_image.mode == 'RGBA':
@@ -107,11 +168,11 @@ def generate_renditions(s3_key, bucket=None):
         }
 
 
-def process_upload_async(s3_key, bucket=None):
+def process_upload_async(s3_key, bucket=None, image_data=None):
     """
     Simulate async processing queue (Step 9)
     In production, this would be triggered by S3 event → SQS → Lambda
     For LocalStack, we call it synchronously after upload
     """
-    return generate_renditions(s3_key, bucket)
+    return generate_renditions(s3_key, bucket, image_data)
 

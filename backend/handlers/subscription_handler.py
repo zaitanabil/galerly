@@ -3,57 +3,227 @@ Subscription management and plan enforcement
 """
 from datetime import datetime
 from boto3.dynamodb.conditions import Key
-from utils.config import galleries_table, users_table, dynamodb
+from utils.config import galleries_table, users_table, dynamodb, features_table, user_features_table
 from utils.response import create_response
 from handlers.billing_handler import PLANS
 
 subscriptions_table = dynamodb.Table('galerly-subscriptions')
 
 
+def get_user_features(user):
+    """
+    Get consolidated features for a user.
+    Merges plan defaults with specific overrides from user_features table.
+    """
+    try:
+        user_id = user.get('id')
+        
+        # 1. Get user plan from DB
+        user_response = {}
+        if user.get('email'):
+            try:
+                user_response = users_table.get_item(Key={'email': user['email']})
+            except Exception as e:
+                print(f"Error fetching user by email: {e}")
+        
+        if 'Item' not in user_response and user_id:
+            # Fallback to querying by ID using GSI
+            try:
+                resp = users_table.query(
+                    IndexName='UserIdIndex', 
+                    KeyConditionExpression=Key('id').eq(user_id)
+                )
+                if resp.get('Items'):
+                    user_response = {'Item': resp['Items'][0]}
+            except Exception as e:
+                print(f"Error fetching user by ID: {e}")
+        
+        # 2. Get manual feature overrides/assignments
+        user_features_items = []
+        if user_id:
+            try:
+                response = user_features_table.query(
+                    KeyConditionExpression=Key('user_id').eq(user_id)
+                )
+                user_features_items = response.get('Items', [])
+            except Exception as e:
+                print(f"Error fetching feature overrides: {e}")
+        
+        # 3. Get all feature definitions to map feature_id -> values
+        
+        # Fetch user details to get plan
+        user_plan_id = 'free'
+        if 'Item' in user_response:
+            user_plan_id = user_response['Item'].get('plan') or user_response['Item'].get('subscription') or 'free'
+        else:
+            # Fallback to what's in the user object if DB fetch failed
+            user_plan_id = user.get('plan') or user.get('subscription') or 'free'
+        
+        # Normalize plan
+        from utils.subscription_validator import LEGACY_PLAN_MAP
+        normalized_plan_id = LEGACY_PLAN_MAP.get(user_plan_id, user_plan_id)
+        plan_def = PLANS.get(normalized_plan_id, PLANS.get('free'))
+        
+        # Start with defaults from the plan definition
+        features = {
+            'storage_gb': plan_def.get('storage_gb', 3),
+            'galleries_per_month': plan_def.get('galleries_per_month', 5),
+            'video_minutes': 0, 
+            'video_quality': 'hd', # hd or 4k
+            'remove_branding': False,
+            'custom_domain': False,
+            'raw_support': False,
+            'analytics_level': 'basic', # basic, advanced, pro
+            'email_templates': False,
+            'client_favorites': False,
+            'seo_tools': False,
+            'raw_vault': False
+        }
+        
+        # Collect all feature IDs: from plan definition + manual overrides
+        feature_ids = set(plan_def.get('feature_ids', []))
+        
+        # Add overrides
+        for item in user_features_items:
+            fid = item.get('feature_id')
+            if fid:
+                feature_ids.add(fid)
+                
+        # Resolve feature IDs to limits
+        # We process them in order of "power" to ensure upgrades override defaults
+        
+        # Storage Resolution
+        if 'storage_unlimited' in feature_ids:
+            features['storage_gb'] = -1
+        elif 'storage_1tb' in feature_ids or 'storage_1000gb' in feature_ids:
+            features['storage_gb'] = 1000
+        elif 'storage_200gb' in feature_ids:
+            features['storage_gb'] = 200
+        elif 'storage_100gb' in feature_ids:
+            features['storage_gb'] = 100
+        elif 'storage_50gb' in feature_ids:
+            features['storage_gb'] = 50
+        elif 'storage_10gb' in feature_ids:
+            features['storage_gb'] = 10
+        elif 'storage_3gb' in feature_ids:
+            features['storage_gb'] = 3
+        elif 'storage_1gb' in feature_ids:
+            features['storage_gb'] = 1
+            
+        # Gallery Limits
+        if 'unlimited_galleries' in feature_ids:
+            features['galleries_per_month'] = -1
+            
+        # Video Support
+        if 'video_4k_unlimited' in feature_ids:
+            features['video_minutes'] = -1
+            features['video_quality'] = '4k'
+        elif 'video_10hr_4k' in feature_ids:
+            features['video_minutes'] = 600
+            features['video_quality'] = '4k'
+        elif 'video_4hr_4k' in feature_ids:
+            features['video_minutes'] = 240
+            features['video_quality'] = '4k'
+        elif 'video_2hr_4k' in feature_ids:
+            features['video_minutes'] = 120
+            features['video_quality'] = '4k'
+        elif 'video_1hr_hd' in feature_ids or 'video_60min_hd' in feature_ids:
+            features['video_minutes'] = 60
+            features['video_quality'] = 'hd'
+        elif 'video_60min_4k' in feature_ids:
+            features['video_minutes'] = 60
+            features['video_quality'] = '4k'
+        elif 'video_30min_4k' in feature_ids:
+            features['video_minutes'] = 30
+            features['video_quality'] = '4k'
+        elif 'video_30min_hd' in feature_ids:
+            features['video_minutes'] = 30
+            features['video_quality'] = 'hd'
+        elif 'video_15min_hd' in feature_ids:
+            features['video_minutes'] = 15
+            features['video_quality'] = 'hd'
+        elif 'video_10min_hd' in feature_ids:
+            features['video_minutes'] = 10
+            features['video_quality'] = 'hd'
+        elif 'video_none' in feature_ids:
+            features['video_minutes'] = 0
+            features['video_quality'] = 'none'
+            
+        # Branding & Domain
+        if 'no_branding' in feature_ids or 'white_label' in feature_ids:
+            features['remove_branding'] = True
+        elif 'branding_on' in feature_ids:
+            features['remove_branding'] = False
+            
+        if 'watermarking' in feature_ids or normalized_plan_id in ['plus', 'pro', 'ultimate']:
+            features['watermarking'] = True
+            
+        if 'custom_domain' in feature_ids:
+            features['custom_domain'] = True
+            
+        # Advanced Features
+        if 'client_invoicing' in feature_ids or normalized_plan_id in ['pro', 'ultimate']:
+            features['client_invoicing'] = True
+            
+        # Client Favorites (Starter+)
+        if 'client_favorites' in feature_ids or normalized_plan_id in ['starter', 'plus', 'pro', 'ultimate']:
+            features['client_favorites'] = True
+
+        if 'raw_support' in feature_ids or 'raw_vault' in feature_ids:
+            features['raw_support'] = True
+            
+        if 'raw_vault' in feature_ids:
+            features['raw_vault'] = True
+
+        if 'email_templates' in feature_ids or normalized_plan_id in ['pro', 'ultimate']:
+            features['email_templates'] = True
+            
+        # SEO Tools (Pro & Ultimate)
+        if 'seo_tools' in feature_ids or normalized_plan_id in ['pro', 'ultimate']:
+            features['seo_tools'] = True
+            
+        # Analytics Level
+        if 'analytics_pro' in feature_ids or 'visitor_insights' in feature_ids:
+            features['analytics_level'] = 'pro'
+        elif 'analytics_advanced' in feature_ids:
+            features['analytics_level'] = 'advanced'
+            
+        return features, normalized_plan_id, plan_def['name']
+
+    except Exception as e:
+        print(f"Error fetching user features: {e}")
+        # Fallback to defaults
+        return {
+            'storage_gb': 5,
+            'galleries_per_month': 5
+        }, 'free', 'Free'
+
+
 def get_user_plan_limits(user):
     """Get plan limits for user - fetches plan from DynamoDB to ensure latest status"""
     # Get user's current plan directly from DynamoDB (not from session cache)
-    # This ensures we have the latest subscription status after webhook updates
     try:
-        user_email = user.get('email')
-        if user_email:
-            user_response = users_table.get_item(Key={'email': user_email})
-            if 'Item' in user_response:
-                db_user = user_response['Item']
-                # Use 'plan' field (new), fallback to 'subscription' (legacy)
-                plan_id = db_user.get('plan') or db_user.get('subscription')
-                print(f"📋 get_user_plan_limits: User {user_email} plan from DB: {plan_id}")
-            else:
-                plan_id = user.get('plan') or user.get('subscription')
-                print(f"⚠️  User not found in DB, using session plan: {plan_id}")
-        else:
-            plan_id = user.get('plan') or user.get('subscription')
-            print(f"⚠️  No email in user object, using session plan: {plan_id}")
+        # Fetch consolidated features using new logic
+        features, plan_id, plan_name = get_user_features(user)
+        
+        return {
+            'plan': plan_id,
+            'plan_name': plan_name,
+            'galleries_per_month': features['galleries_per_month'],
+            'storage_gb': features['storage_gb'],
+            'features': features # Include raw features dict if needed
+        }
     except Exception as e:
-        print(f"⚠️  Error fetching user from DB: {str(e)}, using session plan")
-        plan_id = user.get('plan') or user.get('subscription')
-    
-    # If no plan found, default to free
-    if not plan_id:
-        plan_id = 'free'
-    
-    # Normalize legacy plan names
-    from utils.subscription_validator import LEGACY_PLAN_MAP
-    normalized_plan_id = LEGACY_PLAN_MAP.get(plan_id, plan_id)
-    
-    plan = PLANS.get(normalized_plan_id)
-    if not plan:
-        # Fallback to free plan if plan_id is not recognized
-        normalized_plan_id = 'free'
-        plan = PLANS.get('free')
-    
+        print(f"⚠️  Error in get_user_plan_limits: {str(e)}")
+        # Fallback
     return {
-        'plan': normalized_plan_id,  # Return normalized plan ID
-        'plan_name': plan['name'],
-        'galleries_per_month': plan['galleries_per_month'],
-        'storage_gb': plan['storage_gb'],
-        'features': plan['features']
+            'plan': 'free',
+            'plan_name': 'Free',
+            'galleries_per_month': 5,
+            'storage_gb': 5,
+            'features': {}
     }
+
 
 
 def check_gallery_limit(user):
@@ -194,4 +364,3 @@ def enforce_storage_limit(user, additional_mb):
         return False, f"Insufficient storage. You have {storage_limit['remaining_gb']:.2f} GB remaining. Upgrade to {plan_limits['plan_name']} for more storage."
     
     return True, None
-

@@ -5,6 +5,12 @@ Automatically detects LocalStack endpoint and configures boto3 accordingly
 import os
 import boto3
 from botocore.config import Config
+from dotenv import load_dotenv
+
+# Load environment variables from .env.local first (for local dev overrides), then .env
+# This needs to happen before any get_required_env calls
+load_dotenv('.env.local')
+load_dotenv()
 
 def get_required_env(key):
     """Get required environment variable or raise error"""
@@ -122,6 +128,11 @@ analytics_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_ANALYTICS'))
 client_favorites_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_CLIENT_FAVORITES'))
 client_feedback_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_CLIENT_FEEDBACK'))
 email_templates_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_EMAIL_TEMPLATES'))
+features_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_FEATURES'))
+user_features_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_USER_FEATURES'))
+invoices_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_INVOICES'))
+appointments_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_APPOINTMENTS'))
+contracts_table = dynamodb.Table(get_required_env('DYNAMODB_TABLE_CONTRACTS'))
 
 # Debug logging for LocalStack
 if IS_LOCAL and AWS_ENDPOINT_URL:

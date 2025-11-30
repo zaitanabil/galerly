@@ -1,9 +1,12 @@
 """
 Portfolio customization handlers
 """
+from datetime import datetime
 from boto3.dynamodb.conditions import Key
 from utils.config import users_table, galleries_table
 from utils.response import create_response
+from handlers.subscription_handler import get_user_features
+import dns.resolver
 
 def handle_get_portfolio_settings(user):
     """Get portfolio customization settings for current user"""
@@ -33,7 +36,13 @@ def handle_get_portfolio_settings(user):
             }),
             'featured_galleries': user_data.get('portfolio_featured_galleries', []),
             'portfolio_sections': user_data.get('portfolio_sections', []),
-            'custom_domain': user_data.get('portfolio_custom_domain', '')
+            'custom_domain': user_data.get('portfolio_custom_domain', ''),
+            'seo_settings': user_data.get('portfolio_seo', {
+                'title': '',
+                'description': '',
+                'keywords': '',
+                'og_image': ''
+            })
         }
         
         return create_response(200, portfolio_settings)
@@ -103,6 +112,11 @@ def handle_update_portfolio_settings(user, body):
         if 'custom_domain' in body:
             update_expressions.append('portfolio_custom_domain = :custom_domain')
             expression_values[':custom_domain'] = body['custom_domain']
+            
+        # SEO
+        if 'seo_settings' in body:
+            update_expressions.append('portfolio_seo = :seo')
+            expression_values[':seo'] = body['seo_settings']
         
         # Always update updated_at
         from datetime import datetime
@@ -162,7 +176,13 @@ def handle_get_public_portfolio(photographer_id):
                 'twitter': ''
             }),
             'featured_galleries': photographer.get('portfolio_featured_galleries', []),
-            'portfolio_sections': photographer.get('portfolio_sections', [])
+            'portfolio_sections': photographer.get('portfolio_sections', []),
+            'seo_settings': photographer.get('portfolio_seo', {
+                'title': '',
+                'description': '',
+                'keywords': '',
+                'og_image': ''
+            })
         }
         
         # Get photographer's galleries
@@ -211,3 +231,87 @@ def handle_get_public_portfolio(photographer_id):
         traceback.print_exc()
         return create_response(500, {'error': 'Failed to load portfolio'})
 
+def handle_verify_domain(user, body):
+    """
+    Verify custom domain ownership via DNS CNAME check
+    Requires 'custom_domain' feature (Plus plan and above)
+    """
+    try:
+        # 1. Check Plan Limits
+        features, _, _ = get_user_features(user)
+        if not features.get('custom_domain', False):
+            return create_response(403, {
+                'error': 'Custom domains are available on Plus, Pro, and Ultimate plans. Please upgrade to use this feature.',
+                'upgrade_required': True
+            })
+
+        domain = body.get('domain', '').strip().lower()
+        if not domain or '.' not in domain:
+             return create_response(400, {'error': 'Invalid domain format. Example: photos.yourdomain.com'})
+        
+        # Remove protocol if present
+        domain = domain.replace('http://', '').replace('https://', '').split('/')[0]
+        
+        # 2. Check for Domain Collision
+        # Scan users table to see if domain is already taken
+        # (Note: In high scale, this should be a GSI or separate Domains table)
+        scan_response = users_table.scan(
+            FilterExpression='portfolio_custom_domain = :d',
+            ExpressionAttributeValues={':d': domain}
+        )
+        
+        existing_users = scan_response.get('Items', [])
+        if existing_users:
+            # If taken by SOMEONE ELSE
+            if existing_users[0]['id'] != user['id']:
+                return create_response(409, {'error': 'This domain is already connected to another account.'})
+        
+        # 3. Verify DNS CNAME
+        # Expected target: cname.galerly.com (or similar infrastructure entry point)
+        EXPECTED_TARGETS = ['cname.galerly.com.', 'galerly.com.', 'domains.galerly.com.']
+        verified = False
+        
+        try:
+            answers = dns.resolver.resolve(domain, 'CNAME')
+            for rdata in answers:
+                cname_target = str(rdata.target).lower()
+                # Check if target matches any of our expected endpoints
+                # DNS python returns trailing dot
+                if any(t in cname_target for t in EXPECTED_TARGETS):
+                    verified = True
+                    break
+        except dns.resolver.NoAnswer:
+            return create_response(400, {'error': 'No CNAME record found. Please add a CNAME record pointing to cname.galerly.com'})
+        except dns.resolver.NXDOMAIN:
+            return create_response(400, {'error': 'Domain does not exist. Please check the spelling.'})
+        except Exception as e:
+            print(f"DNS Error: {str(e)}")
+            # In LocalStack/Dev, we might want to bypass strict DNS check or mock it
+            # For now, we fail safe
+            return create_response(400, {'error': f'DNS verification failed: {str(e)}'})
+
+        if not verified:
+            return create_response(400, {
+                'error': f'CNAME verification failed. Your domain points to {cname_target if "cname_target" in locals() else "unknown"}, but should point to cname.galerly.com'
+            })
+        
+        # 4. Save if verified
+        users_table.update_item(
+            Key={'email': user['email']},
+            UpdateExpression='SET portfolio_custom_domain = :d, updated_at = :now',
+            ExpressionAttributeValues={
+                ':d': domain,
+                ':now': datetime.utcnow().isoformat() + 'Z'
+            }
+        )
+        
+        return create_response(200, {
+            'verified': True, 
+            'domain': domain, 
+            'message': 'Domain verified and connected successfully. HTTPS certificates will be provisioned shortly.'
+        })
+    except Exception as e:
+        print(f"Error verifying domain: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': 'Failed to verify domain'})
