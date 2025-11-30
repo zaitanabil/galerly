@@ -43,7 +43,7 @@ This React application is a complete rewrite of the original HTML/JS frontend, f
 ## Architecture
 
 ```
-frontend react/
+frontend/
 ├── src/
 │   ├── components/        # Reusable React components
 │   │   ├── Header.tsx

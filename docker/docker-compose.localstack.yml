@@ -99,10 +99,10 @@ services:
     restart: unless-stopped
 
   # React frontend with Vite dev server
-  frontend_react:
-    container_name: ${FRONTEND_CONTAINER_NAME:-galerly-frontend-react-local}
+  frontend:
+    container_name: ${FRONTEND_CONTAINER_NAME:-galerly-frontend-local}
     build:
-      context: ../frontend react
+      context: ../frontend
       dockerfile: Dockerfile.local
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
@@ -124,7 +124,7 @@ services:
       - VITE_ENABLE_ANALYTICS=false
       - VITE_ENABLE_ERROR_REPORTING=false
     volumes:
-      - ../frontend react:/app
+      - ../frontend:/app
       - /app/node_modules
     depends_on:
       - backend

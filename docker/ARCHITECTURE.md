@@ -36,7 +36,7 @@
 │  │  └── recorded_api_calls/    # API call recordings            │   │
 │  │                                                                 │   │
 │  │  backend/                   # Backend code (volume mount)      │   │
-│  │  frontend react/            # Frontend code (volume mount)     │   │
+│  │  frontend/                  # Frontend code (volume mount)     │   │
 │  └────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────┘
 ```
@@ -100,7 +100,7 @@ Host: backend/
 
 ### Frontend Container
 ```
-Host: frontend react/
+Host: frontend/
   │
   ├──► Container: /app
   │
@@ -129,7 +129,7 @@ Host: localstack_data/
 - Containers can resolve each other by name:
   - `localstack` → LocalStack container
   - `backend` → Backend container
-  - `frontend_react` → Frontend container
+  - `frontend` → Frontend container
 
 ### Port Mapping
 ```
@@ -138,7 +138,7 @@ Container Name         Internal Port    External Port    Purpose
 galerly-localstack     4566            → 4566            AWS APIs
 galerly-backend-local  5001            → 5001            Flask API
 galerly-frontend-      5173            → 5173            Vite Dev
-  react-local                                            Server
+  local                                                  Server
 ```
 
 ## Environment Variables

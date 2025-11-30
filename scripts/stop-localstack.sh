@@ -18,8 +18,8 @@ fi
 echo "🐳 Stopping all Docker containers..."
 docker-compose -f docker/docker-compose.localstack.yml down 2>/dev/null || {
     echo "⚠️  docker-compose down failed, trying to stop containers manually..."
-    docker stop galerly-frontend-react-local galerly-backend-local galerly-localstack 2>/dev/null || true
-    docker rm galerly-frontend-react-local galerly-backend-local galerly-localstack 2>/dev/null || true
+    docker stop galerly-frontend-local galerly-backend-local galerly-localstack 2>/dev/null || true
+    docker rm galerly-frontend-local galerly-backend-local galerly-localstack 2>/dev/null || true
 }
 echo ""
 
