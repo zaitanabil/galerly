@@ -166,11 +166,6 @@ export default function PricingPage() {
           description: 'Advanced settings to optimize your galleries and portfolio for search engines.',
           values: [false, false, false, true, true] 
         },
-        { 
-          name: 'Developer API', 
-          description: 'Programmatic access to your data for custom integrations.',
-          values: [false, false, false, false, true] 
-        },
       ]
     },
     {
@@ -179,12 +174,7 @@ export default function PricingPage() {
         { 
           name: 'Support Level', 
           description: 'Priority of your support tickets and access to live chat.',
-          values: ['Community', 'Standard', 'Priority', 'Priority', 'VIP + Concierge'] 
-        },
-        { 
-          name: 'Onboarding Call', 
-          description: '1-on-1 setup call with a specialist to migrate your data and configure your account.',
-          values: [false, false, false, false, true] 
+          values: ['Priority', 'Priority', 'Priority', 'Priority', 'Priority'] 
         },
       ]
     }
@@ -239,76 +229,76 @@ export default function PricingPage() {
 
           {/* Pricing Table - Desktop */}
           <div className="hidden lg:block overflow-x-auto pb-12">
-            <div className="min-w-[1000px]">
+            <div className="min-w-[1200px]">
                   {/* Sticky Header */}
               <div className="sticky top-[56px] z-20 bg-white/95 backdrop-blur-xl border-b border-gray-200 shadow-sm transition-all duration-300">
-                <div className="grid grid-cols-[280px_repeat(5,1fr)] gap-4 p-6 items-end">
-                  <div className="col-span-1 pb-4">
+                <div className="grid grid-cols-[240px_repeat(5,1fr)] p-0">
+                  <div className="col-span-1 p-6 flex items-end">
                     <span className="text-xs font-bold text-[#1D1D1F]/40 uppercase tracking-[0.2em]">Features</span>
                   </div>
                   {plans.map((plan) => (
-                    <div key={plan.id} className="col-span-1 flex flex-col items-center text-center relative pb-2">
-                  {plan.badge && (
-                        <div className="absolute -top-10 bg-[#0066CC] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-sm">
-                      {plan.badge}
-                    </div>
-                  )}
-                      <h3 className="text-lg font-bold text-[#1D1D1F] mb-1">{plan.name}</h3>
-                      <div className="mb-3 flex items-baseline justify-center">
+                    <div key={plan.id} className={`col-span-1 flex flex-col items-center text-center relative p-6 border-l border-gray-100 ${plan.id === 'plus' ? 'bg-blue-50/30' : ''}`}>
+                      {plan.badge && (
+                        <div className="absolute -top-4 bg-gradient-to-r from-[#0066CC] to-[#0099ff] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg shadow-blue-500/30">
+                          {plan.badge}
+                        </div>
+                      )}
+                      <h3 className={`text-lg font-bold mb-1 ${plan.id === 'plus' ? 'text-[#0066CC]' : 'text-[#1D1D1F]'}`}>{plan.name}</h3>
+                      <div className="mb-4 flex items-baseline justify-center">
                         <span className="text-2xl font-bold text-[#1D1D1F]">
                           ${billingPeriod === 'monthly' ? plan.price.monthly : plan.price.annual}
                         </span>
                         {plan.price.monthly > 0 && <span className="text-xs text-[#1D1D1F]/60 ml-0.5">/mo</span>}
                       </div>
                       <Link
-                        to={`/register?plan=${plan.id}`}
+                        to={`/register?plan=${plan.id}&interval=${billingPeriod}`}
                         className={`
-                          w-full py-2.5 rounded-full text-sm font-semibold transition-all
+                          w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center
                           ${plan.id === 'plus' 
-                            ? 'bg-[#0066CC] text-white hover:bg-[#0052A3] shadow-md shadow-blue-500/20' 
+                            ? 'bg-gradient-to-r from-[#0066CC] to-[#0052A3] text-white hover:shadow-lg hover:shadow-blue-500/25 hover:-translate-y-0.5' 
                             : plan.id === 'pro' || plan.id === 'ultimate'
-                              ? 'bg-[#1D1D1F] text-white hover:bg-black shadow-md'
-                              : 'bg-[#F5F5F7] text-[#1D1D1F] hover:bg-[#E5E5E7]'
+                              ? 'bg-[#1D1D1F] text-white hover:bg-black hover:shadow-lg hover:-translate-y-0.5'
+                              : 'bg-gray-100 text-[#1D1D1F] hover:bg-gray-200'
                           }
                         `}
                       >
-                        {plan.price.monthly === 0 ? 'Start' : 'Choose'}
+                        {plan.price.monthly === 0 ? 'Start Free' : 'Choose'}
                       </Link>
                     </div>
                   ))}
                 </div>
-                    </div>
+              </div>
 
               {/* Table Body */}
-              <div className="bg-white rounded-b-3xl border-x border-b border-gray-200">
+              <div className="bg-white rounded-b-3xl border-x border-b border-gray-200 shadow-sm">
                 {features.map((category) => (
                   <div key={category.category} className="group">
-                    <div className="px-6 py-3 bg-[#F5F5F7]/80 border-y border-gray-200/50">
-                      <h4 className="font-semibold text-[#1D1D1F] text-sm tracking-tight">{category.category}</h4>
+                    <div className="px-6 py-3 bg-gray-50/80 border-y border-gray-100">
+                      <h4 className="font-bold text-[#1D1D1F] text-xs uppercase tracking-wider">{category.category}</h4>
                     </div>
                     {category.items.map((feature, featIndex) => (
                       <div 
                         key={feature.name} 
                         className={`
-                          grid grid-cols-[280px_repeat(5,1fr)] gap-4 px-6 py-4 items-center transition-colors hover:bg-blue-50/30
-                          ${featIndex !== category.items.length - 1 ? 'border-b border-gray-100' : ''}
+                          grid grid-cols-[240px_repeat(5,1fr)] items-center transition-colors hover:bg-gray-50
+                          ${featIndex !== category.items.length - 1 ? 'border-b border-gray-50' : ''}
                         `}
                       >
-                        <div className="col-span-1 flex items-center gap-2 pr-4">
-                          <span className="text-sm font-medium text-[#1D1D1F]/80 leading-snug">{feature.name}</span>
+                        <div className="col-span-1 flex items-center gap-2 p-6 pr-4">
+                          <span className="text-sm font-medium text-[#1D1D1F] leading-snug">{feature.name}</span>
                           <div className="group/tooltip relative cursor-help">
-                            <HelpCircle className="w-3.5 h-3.5 text-[#1D1D1F]/20 hover:text-[#0066CC] transition-colors" />
-                            <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-64 p-3 bg-[#1D1D1F] text-white text-xs leading-relaxed rounded-lg opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                            <HelpCircle className="w-3.5 h-3.5 text-gray-300 hover:text-[#0066CC] transition-colors" />
+                            <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-56 p-3 bg-[#1D1D1F] text-white text-xs leading-relaxed rounded-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
                               {feature.description}
                             </div>
                           </div>
                         </div>
                         {feature.values.map((val, i) => (
-                          <div key={i} className="col-span-1 flex justify-center text-center px-2">
+                          <div key={i} className={`col-span-1 flex justify-center text-center p-6 h-full items-center border-l border-gray-50 ${i === 2 ? 'bg-blue-50/10' : ''}`}>
                             {typeof val === 'boolean' ? (
                               val ? (
-                                <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
-                                  <Check className="w-3.5 h-3.5 text-green-600" />
+                                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shadow-sm">
+                                  <Check className="w-3.5 h-3.5 text-[#0066CC]" strokeWidth={3} />
                                 </div>
                               ) : (
                                 <Minus className="w-4 h-4 text-gray-200" />
@@ -324,17 +314,17 @@ export default function PricingPage() {
                     ))}
                   </div>
                 ))}
-                    </div>
+              </div>
 
               {/* Bottom CTA */}
-              <div className="grid grid-cols-[280px_repeat(5,1fr)] gap-4 p-8 border-t border-gray-200 bg-gray-50 rounded-b-3xl mt-[-1px]">
+              <div className="grid grid-cols-[240px_repeat(5,1fr)] p-0 border-t border-gray-200 bg-gray-50/50 rounded-b-3xl mt-[-1px]">
                 <div className="col-span-1"></div>
                 {plans.map((plan) => (
-                  <div key={plan.id} className="col-span-1 text-center">
+                  <div key={plan.id} className={`col-span-1 text-center p-6 border-l border-gray-200/50 ${plan.id === 'plus' ? 'bg-blue-50/30' : ''}`}>
                     <Link
-                      to={`/register?plan=${plan.id}`}
+                      to={`/register?plan=${plan.id}&interval=${billingPeriod}`}
                       className={`
-                        inline-flex items-center gap-2 text-sm font-medium hover:underline justify-center
+                        inline-flex items-center gap-2 text-sm font-bold hover:underline justify-center
                         ${plan.id === 'plus' ? 'text-[#0066CC]' : 'text-[#1D1D1F]'}
                       `}
                     >
@@ -374,7 +364,7 @@ export default function PricingPage() {
                 </div>
 
                 <Link
-                  to={`/register?plan=${plan.id}`}
+                  to={`/register?plan=${plan.id}&interval=${billingPeriod}`}
                   className={`
                     w-full py-3.5 rounded-full text-center font-semibold block mb-8 transition-all
                     ${plan.id === 'plus' 

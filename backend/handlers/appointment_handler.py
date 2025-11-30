@@ -32,7 +32,7 @@ def handle_create_appointment(user, body):
         
         if not features.get('scheduler'):
              return create_response(403, {
-                 'error': 'Scheduling is available on Pro and Ultimate plans.',
+                 'error': 'Scheduling is available on the Ultimate plan.',
                  'upgrade_required': True
              })
 

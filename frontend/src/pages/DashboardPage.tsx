@@ -393,18 +393,6 @@ export default function DashboardPage() {
                   <Zap className="w-5 h-5 text-amber-500 fill-amber-500" />
                   </div>
                 <div>
-                  {user?.plan === 'ultimate' ? (
-                      <>
-                        <h3 className="font-medium text-[#1D1D1F] mb-1">VIP Concierge</h3>
-                        <p className="text-sm text-[#1D1D1F]/70 mb-3 leading-relaxed">
-                            As an Ultimate member, you get priority onboarding and migration assistance.
-                        </p>
-                        <a href="mailto:vip@galerly.com?subject=Book Onboarding" className="text-sm font-medium text-[#0066CC] hover:underline flex items-center gap-1">
-                            Book Onboarding Call <ChevronRight className="w-3 h-3" />
-                        </a>
-                      </>
-                  ) : (
-                      <>
                   <h3 className="font-medium text-[#1D1D1F] mb-1">Pro Tip</h3>
                   <p className="text-sm text-[#1D1D1F]/70 mb-3 leading-relaxed">
                     Galleries with <span className="font-medium text-[#0066CC]">Custom Domains</span> get 40% more engagement.
@@ -412,8 +400,6 @@ export default function DashboardPage() {
                   <Link to="/settings" className="text-sm font-medium text-[#0066CC] hover:underline flex items-center gap-1">
                     Configure Domain <ChevronRight className="w-3 h-3" />
                   </Link>
-                      </>
-                  )}
                 </div>
               </div>
             </div>

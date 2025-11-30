@@ -27,14 +27,14 @@ def handle_list_contracts(user, query_params=None):
 def handle_create_contract(user, body):
     """Create draft contract"""
     try:
-        # Check Plan Limits (Pro Feature)
+        # Check Plan Limits
         from handlers.subscription_handler import get_user_features
         features, _, _ = get_user_features(user)
         
-        # Contracts are a business tool, aligning with Pro plan (Invoicing/Automation)
-        if 'pro' not in str(user.get('plan', '')).lower() and 'ultimate' not in str(user.get('plan', '')).lower():
+        # Check for e_signatures feature
+        if not features.get('e_signatures'):
              return create_response(403, {
-                 'error': 'Contracts are available on Pro and Ultimate plans.',
+                 'error': 'Contracts and eSignatures are available on the Ultimate plan.',
                  'upgrade_required': True
              })
 

@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Check, AlertCircle, Calendar, CheckCircle, Zap, CreditCard, Download, Settings, LogOut } from 'lucide-react';
+import { Check, AlertCircle, Zap, CreditCard, Download, Settings, LogOut, Minus, HelpCircle, Cloud, Image, ChevronRight, FileText } from 'lucide-react';
 import * as billingService from '../services/billingService';
 
 // Map service interface to local interface if needed, or use service interface
@@ -10,9 +10,21 @@ type Invoice = billingService.Invoice;
 
 const PLANS = [
   {
+    id: 'free',
+    name: 'Free',
+    price: { monthly: 0, annual: 0 },
+    description: 'For hobbyists',
+    accent: 'bg-gray-100 text-gray-900',
+    buttonVariant: 'secondary',
+    features: []
+  },
+  {
     id: 'starter',
     name: 'Starter',
     price: { monthly: 12, annual: 10 },
+    description: 'For new pros',
+    accent: 'bg-gray-100 text-gray-900',
+    buttonVariant: 'secondary',
     features: [
       '25 GB Smart Storage',
       'Unlimited Galleries',
@@ -26,6 +38,10 @@ const PLANS = [
     id: 'plus',
     name: 'Plus',
     price: { monthly: 29, annual: 24 },
+    badge: 'BEST VALUE',
+    description: 'Most popular',
+    accent: 'bg-[#0066CC] text-white',
+    buttonVariant: 'primary',
     features: [
       '100 GB Smart Storage',
       'Unlimited Galleries',
@@ -40,6 +56,9 @@ const PLANS = [
     id: 'pro',
     name: 'Pro',
     price: { monthly: 59, annual: 49 },
+    description: 'For studios',
+    accent: 'bg-gray-900 text-white',
+    buttonVariant: 'dark',
     features: [
       '500 GB Smart Storage',
       '4 Hours Video (4K)',
@@ -54,68 +73,156 @@ const PLANS = [
     id: 'ultimate',
     name: 'Ultimate',
     price: { monthly: 119, annual: 99 },
+    description: 'Max power',
+    accent: 'bg-gray-900 text-white',
+    buttonVariant: 'dark',
     features: [
       '2 TB Smart Storage',
       '10 Hours Video (4K)',
       'RAW Vault Archival (Glacier)',
-      'VIP Priority Support',
-      'Developer API Access',
-      'Concierge Onboarding',
+      'Scheduler',
+      'eSignatures',
       'All Pro Features',
     ],
   },
 ];
 
-const TIER_FEATURES: Record<string, string[]> = {
-  free: [
-    '2 GB Smart Storage',
-    '3 Active Galleries',
-    'Basic Portfolio',
-    'Community Support',
-    'Galerly Branding',
-  ],
-  starter: [
-    '25 GB Smart Storage',
-    'Unlimited Galleries',
-    '30 Min Video (HD)',
-    'Remove Galerly Branding',
-    'Client Favorites & Proofing',
-    'Basic Analytics',
-  ],
-  plus: [
-    '100 GB Smart Storage',
-    'Unlimited Galleries',
-    '1 Hour Video (HD)',
-    'Custom Domain',
-    'Automated Watermarking',
-    'Client Favorites & Proofing',
-    'Advanced Analytics',
-  ],
-  pro: [
-    '500 GB Smart Storage',
-    '4 Hours Video (4K)',
-    'RAW Photo Support',
-    'Client Invoicing',
-    'Email Automation & Templates',
-    'SEO Optimization Tools',
-    'Pro Analytics',
-  ],
-  ultimate: [
-    '2 TB Smart Storage',
-    '10 Hours Video (4K)',
-    'RAW Vault Archival (Glacier)',
-    'VIP Priority Support',
-    'Developer API Access',
-    'Concierge Onboarding',
-    'All Pro Features',
-  ],
-};
+const FEATURES_TABLE = [
+  {
+    category: 'Storage & Limits',
+    items: [
+      { 
+        name: 'Smart Storage', 
+        description: 'High-performance cloud storage optimized for RAW and high-res images with smart compression.',
+        values: ['2 GB', '25 GB', '100 GB', '500 GB', '2 TB'] 
+      },
+      { 
+        name: 'Active Galleries', 
+        description: 'Number of client galleries you can have online simultaneously.',
+        values: ['3', 'Unlimited', 'Unlimited', 'Unlimited', 'Unlimited'] 
+      },
+      { 
+        name: 'Photo Uploads', 
+        description: 'Total number of photos you can upload across all your galleries.',
+        values: ['Unlimited', 'Unlimited', 'Unlimited', 'Unlimited', 'Unlimited'] 
+      },
+    ]
+  },
+  {
+    category: 'Video',
+    items: [
+      { 
+        name: 'Video Streaming', 
+        description: 'Stream 4K content optimized for web viewing (high-efficiency playback).',
+        values: ['-', '30 min (HD)', '1 hour (HD)', '4 hours (4K)', '10 hours (4K)'] 
+      },
+      { 
+        name: 'Video Uploads', 
+        description: 'Upload video files for client delivery or streaming (Web-Ready).',
+        values: ['-', 'Included', 'Included', 'Included', 'Included'] 
+      },
+    ]
+  },
+  {
+    category: 'Branding & Domain',
+    items: [
+      { 
+        name: 'Remove Galerly Branding', 
+        description: "Remove 'Powered by Galerly' from your gallery footers.",
+        values: [false, true, true, true, true] 
+      },
+      { 
+        name: 'Custom Domain', 
+        description: 'Use your own domain name (e.g., gallery.yourstudio.com) for a professional look.',
+        values: [false, false, true, true, true] 
+      },
+      { 
+        name: 'Automated Watermarking', 
+        description: 'Automatically apply your logo or watermark to images to prevent unauthorized use.',
+        values: [false, false, true, true, true] 
+      },
+      { 
+        name: 'Portfolio Website', 
+        description: 'A dedicated, SEO-friendly portfolio site to showcase your best work.',
+        values: [true, true, true, true, true] 
+      },
+    ]
+  },
+  {
+    category: 'Workflow & Sales',
+    items: [
+      { 
+        name: 'Client Favorites & Proofing', 
+        description: 'Allow clients to create favorite lists, leave comments, and select photos for editing.',
+        values: [false, true, true, true, true] 
+      },
+      { 
+        name: 'Email Automation', 
+        description: 'Send automated emails for gallery expiry, download reminders, and more.',
+        values: [false, false, false, true, true] 
+      },
+      { 
+        name: 'Client Invoicing', 
+        description: 'Create and send professional invoices directly to your clients.',
+        values: [false, false, false, true, true] 
+      },
+      { 
+        name: 'Scheduler', 
+        description: 'Allow clients to book sessions directly through your integrated calendar.',
+        values: [false, false, false, false, true] 
+      },
+      { 
+        name: 'eSignatures', 
+        description: 'Send contracts and get them signed digitally before the shoot.',
+        values: [false, false, false, false, true] 
+      },
+    ]
+  },
+  {
+    category: 'Advanced Features',
+    items: [
+      { 
+        name: 'Analytics', 
+        description: 'Track gallery views, downloads, and visitor engagement.',
+        values: ['Basic', 'Basic', 'Advanced', 'Pro', 'Pro'] 
+      },
+      { 
+        name: 'RAW Photo Support', 
+        description: 'Upload and deliver RAW file formats (CR2, NEF, ARW, etc.) directly.',
+        values: [false, false, false, true, true] 
+      },
+      { 
+        name: 'RAW Vault Archival', 
+        description: 'Long-term cold storage for your RAW files at a fraction of the cost.',
+        values: [false, false, false, false, true] 
+      },
+      { 
+        name: 'SEO Tools', 
+        description: 'Advanced settings to optimize your galleries and portfolio for search engines.',
+        values: [false, false, false, true, true] 
+      },
+    ]
+  },
+  {
+    category: 'Support',
+    items: [
+      { 
+        name: 'Support Level', 
+        description: 'Priority of your support tickets and access to live chat.',
+        values: ['Priority', 'Priority', 'Priority', 'Priority', 'Priority'] 
+      },
+    ]
+  }
+];
+
+const UPGRADE_PLANS = PLANS.filter(p => p.id !== 'free');
 
 export default function BillingPage() {
   const { logout } = useAuth();
   const [searchParams] = useSearchParams();
   const [subscription, setSubscription] = useState<billingService.Subscription | null>(null);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [usage, setUsage] = useState<billingService.UsageStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -137,10 +244,16 @@ export default function BillingPage() {
     } else {
       // Check for auto-checkout plan param
       const autoPlan = searchParams.get('plan');
+      const autoInterval = searchParams.get('interval') as 'monthly' | 'annual';
+
+      if (autoInterval && (autoInterval === 'monthly' || autoInterval === 'annual')) {
+        setBillingPeriod(autoInterval);
+      }
+
       if (autoPlan && !loading && subscription) {
         // Only trigger if not already on this plan
         if (subscription.plan !== autoPlan) {
-           handleUpgrade(autoPlan);
+           handleUpgrade(autoPlan, autoInterval);
            // Clear param so it doesn't loop or re-trigger on refresh
            window.history.replaceState({}, '', window.location.pathname);
         }
@@ -152,9 +265,10 @@ export default function BillingPage() {
     setLoading(true);
 
     try {
-    const [subRes, invoicesRes] = await Promise.all([
+    const [subRes, invoicesRes, usageRes] = await Promise.all([
         billingService.getSubscription(),
-        billingService.getBillingHistory()
+        billingService.getBillingHistory(),
+        billingService.getUsage()
     ]);
 
     if (subRes.success && subRes.data) {
@@ -164,6 +278,10 @@ export default function BillingPage() {
     if (invoicesRes.success && invoicesRes.data) {
       setInvoices(invoicesRes.data.invoices || []);
     }
+
+    if (usageRes.success && usageRes.data) {
+      setUsage(usageRes.data);
+    }
     } catch (error) {
       console.error('Error loading billing info:', error);
     } finally {
@@ -171,15 +289,23 @@ export default function BillingPage() {
     }
   };
 
-  const handleUpgrade = async (planId: string) => {
+  const getSavingsText = (plan: typeof PLANS[0]) => {
+    if (plan.price.monthly === 0) return null;
+    const annualTotal = plan.price.annual * 12;
+    const monthlyTotal = plan.price.monthly * 12;
+    const savings = monthlyTotal - annualTotal;
+    return savings > 0 ? `Save $${savings}/year` : null;
+  };
+
+  const handleUpgrade = async (planId: string, intervalOverride?: 'monthly' | 'annual') => {
     setCheckoutLoading(planId);
     try {
       // Create checkout session
       // For plan changes (if already paid), backend handles via same endpoint or change-plan
       // Assuming backend handles creating correct session type (setup or subscription)
       
-      // TODO: Pass billingPeriod to backend once supported
-      const response = await billingService.createCheckoutSession(planId, billingPeriod); 
+      const selectedInterval = intervalOverride || billingPeriod;
+      const response = await billingService.createCheckoutSession(planId, selectedInterval); 
       
       // Note: Backend handle_create_checkout_session expects { plan: 'plus' }
       // It resolves price ID internally. The TS signature might be misleading if it says (priceId, tier).
@@ -218,6 +344,14 @@ export default function BillingPage() {
       setNotification({ message: 'An error occurred.', type: 'error' });
     }
   };
+
+  const storageLimit = usage?.storage_limit?.limit_gb ?? 0;
+  const storageUsed = usage?.storage_limit?.used_gb ?? 0;
+  const storagePercent = usage?.storage_limit?.usage_percent ?? 0;
+  
+  const galleriesLimit = usage?.gallery_limit?.limit ?? 0;
+  const galleriesUsed = usage?.gallery_limit?.used ?? 0;
+  const galleriesPercent = galleriesLimit > 0 ? (galleriesUsed / galleriesLimit) * 100 : (galleriesLimit === -1 ? 5 : 0);
 
   return (
     <div className="min-h-screen bg-[#F5F5F7]">
@@ -265,90 +399,150 @@ export default function BillingPage() {
             <p className="text-sm text-[#1D1D1F]/60">Loading billing information...</p>
           </div>
         ) : (
-          <div className="space-y-8">
-            {/* Current Subscription */}
-            <div className="glass-panel p-8">
-              <h2 className="text-2xl font-serif font-medium text-[#1D1D1F] mb-6">
-                Current Plan
-              </h2>
+          <div className="space-y-12">
+            {/* Current Subscription & Payment Dashboard */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {/* Membership Card */}
+              <div className="lg:col-span-2 relative overflow-hidden rounded-[32px] bg-[#1D1D1F] text-white p-8 md:p-10 shadow-2xl transition-transform duration-500 hover:scale-[1.005] group">
+                <div className="absolute top-0 right-0 w-[500px] h-[500px] bg-gradient-to-br from-blue-600/30 to-purple-600/30 rounded-full blur-3xl -mr-32 -mt-32 pointer-events-none opacity-60" />
+                <div className="absolute bottom-0 left-0 w-[300px] h-[300px] bg-blue-500/10 rounded-full blur-3xl -ml-10 -mb-10 pointer-events-none" />
 
-              <div className="flex items-start justify-between mb-6">
-                <div>
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-3xl font-medium text-[#1D1D1F] capitalize">
-                      {subscription?.plan || 'Free'}
-                    </h3>
-                    <span
-                      className={`px-3 py-1 rounded-full text-xs font-medium ${
-                        subscription?.status === 'active'
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-700'
-                      }`}
-                    >
-                      {subscription?.status || 'Free'}
-                    </span>
-                  </div>
-                  {(PLANS.find(p => p.id === subscription?.plan)?.price.monthly || 0) > 0 ? (
+                <div className="relative z-10 flex flex-col h-full justify-between">
+                  <div className="flex justify-between items-start mb-12">
                     <div>
-                      <p className="text-lg text-[#1D1D1F]/60 mb-2">
-                        {/* Assuming we might know the interval in the future, for now show monthly price as base */}
-                        ${PLANS.find(p => p.id === subscription?.plan)?.price.monthly}/month
-                      </p>
-                      {subscription?.status === 'active' && !subscription?.subscription?.cancel_at_period_end && (
-                        <button
-                          onClick={handleCancelSubscription}
-                          className="text-sm text-red-600 hover:text-red-700 font-medium underline"
-                        >
-                          Cancel Subscription
-                        </button>
-                      )}
-                      {subscription?.subscription?.cancel_at_period_end && (
-                        <p className="text-sm text-amber-600 font-medium">
-                          Cancels at period end
-                        </p>
-                      )}
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="inline-flex items-center px-3 py-1 rounded-full bg-white/10 backdrop-blur-md border border-white/10 text-xs font-medium tracking-wide text-white/90">
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-400 mr-2 animate-pulse"></span>
+                          {subscription?.status === 'active' ? 'Active Membership' : subscription?.status}
+                        </span>
+                        {subscription?.subscription?.cancel_at_period_end && (
+                          <span className="inline-flex items-center px-3 py-1 rounded-full bg-red-500/20 backdrop-blur-md border border-red-500/30 text-xs font-medium text-red-200">
+                            Expiring Soon
+                          </span>
+                        )}
+                      </div>
+                      <h1 className="text-5xl md:text-6xl font-serif text-white tracking-tight">
+                        {PLANS.find(p => p.id === subscription?.plan)?.name || 'Free'}
+                      </h1>
                     </div>
-                  ) : (
-                    <p className="text-lg text-[#1D1D1F]/60">
-                      Free Forever
-                    </p>
-                  )}
+                    <div className="text-right">
+                       {(PLANS.find(p => p.id === subscription?.plan)?.price.monthly || 0) > 0 ? (
+                          <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl px-6 py-4 text-center min-w-[120px]">
+                             <div className="text-3xl font-bold text-white tracking-tight">
+                                ${PLANS.find(p => p.id === subscription?.plan)?.price.monthly}
+                             </div>
+                             <div className="text-xs text-white/50 font-medium uppercase tracking-wider">Per Month</div>
+                          </div>
+                       ) : (
+                          <div className="bg-white/10 backdrop-blur-md border border-white/10 rounded-2xl px-6 py-4 text-center min-w-[120px]">
+                             <div className="text-3xl font-bold text-white tracking-tight">Free</div>
+                             <div className="text-xs text-white/50 font-medium uppercase tracking-wider">Forever</div>
+                          </div>
+                       )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8 md:gap-12">
+                    <div>
+                      <div className="flex justify-between items-end mb-3">
+                        <div className="flex items-center gap-2 text-white/80">
+                          <Cloud className="w-5 h-5 text-blue-400" />
+                          <span className="font-medium">Cloud Storage</span>
+                        </div>
+                        <span className="text-sm font-medium text-white/60">
+                          {storageLimit === -1 
+                            ? `${storageUsed} GB Used` 
+                            : `${storageUsed} / ${storageLimit} GB`}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-white/10 rounded-full overflow-hidden backdrop-blur-sm">
+                        <div 
+                          className="h-full bg-gradient-to-r from-blue-400 to-blue-600 rounded-full transition-all duration-1000 ease-out relative" 
+                          style={{ width: `${Math.min(storagePercent, 100)}%` }}
+                        >
+                          <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px]" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-end mb-3">
+                        <div className="flex items-center gap-2 text-white/80">
+                          <Image className="w-5 h-5 text-purple-400" />
+                          <span className="font-medium">Active Galleries</span>
+                        </div>
+                        <span className="text-sm font-medium text-white/60">
+                          {galleriesLimit === -1 
+                            ? `${galleriesUsed} Galleries` 
+                            : `${galleriesUsed} / ${galleriesLimit}`}
+                        </span>
+                      </div>
+                      <div className="h-2 bg-white/10 rounded-full overflow-hidden backdrop-blur-sm">
+                        <div 
+                          className="h-full bg-gradient-to-r from-purple-400 to-pink-600 rounded-full transition-all duration-1000 ease-out relative" 
+                          style={{ width: `${Math.min(galleriesPercent, 100)}%` }}
+                        >
+                           <div className="absolute right-0 top-0 bottom-0 w-2 bg-white/50 blur-[2px]" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {subscription?.subscription?.current_period_end && (
-                <div className="flex items-center gap-2 text-sm text-[#1D1D1F]/60">
-                  <Calendar className="w-4 h-4" />
-                  <span>
-                    Next billing date: {new Date(subscription.subscription.current_period_end).toLocaleDateString()}
-                  </span>
+              {/* Payment Method Quick View */}
+              <div className="glass-panel p-6 h-full flex flex-col justify-between hover:shadow-glass-strong transition-all duration-300">
+                <div>
+                   <div className="flex items-center justify-between mb-6">
+                      <h3 className="font-medium text-[#1D1D1F] flex items-center gap-2">
+                         <CreditCard className="w-5 h-5 text-gray-400" />
+                         Payment Method
+                      </h3>
+                      <button className="text-xs font-semibold text-[#0066CC] hover:underline">Edit</button>
+                   </div>
+                   
+                   <div className="bg-gradient-to-br from-[#1D1D1F] to-[#2d2d30] rounded-2xl p-5 text-white shadow-lg mb-6 relative overflow-hidden group/card cursor-pointer">
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10 blur-2xl" />
+                      <div className="relative z-10">
+                         <div className="flex justify-between items-start mb-6">
+                            <div className="w-10 h-6 bg-white/20 rounded flex items-center justify-center backdrop-blur-sm">
+                               <div className="w-6 h-4 bg-yellow-400/80 rounded-[2px]" />
+                            </div>
+                            <span className="font-mono text-white/40 text-xs">Debit</span>
+                         </div>
+                         <div className="font-mono text-lg tracking-widest mb-1 group-hover/card:text-white/90 transition-colors">•••• •••• •••• 4242</div>
+                         <div className="flex justify-between items-end">
+                            <span className="text-[10px] text-white/40 uppercase tracking-widest">Expires 12/25</span>
+                            <span className="font-bold text-white/80 text-sm">VISA</span>
+                         </div>
+                      </div>
+                   </div>
                 </div>
-              )}
-
-              {/* Features */}
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <h4 className="text-sm font-medium text-[#1D1D1F] mb-3">
-                  Plan Features
-                </h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  {(TIER_FEATURES[subscription?.plan || 'free'] || TIER_FEATURES.free).map((feature, index) => (
-                    <div key={index} className="flex items-center gap-2 text-sm text-[#1D1D1F]/70">
-                      <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
-                      <span>{feature}</span>
-                    </div>
-                  ))}
+                
+                <div>
+                   <div className="text-xs text-gray-400 mb-4 px-1">
+                      Next billing date: <span className="text-gray-700 font-medium">{subscription?.subscription?.current_period_end ? new Date(subscription.subscription.current_period_end).toLocaleDateString() : 'N/A'}</span>
+                   </div>
+                   {subscription?.status === 'active' && !subscription?.subscription?.cancel_at_period_end && (
+                     <button
+                       onClick={handleCancelSubscription}
+                       className="w-full py-3 rounded-xl border border-red-100 text-red-600 bg-red-50/50 text-sm font-medium hover:bg-red-50 transition-all flex items-center justify-center gap-2 group/btn"
+                     >
+                       Cancel Subscription
+                       <ChevronRight className="w-4 h-4 opacity-50 group-hover/btn:translate-x-0.5 transition-transform" />
+                     </button>
+                   )}
                 </div>
               </div>
             </div>
 
-            {/* Available Plans (Upgrade) */}
-            {(!subscription?.plan || subscription.plan === 'free' || subscription.plan === 'starter' || subscription.plan === 'plus' || subscription.plan === 'pro') && (
-              <div className="glass-panel p-8">
+            {/* Available Plans (Table View) */}
+            <div className="mt-12">
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
                   <h2 className="text-lg font-medium text-[#1D1D1F] flex items-center gap-2">
-                  <Zap className="w-5 h-5 text-amber-500" />
-                  Available Upgrades
-                </h2>
+                    <Zap className="w-5 h-5 text-amber-500" />
+                    Available Plans
+                  </h2>
 
                   {/* Billing Toggle */}
                   <div className="inline-flex items-center gap-1 p-1 rounded-full bg-[#F5F5F7] border border-[#1D1D1F]/5 w-fit">
@@ -378,138 +572,241 @@ export default function BillingPage() {
                     </button>
                   </div>
                 </div>
-                
-                <div className="grid md:grid-cols-2 gap-6">
-                  {PLANS.filter(p => {
-                    // Filter out current plan and plans lower than current
-                    // Current plan index
-                    const currentPlanId = subscription?.plan || 'free';
-                    const planOrder = ['free', 'starter', 'plus', 'pro', 'ultimate'];
-                    const currentIndex = planOrder.indexOf(currentPlanId);
-                    const planIndex = planOrder.indexOf(p.id);
-                    return planIndex > currentIndex;
-                  }).map((plan) => (
-                    <div key={plan.id} className="border border-gray-200 rounded-2xl p-6 hover:border-[#0066CC]/30 transition-all bg-white/50">
+
+                {/* Desktop Table */}
+                <div className="hidden lg:block overflow-x-auto pb-12">
+                  <div className="min-w-[900px]">
+                    {/* Sticky Header */}
+                    <div className="sticky top-16 z-20 bg-[#F5F5F7]/95 backdrop-blur-xl border-b border-gray-200 shadow-sm transition-all duration-300 rounded-t-2xl">
+                      <div className="grid grid-cols-[240px_repeat(4,1fr)] p-0">
+                        <div className="col-span-1 p-6 flex items-end">
+                          <span className="text-xs font-bold text-[#1D1D1F]/40 uppercase tracking-[0.2em]">Features</span>
+                        </div>
+                        {UPGRADE_PLANS.map((plan) => {
+                           const isCurrent = subscription?.plan === plan.id;
+                           const isPopular = plan.id === 'plus';
+                           const savings = getSavingsText(plan);
+                           return (
+                          <div key={plan.id} className={`col-span-1 flex flex-col items-center text-center relative p-6 border-l border-gray-200/50 ${isPopular ? 'bg-blue-50/30' : ''}`}>
+                            {plan.badge && (
+                              <div className="absolute -top-4 bg-gradient-to-r from-[#0066CC] to-[#0099ff] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg shadow-blue-500/30">
+                                {plan.badge}
+                              </div>
+                            )}
+                            <h3 className={`text-lg font-bold mb-1 ${isPopular ? 'text-[#0066CC]' : 'text-[#1D1D1F]'}`}>{plan.name}</h3>
+                            <div className="mb-4 flex flex-col items-center justify-center">
+                               <div className="flex items-baseline">
+                                  <span className="text-2xl font-bold text-[#1D1D1F]">
+                                    ${billingPeriod === 'monthly' ? plan.price.monthly : plan.price.annual}
+                                  </span>
+                                  {plan.price.monthly > 0 && <span className="text-xs text-[#1D1D1F]/60 ml-0.5">/mo</span>}
+                                </div>
+                                {billingPeriod === 'annual' && savings && (
+                                  <span className="text-[10px] font-semibold text-green-600 mt-0.5 bg-green-50 px-2 py-0.5 rounded-full">{savings}</span>
+                                )}
+                            </div>
+                            <button
+                              onClick={() => !isCurrent && handleUpgrade(plan.id)}
+                              disabled={isCurrent || checkoutLoading === plan.id}
+                              className={`
+                                w-full py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2
+                                ${isCurrent
+                                  ? 'bg-gray-100 text-gray-400 cursor-default'
+                                  : plan.id === 'plus' 
+                                    ? 'bg-gradient-to-r from-[#0066CC] to-[#0052A3] text-white hover:shadow-lg hover:shadow-blue-500/25 hover:-translate-y-0.5' 
+                                    : 'bg-[#1D1D1F] text-white hover:bg-black hover:shadow-lg hover:-translate-y-0.5'
+                                }
+                              `}
+                            >
+                              {checkoutLoading === plan.id ? (
+                                  <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                              ) : isCurrent ? (
+                                  'Current Plan'
+                              ) : (
+                                  'Upgrade'
+                              )}
+                            </button>
+                          </div>
+                        )})}
+                      </div>
+                    </div>
+
+                    {/* Table Body */}
+                    <div className="bg-white rounded-b-3xl border-x border-b border-gray-200 shadow-sm">
+                      {FEATURES_TABLE.map((category) => (
+                        <div key={category.category} className="group">
+                          <div className="px-6 py-3 bg-gray-50/80 border-y border-gray-100">
+                            <h4 className="font-bold text-[#1D1D1F] text-xs uppercase tracking-wider">{category.category}</h4>
+                          </div>
+                          {category.items.map((feature, featIndex) => (
+                            <div 
+                              key={feature.name} 
+                              className={`
+                                grid grid-cols-[240px_repeat(4,1fr)] items-center transition-colors hover:bg-gray-50
+                                ${featIndex !== category.items.length - 1 ? 'border-b border-gray-50' : ''}
+                              `}
+                            >
+                              <div className="col-span-1 flex items-center gap-2 p-6 pr-4">
+                                <span className="text-sm font-medium text-[#1D1D1F] leading-snug">{feature.name}</span>
+                                <div className="group/tooltip relative cursor-help">
+                                  <HelpCircle className="w-3.5 h-3.5 text-gray-300 hover:text-[#0066CC] transition-colors" />
+                                  <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-56 p-3 bg-[#1D1D1F] text-white text-xs leading-relaxed rounded-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                                    {feature.description}
+                                  </div>
+                                </div>
+                              </div>
+                              {UPGRADE_PLANS.map((plan) => {
+                                const originalIndex = PLANS.findIndex(p => p.id === plan.id);
+                                const value = feature.values[originalIndex];
+                                const isPopular = plan.id === 'plus';
+                                return (
+                                  <div key={plan.id} className={`col-span-1 flex justify-center text-center p-6 h-full items-center border-l border-gray-50 ${isPopular ? 'bg-blue-50/10' : ''}`}>
+                                      {typeof value === 'boolean' ? (
+                                          value ? (
+                                            <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shadow-sm">
+                                              <Check className="w-3.5 h-3.5 text-[#0066CC]" strokeWidth={3} />
+                                            </div>
+                                          ) : <Minus className="w-4 h-4 text-gray-200" />
+                                      ) : value === '-' ? (
+                                          <Minus className="w-4 h-4 text-gray-200" />
+                                      ) : (
+                                          <span className="text-sm font-medium text-[#1D1D1F]">{value}</span>
+                                      )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Mobile View (Cards) */}
+                <div className="lg:hidden grid md:grid-cols-2 gap-6">
+                  {UPGRADE_PLANS.map((plan) => {
+                    const isCurrent = subscription?.plan === plan.id;
+                    const savings = getSavingsText(plan);
+                    return (
+                    <div key={plan.id} className="border border-gray-200 rounded-2xl p-6 hover:border-[#0066CC]/30 transition-all bg-white/50 relative overflow-hidden">
+                      {plan.badge && (
+                          <div className="absolute top-0 right-0 bg-[#0066CC] text-white text-[10px] font-bold px-4 py-1.5 rounded-bl-xl uppercase tracking-wider">
+                            {plan.badge}
+                          </div>
+                      )}
                       <div className="flex justify-between items-start mb-4">
                         <div>
                           <h3 className="text-xl font-medium text-[#1D1D1F]">{plan.name}</h3>
-                          <p className="text-2xl font-bold text-[#1D1D1F] mt-1">
-                            ${billingPeriod === 'monthly' ? plan.price.monthly : plan.price.annual}
+                          <div className="flex items-baseline gap-1 mt-1">
+                            <span className="text-2xl font-bold text-[#1D1D1F]">
+                              ${billingPeriod === 'monthly' ? plan.price.monthly : plan.price.annual}
+                            </span>
                             <span className="text-sm font-normal text-[#1D1D1F]/60">/mo</span>
-                          </p>
-                          {billingPeriod === 'annual' && (
-                            <p className="text-xs text-[#0066CC] mt-1 font-medium">
-                              Billed ${plan.price.annual * 12} yearly
-                            </p>
+                          </div>
+                          {billingPeriod === 'annual' && savings && (
+                            <p className="text-xs text-[#0066CC] mt-1 font-medium">{savings}</p>
                           )}
                         </div>
-                        {plan.id === 'plus' && <span className="bg-[#0066CC] text-white text-xs font-bold px-2 py-1 rounded-md">BEST VALUE</span>}
                       </div>
                       
                       <ul className="space-y-2 mb-6">
-                        {plan.features.map((feature, idx) => (
+                        {plan.features.slice(0, 5).map((feature, idx) => (
                           <li key={idx} className="flex items-center gap-2 text-sm text-[#1D1D1F]/70">
                             <Check className="w-3 h-3 text-[#0066CC]" />
                             {feature}
                           </li>
                         ))}
+                        {plan.features.length > 5 && (
+                            <li className="text-xs text-[#1D1D1F]/50 pl-5">+{plan.features.length - 5} more features</li>
+                        )}
                       </ul>
                       
                       <button
-                        onClick={() => handleUpgrade(plan.id)}
-                        disabled={checkoutLoading === plan.id}
-                        className="w-full py-3 bg-[#1D1D1F] text-white rounded-xl font-medium hover:bg-black transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                        onClick={() => !isCurrent && handleUpgrade(plan.id)}
+                        disabled={isCurrent || checkoutLoading === plan.id}
+                        className={`
+                            w-full py-3 rounded-xl font-medium transition-all disabled:opacity-50 flex items-center justify-center gap-2
+                            ${isCurrent
+                                ? 'bg-gray-100 text-gray-400 cursor-default'
+                                : 'bg-[#1D1D1F] text-white hover:bg-black'
+                            }
+                        `}
                       >
                         {checkoutLoading === plan.id ? (
                           <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        ) : isCurrent ? (
+                          'Current Plan'
                         ) : (
                           'Upgrade'
                         )}
                       </button>
                     </div>
-                  ))}
+                  )})}
                 </div>
-              </div>
-            )}
-
-            {/* Payment Method */}
-            <div className="glass-panel p-8">
-              <h2 className="text-lg font-medium text-[#1D1D1F] mb-6">
-                Payment Method
-              </h2>
-
-              <div className="flex items-center justify-between p-4 bg-white/50 border border-gray-200 rounded-2xl">
-                <div className="flex items-center gap-4">
-                  <div className="w-12 h-12 bg-gray-100 rounded-xl flex items-center justify-center">
-                    <CreditCard className="w-6 h-6 text-[#1D1D1F]/60" />
-                  </div>
-                  <div>
-                    <p className="font-medium text-[#1D1D1F]">Manage via Stripe</p>
-                    <p className="text-sm text-[#1D1D1F]/60">Secure payment processing</p>
-                  </div>
-                </div>
-                {/* For real implementation, this would link to Stripe Customer Portal */}
-                <button className="px-4 py-2 bg-white border border-gray-200 text-[#1D1D1F] rounded-full text-sm font-medium hover:bg-gray-50 transition-all opacity-50 cursor-not-allowed">
-                  Manage
-                </button>
-              </div>
             </div>
 
-            {/* Invoices */}
+            {/* Invoices Section (Redesigned) */}
             <div className="glass-panel p-8">
-              <h2 className="text-lg font-medium text-[#1D1D1F] mb-6">
-                Invoices
-              </h2>
-
-              {invoices.length === 0 ? (
-                <p className="text-center text-[#1D1D1F]/60 py-8">
-                  No invoices yet
-                </p>
-              ) : (
-                <div className="space-y-3">
-                  {invoices.map((invoice) => (
-                    <div
-                      key={invoice.id}
-                      className="flex items-center justify-between p-4 bg-white/50 border border-gray-200 rounded-2xl hover:border-gray-300 transition-all"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                          <Download className="w-5 h-5 text-[#0066CC]" />
-                        </div>
-                        <div>
-                          <p className="font-medium text-[#1D1D1F]">
-                            ${(invoice.amount / 100).toFixed(2)}
-                          </p>
-                          <p className="text-sm text-[#1D1D1F]/60">
-                            {new Date(invoice.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`px-3 py-1 rounded-full text-xs font-medium ${
-                            invoice.status === 'paid'
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-yellow-100 text-yellow-700'
-                          }`}
-                        >
-                          {invoice.status}
-                        </span>
-                        {invoice.invoice_pdf && (
-                        <a
-                            href={invoice.invoice_pdf}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                        >
-                          <Download className="w-4 h-4 text-[#1D1D1F]/60" />
-                        </a>
-                        )}
-                      </div>
+               <div className="flex items-center justify-between mb-6">
+                  <h2 className="text-xl font-medium text-[#1D1D1F]">Billing History</h2>
+                  <button className="text-sm font-medium text-[#0066CC] hover:underline flex items-center gap-1">
+                     Download All <Download className="w-4 h-4" />
+                  </button>
+               </div>
+               
+               {invoices.length === 0 ? (
+                 <div className="text-center py-12 border border-dashed border-gray-200 rounded-2xl bg-gray-50/50">
+                    <div className="w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                       <FileText className="w-6 h-6 text-gray-400" />
                     </div>
-                  ))}
-                </div>
-              )}
+                    <p className="text-gray-500 font-medium">No invoices available yet</p>
+                 </div>
+               ) : (
+                 <div className="border border-gray-100 rounded-2xl overflow-hidden bg-white">
+                    <table className="w-full">
+                       <thead className="bg-gray-50/50 border-b border-gray-100">
+                          <tr>
+                             <th className="text-left py-4 px-6 text-xs font-semibold text-gray-400 uppercase tracking-wider">Date</th>
+                             <th className="text-left py-4 px-6 text-xs font-semibold text-gray-400 uppercase tracking-wider">Amount</th>
+                             <th className="text-left py-4 px-6 text-xs font-semibold text-gray-400 uppercase tracking-wider">Status</th>
+                             <th className="text-right py-4 px-6 text-xs font-semibold text-gray-400 uppercase tracking-wider">Invoice</th>
+                          </tr>
+                       </thead>
+                       <tbody className="divide-y divide-gray-50">
+                          {invoices.map((invoice) => (
+                             <tr key={invoice.id} className="group hover:bg-blue-50/20 transition-colors">
+                                <td className="py-4 px-6 text-sm font-medium text-gray-900">
+                                   {new Date(invoice.created_at).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}
+                                </td>
+                                <td className="py-4 px-6 text-sm font-medium text-gray-900">
+                                   ${(invoice.amount / 100).toFixed(2)}
+                                </td>
+                                <td className="py-4 px-6">
+                                   <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
+                                      ${invoice.status === 'paid' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'}
+                                   `}>
+                                      {invoice.status}
+                                   </span>
+                                </td>
+                                <td className="py-4 px-6 text-right">
+                                   {invoice.invoice_pdf && (
+                                      <a 
+                                         href={invoice.invoice_pdf} 
+                                         target="_blank" 
+                                         rel="noopener noreferrer"
+                                         className="inline-flex items-center justify-center p-2 text-gray-400 hover:text-[#0066CC] hover:bg-blue-50 rounded-lg transition-all"
+                                      >
+                                         <Download className="w-4 h-4" />
+                                      </a>
+                                   )}
+                                </td>
+                             </tr>
+                          ))}
+                       </tbody>
+                    </table>
+                 </div>
+               )}
             </div>
           </div>
         )}

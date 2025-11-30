@@ -65,8 +65,8 @@ def get_user_features(user):
         
         # Start with defaults from the plan definition
         features = {
-            'storage_gb': plan_def.get('storage_gb', 3),
-            'galleries_per_month': plan_def.get('galleries_per_month', 5),
+            'storage_gb': plan_def.get('storage_gb', 2),
+            'galleries_per_month': plan_def.get('galleries_per_month', 3),
             'video_minutes': 0, 
             'video_quality': 'hd', # hd or 4k
             'remove_branding': False,
@@ -76,7 +76,11 @@ def get_user_features(user):
             'email_templates': False,
             'client_favorites': False,
             'seo_tools': False,
-            'raw_vault': False
+            'raw_vault': False,
+            'client_invoicing': False,
+            'scheduler': False,
+            'e_signatures': False,
+            'watermarking': False
         }
         
         # Collect all feature IDs: from plan definition + manual overrides
@@ -154,18 +158,24 @@ def get_user_features(user):
         elif 'branding_on' in feature_ids:
             features['remove_branding'] = False
             
-        if 'watermarking' in feature_ids or normalized_plan_id in ['plus', 'pro', 'ultimate']:
+        if 'watermarking' in feature_ids:
             features['watermarking'] = True
             
         if 'custom_domain' in feature_ids:
             features['custom_domain'] = True
             
         # Advanced Features
-        if 'client_invoicing' in feature_ids or normalized_plan_id in ['pro', 'ultimate']:
+        if 'client_invoicing' in feature_ids or 'smart_invoicing' in feature_ids:
             features['client_invoicing'] = True
             
+        if 'scheduler' in feature_ids:
+            features['scheduler'] = True
+            
+        if 'e_signatures' in feature_ids:
+            features['e_signatures'] = True
+            
         # Client Favorites (Starter+)
-        if 'client_favorites' in feature_ids or normalized_plan_id in ['starter', 'plus', 'pro', 'ultimate']:
+        if 'client_favorites' in feature_ids or 'client_proofing' in feature_ids:
             features['client_favorites'] = True
 
         if 'raw_support' in feature_ids or 'raw_vault' in feature_ids:
@@ -174,11 +184,11 @@ def get_user_features(user):
         if 'raw_vault' in feature_ids:
             features['raw_vault'] = True
 
-        if 'email_templates' in feature_ids or normalized_plan_id in ['pro', 'ultimate']:
+        if 'email_templates' in feature_ids:
             features['email_templates'] = True
             
         # SEO Tools (Pro & Ultimate)
-        if 'seo_tools' in feature_ids or normalized_plan_id in ['pro', 'ultimate']:
+        if 'seo_tools' in feature_ids:
             features['seo_tools'] = True
             
         # Analytics Level
@@ -191,10 +201,10 @@ def get_user_features(user):
 
     except Exception as e:
         print(f"Error fetching user features: {e}")
-        # Fallback to defaults
+        # Fallback to defaults (Free plan limits)
         return {
-            'storage_gb': 5,
-            'galleries_per_month': 5
+            'storage_gb': 2,
+            'galleries_per_month': 3
         }, 'free', 'Free'
 
 
@@ -218,8 +228,8 @@ def get_user_plan_limits(user):
     return {
             'plan': 'free',
             'plan_name': 'Free',
-            'galleries_per_month': 5,
-            'storage_gb': 5,
+                'galleries_per_month': 3,
+                'storage_gb': 2,
             'features': {}
     }
 

@@ -34,9 +34,10 @@ FEATURES = [
 
     # Visual Asset Management (Video)
     {"id": "video_none", "name": "No Video Streaming", "category": "video", "value": 0, "unit": "minutes", "resolution": "None", "display": "No Video"},
-    {"id": "video_15min_hd", "name": "HD Video Streaming (15 min)", "category": "video", "value": 15, "unit": "minutes", "resolution": "HD", "display": "15 Min HD Video"},
-    {"id": "video_60min_4k", "name": "4K Video Streaming (60 min)", "category": "video", "value": 60, "unit": "minutes", "resolution": "4K", "display": "60 Min 4K Video"},
-    {"id": "video_unlimited_4k", "name": "Unlimited 4K Video Streaming", "category": "video", "value": -1, "unit": "minutes", "resolution": "4K", "display": "Unlimited 4K Video"},
+    {"id": "video_30min_hd", "name": "HD Video Streaming (30 min)", "category": "video", "value": 30, "unit": "minutes", "resolution": "HD", "display": "30 Min HD Video"},
+    {"id": "video_60min_hd", "name": "HD Video Streaming (1 Hour)", "category": "video", "value": 60, "unit": "minutes", "resolution": "HD", "display": "1 Hour HD Video"},
+    {"id": "video_4hr_4k", "name": "4K Video Streaming (4 Hours)", "category": "video", "value": 240, "unit": "minutes", "resolution": "4K", "display": "4 Hours 4K Video"},
+    {"id": "video_10hr_4k", "name": "4K Video Streaming (10 Hours)", "category": "video", "value": 600, "unit": "minutes", "resolution": "4K", "display": "10 Hours 4K Video"},
 
     # Brand Identity Suite
     {"id": "branding_on", "name": "Galerly Branding", "category": "branding", "enabled": True, "display": "Galerly Branding"},
@@ -57,14 +58,11 @@ FEATURES = [
     {"id": "esignatures", "name": "eSignatures & Audit Trails", "category": "studio", "enabled": True, "display": "eSignatures"},
     {"id": "scheduler", "name": "Intelligent Scheduler", "category": "studio", "enabled": True, "display": "Scheduler"},
     {"id": "seo_tools", "name": "SEO Optimization Tools", "category": "studio", "enabled": True, "display": "SEO Tools"},
-    {"id": "api_access", "name": "Developer API Access", "category": "studio", "enabled": True, "display": "API Access"},
 
     # Analytics & Support
     {"id": "analytics_basic", "name": "Basic Analytics", "category": "analytics", "enabled": True, "display": "Basic Analytics"},
     {"id": "analytics_advanced", "name": "Advanced Analytics", "category": "analytics", "enabled": True, "display": "Advanced Analytics"},
-    {"id": "analytics_pro", "name": "Pro Analytics & Insights", "category": "analytics", "enabled": True, "display": "Pro Analytics"},
-    {"id": "vip_support", "name": "VIP Priority Support", "category": "support", "enabled": True, "display": "VIP Support"},
-    {"id": "concierge_onboarding", "name": "Concierge Onboarding", "category": "support", "enabled": True, "display": "Concierge Onboarding"}
+    {"id": "analytics_pro", "name": "Pro Analytics & Insights", "category": "analytics", "enabled": True, "display": "Pro Analytics"}
 ]
 
 def init_features():

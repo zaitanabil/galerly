@@ -56,7 +56,7 @@ PLANS = {
             '2 GB Smart Storage',
             '3 Active Galleries',
             'Basic Portfolio',
-            'Community Support',
+            'Priority Support',
             'Galerly Branding'
         ]
     },
@@ -74,8 +74,8 @@ PLANS = {
             '25 GB Smart Storage',
             'Unlimited Galleries',
             '30 Min Video (HD)',
-            'Remove Branding',
-            'Client Favorites',
+            'Remove Galerly Branding',
+            'Client Favorites & Proofing',
             'Basic Analytics'
         ]
     },
@@ -95,6 +95,7 @@ PLANS = {
             '1 Hour Video (HD)',
             'Custom Domain',
             'Automated Watermarking',
+            'Client Favorites & Proofing',
             'Advanced Analytics'
         ]
     },
@@ -107,15 +108,15 @@ PLANS = {
         'stripe_price_id_annual': os.environ.get('STRIPE_PRICE_PRO_ANNUAL', ''),
         'galleries_per_month': -1,  # Unlimited
         'storage_gb': 500,
-        'feature_ids': ['storage_500gb', 'video_4hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_pro', 'raw_support', 'email_templates', 'smart_invoicing', 'scheduler', 'seo_tools', 'client_proofing', 'watermarking', 'lightroom_workflow'],
+        'feature_ids': ['storage_500gb', 'video_4hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_pro', 'raw_support', 'email_templates', 'smart_invoicing', 'seo_tools', 'client_proofing', 'watermarking', 'lightroom_workflow'],
         'features': [
             '500 GB Smart Storage',
-            'Unlimited Galleries',
             '4 Hours Video (4K)',
             'RAW Photo Support',
             'Client Invoicing',
-            'Email Automation',
-            'SEO Tools'
+            'Email Automation & Templates',
+            'SEO Optimization Tools',
+            'Pro Analytics'
         ]
     },
     'ultimate': {
@@ -127,14 +128,14 @@ PLANS = {
         'stripe_price_id_annual': os.environ.get('STRIPE_PRICE_ULTIMATE_ANNUAL', ''),
         'galleries_per_month': -1,  # Unlimited
         'storage_gb': 2000,
-        'feature_ids': ['storage_2tb', 'video_10hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_pro', 'raw_support', 'email_templates', 'smart_invoicing', 'scheduler', 'seo_tools', 'client_proofing', 'watermarking', 'lightroom_workflow', 'vip_support', 'raw_vault', 'api_access', 'concierge_onboarding'],
+        'feature_ids': ['storage_2tb', 'video_10hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_pro', 'raw_support', 'email_templates', 'smart_invoicing', 'scheduler', 'e_signatures', 'seo_tools', 'client_proofing', 'watermarking', 'lightroom_workflow', 'raw_vault'],
         'features': [
             '2 TB Smart Storage',
-            'Unlimited 4K Video',
-            'RAW Vault Archival',
-            'VIP Priority Support',
-            'API Access',
-            'Concierge Onboarding'
+            '10 Hours Video (4K)',
+            'RAW Vault Archival (Glacier)',
+            'Scheduler',
+            'eSignatures',
+            'All Pro Features'
         ]
     }
 }

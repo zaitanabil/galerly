@@ -30,14 +30,11 @@ def handle_list_invoices(user, query_params=None):
 def handle_create_invoice(user, body):
     """Create a new invoice"""
     try:
-        # Check Plan Limits (Pro Feature)
+        # Check Plan Limits
         from handlers.subscription_handler import get_user_features
         features, _, _ = get_user_features(user)
         
-        # Invoicing is typically a Pro feature (check feature 'client_invoicing' or plan level)
-        # Using explicit plan check or feature flag if defined. 
-        # Based on pricing: "Client Invoicing" is in Pro.
-        if not features.get('client_invoicing') and 'pro' not in str(user.get('plan', '')).lower() and 'ultimate' not in str(user.get('plan', '')).lower():
+        if not features.get('client_invoicing'):
              return create_response(403, {
                  'error': 'Client Invoicing is available on Pro and Ultimate plans.',
                  'upgrade_required': True

@@ -93,9 +93,8 @@ export default function Pricing() {
         '2 TB Smart Storage',
         '10 Hours Video (4K)',
         'RAW Vault Archival (Glacier)',
-        'VIP Priority Support',
-        'Developer API Access',
-        'Concierge Onboarding',
+        'Scheduler',
+        'eSignatures',
         'All Pro Features'
       ],
       highlight: false,

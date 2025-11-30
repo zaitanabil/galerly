@@ -34,13 +34,23 @@ export interface Invoice {
 }
 
 export interface UsageStats {
-  galleries_count: number;
-  photos_count: number;
-  storage_used: number;
-  tier_limits: {
-    max_galleries: number;
-    max_photos_per_gallery: number;
-    max_storage_gb: number;
+  plan: {
+    plan: string;
+    plan_name: string;
+    galleries_per_month: number;
+    storage_gb: number;
+  };
+  gallery_limit: {
+    used: number;
+    limit: number;
+    remaining: number;
+    allowed: boolean;
+  };
+  storage_limit: {
+    used_gb: number;
+    limit_gb: number;
+    remaining_gb: number;
+    usage_percent: number;
   };
 }
 

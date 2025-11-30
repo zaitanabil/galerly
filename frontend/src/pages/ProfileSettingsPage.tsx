@@ -11,14 +11,10 @@ import {
   AlertCircle,
   Check,
   Bell,
-  Code,
   Globe,
-  Key,
-  Copy,
   Search,
   Layout,
-  Stamp,
-  Download
+  Stamp
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -95,10 +91,6 @@ export default function ProfileSettingsPage() {
     watermark_opacity: 0.5
   });
 
-  // API Key state
-  const [apiKey, setApiKey] = useState<string | null>(null);
-  const [showApiKey, setShowApiKey] = useState(false);
-
   const [message, setMessage] = useState({ type: '', text: '' });
   const [loading, setLoading] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
@@ -108,7 +100,6 @@ export default function ProfileSettingsPage() {
     loadPreferences();
     loadPortfolioSettings();
     loadWatermarkSettings();
-    loadApiKey();
   }, []);
 
   const loadPreferences = async () => {
@@ -156,40 +147,6 @@ export default function ProfileSettingsPage() {
         }
     } catch {
         console.error('Failed to load watermark settings');
-    }
-  };
-
-  const loadApiKey = async () => {
-    try {
-        const response = await api.get<{ api_key: string }>('/auth/api-key');
-        if (response.success) {
-            setApiKey(response.data?.api_key || null);
-        }
-    } catch {
-        // Ignore auth errors or plan restrictions
-    }
-  };
-
-  const generateApiKey = async () => {
-    if (!confirm('Generate a new API Key? This will invalidate any existing keys.')) return;
-    try {
-        const response = await api.post<{ api_key: string }>('/auth/api-key', {});
-        if (response.success) {
-            setApiKey(response.data?.api_key || null);
-            setShowApiKey(true);
-            toast.success('API Key generated');
-        } else {
-            toast.error(response.error || 'Failed to generate API key');
-        }
-    } catch {
-        toast.error('Failed to generate API key');
-    }
-  };
-
-  const copyApiKey = () => {
-    if (apiKey) {
-        navigator.clipboard.writeText(apiKey);
-        toast.success('Copied to clipboard');
     }
   };
 
@@ -702,122 +659,6 @@ export default function ProfileSettingsPage() {
                 </div>
               </div>
             </div>
-
-            {/* Developer Settings (Pro/Ultimate only) */}
-            {(user?.plan === 'pro' || user?.plan === 'ultimate') && (
-                <div className="border-t border-gray-200 pt-8">
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="p-2 bg-purple-50 rounded-lg">
-                            <Code className="w-5 h-5 text-purple-600" />
-                        </div>
-                        <h2 className="text-lg font-medium text-[#1D1D1F]">
-                            Developer API
-                        </h2>
-                    </div>
-                    
-                    <div className="bg-gray-50 rounded-2xl p-6 border border-gray-200">
-                        <p className="text-sm text-gray-600 mb-4">
-                            Access your data programmatically. Keep this key secret.
-                        </p>
-                        
-                        {apiKey ? (
-                            <div className="flex gap-2">
-                                <div className="flex-1 relative">
-                                    <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                                        <Key className="w-4 h-4 text-gray-400" />
-                                    </div>
-                                    <input 
-                                        type={showApiKey ? "text" : "password"}
-                                        value={apiKey}
-                                        readOnly
-                                        className="w-full pl-10 pr-20 py-3 bg-white border border-gray-200 rounded-xl text-sm font-mono"
-                                    />
-                                    <button 
-                                        type="button"
-                                        onClick={() => setShowApiKey(!showApiKey)}
-                                        className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-blue-600 hover:underline"
-                                    >
-                                        {showApiKey ? 'Hide' : 'Show'}
-                                    </button>
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={copyApiKey}
-                                    className="p-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 text-gray-600"
-                                    title="Copy to clipboard"
-                                >
-                                    <Copy className="w-4 h-4" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={generateApiKey}
-                                    className="px-4 py-3 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 text-sm font-medium"
-                                >
-                                    Regenerate
-                                </button>
-                            </div>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={generateApiKey}
-                                className="px-6 py-3 bg-[#1D1D1F] text-white rounded-xl font-medium hover:bg-black transition-colors flex items-center gap-2"
-                            >
-                                <Key className="w-4 h-4" /> Generate API Key
-                            </button>
-                        )}
-                        
-                        <div className="mt-4 text-xs text-gray-500 flex items-center justify-between">
-                            <a href="#" className="underline hover:text-blue-600">Read API Documentation</a>
-                            <a href="/downloads/galerly-lightroom-plugin.zip" download className="underline hover:text-blue-600 flex items-center gap-1">
-                                Download Lightroom Plugin <Download className="w-3 h-3" />
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* Concierge Onboarding & VIP Support (Ultimate Only) */}
-            {user?.plan === 'ultimate' && (
-                <div className="border-t border-gray-200 pt-8">
-                    <div className="bg-black text-white rounded-2xl p-8 relative overflow-hidden">
-                        <div className="absolute top-0 right-0 p-8 opacity-10">
-                            <Stamp className="w-32 h-32" />
-                        </div>
-                        <div className="relative z-10 grid md:grid-cols-2 gap-8">
-                            <div>
-                                <h2 className="text-xl font-medium mb-2">Concierge Onboarding</h2>
-                                <p className="text-white/70 mb-6">
-                                    Our priority onboarding team will help you migrate your portfolio, set up your domain, and customize your branding.
-                                </p>
-                                <button
-                                    type="button"
-                                    onClick={() => window.location.href = 'mailto:concierge@galerly.com?subject=Concierge%20Onboarding%20Request'}
-                                    className="px-6 py-3 bg-white text-black rounded-full font-medium hover:bg-gray-100 transition-colors inline-flex items-center gap-2"
-                                >
-                                    <Mail className="w-4 h-4" />
-                                    Request Onboarding
-                                </button>
-                            </div>
-                            <div className="border-t md:border-t-0 md:border-l border-white/10 pt-8 md:pt-0 md:pl-8">
-                                <h2 className="text-xl font-medium mb-2">VIP Priority Support</h2>
-                                <p className="text-white/70 mb-6">
-                                    Skip the queue. Your tickets are routed directly to our senior support team for immediate resolution.
-                                </p>
-                                <div className="flex gap-4">
-                                    <button
-                                        type="button"
-                                        onClick={() => window.location.href = 'mailto:vip-support@galerly.com?subject=Priority%20Support%20Request'}
-                                        className="px-6 py-3 bg-white/10 backdrop-blur-sm border border-white/20 text-white rounded-full font-medium hover:bg-white/20 transition-colors inline-flex items-center gap-2"
-                                    >
-                                        <Mail className="w-4 h-4" />
-                                        Contact VIP Support
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {/* Actions */}
             <div className="border-t border-gray-200 pt-8 flex gap-4">
