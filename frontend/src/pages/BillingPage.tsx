@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Check, AlertCircle, Zap, CreditCard, Download, Settings, LogOut, Minus, HelpCircle, Cloud, Image, ChevronRight, FileText } from 'lucide-react';
+import { Check, AlertCircle, Zap, CreditCard, Download, Settings, LogOut, Minus, HelpCircle, Cloud, Image, ChevronRight, FileText, ShieldCheck, ExternalLink } from 'lucide-react';
 import * as billingService from '../services/billingService';
 
 // Map service interface to local interface if needed, or use service interface
@@ -380,7 +380,7 @@ export default function BillingPage() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-12">
+      <main className="max-w-[1600px] mx-auto px-6 py-8">
         {notification && (
           <div className={`mb-8 p-4 rounded-2xl flex items-center gap-3 ${
             notification.type === 'success' ? 'bg-green-50 text-green-700 border border-green-100' : 'bg-red-50 text-red-700 border border-red-100'
@@ -491,38 +491,45 @@ export default function BillingPage() {
               </div>
 
               {/* Payment Method Quick View */}
-              <div className="glass-panel p-6 h-full flex flex-col justify-between hover:shadow-glass-strong transition-all duration-300">
+              <div className="glass-panel p-8 h-full flex flex-col justify-between hover:shadow-glass-strong transition-all duration-300">
                 <div>
-                   <div className="flex items-center justify-between mb-6">
+                   <div className="flex items-center justify-between mb-8">
                       <h3 className="font-medium text-[#1D1D1F] flex items-center gap-2">
                          <CreditCard className="w-5 h-5 text-gray-400" />
                          Payment Method
                       </h3>
-                      <button className="text-xs font-semibold text-[#0066CC] hover:underline">Edit</button>
                    </div>
                    
-                   <div className="bg-gradient-to-br from-[#1D1D1F] to-[#2d2d30] rounded-2xl p-5 text-white shadow-lg mb-6 relative overflow-hidden group/card cursor-pointer">
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-10 -mt-10 blur-2xl" />
-                      <div className="relative z-10">
-                         <div className="flex justify-between items-start mb-6">
-                            <div className="w-10 h-6 bg-white/20 rounded flex items-center justify-center backdrop-blur-sm">
-                               <div className="w-6 h-4 bg-yellow-400/80 rounded-[2px]" />
-                            </div>
-                            <span className="font-mono text-white/40 text-xs">Debit</span>
-                         </div>
-                         <div className="font-mono text-lg tracking-widest mb-1 group-hover/card:text-white/90 transition-colors">•••• •••• •••• 4242</div>
-                         <div className="flex justify-between items-end">
-                            <span className="text-[10px] text-white/40 uppercase tracking-widest">Expires 12/25</span>
-                            <span className="font-bold text-white/80 text-sm">VISA</span>
-                         </div>
+                   <div className="flex flex-col items-center text-center space-y-4 mb-8">
+                      <div className="w-16 h-16 bg-[#F5F5F7] rounded-full flex items-center justify-center mb-2 shadow-inner">
+                         <ShieldCheck className="w-8 h-8 text-[#0066CC]" strokeWidth={1.5} />
+                      </div>
+                      <div>
+                         <h4 className="font-semibold text-[#1D1D1F] mb-1">Secure Payment</h4>
+                         <p className="text-sm text-[#1D1D1F]/60 max-w-[200px] mx-auto leading-relaxed">
+                            Your payment details are securely processed and stored by Stripe.
+                         </p>
+                      </div>
+                      <div className="flex items-center gap-2 px-3 py-1 bg-green-50 rounded-full border border-green-100">
+                         <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                         <span className="text-xs font-medium text-green-700 uppercase tracking-wide">Active</span>
                       </div>
                    </div>
                 </div>
                 
-                <div>
-                   <div className="text-xs text-gray-400 mb-4 px-1">
-                      Next billing date: <span className="text-gray-700 font-medium">{subscription?.subscription?.current_period_end ? new Date(subscription.subscription.current_period_end).toLocaleDateString() : 'N/A'}</span>
+                <div className="space-y-3">
+                   <div className="flex items-center justify-between px-1 mb-2">
+                      <span className="text-xs text-[#1D1D1F]/40 font-medium uppercase tracking-wider">Next Billing</span>
+                      <span className="text-sm font-semibold text-[#1D1D1F]">
+                         {subscription?.subscription?.current_period_end ? new Date(subscription.subscription.current_period_end).toLocaleDateString() : 'N/A'}
+                      </span>
                    </div>
+                   
+                   <button className="w-full py-3 rounded-xl bg-[#1D1D1F] text-white text-sm font-medium hover:bg-black transition-all flex items-center justify-center gap-2 group/manage shadow-md">
+                      Update Payment Method
+                      <ExternalLink className="w-3.5 h-3.5 opacity-50 group-hover/manage:translate-x-0.5 group-hover/manage:-translate-y-0.5 transition-transform" />
+                   </button>
+
                    {subscription?.status === 'active' && !subscription?.subscription?.cancel_at_period_end && (
                      <button
                        onClick={handleCancelSubscription}
