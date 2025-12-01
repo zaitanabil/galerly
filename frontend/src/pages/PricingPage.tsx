@@ -180,6 +180,14 @@ export default function PricingPage() {
     }
   ];
 
+  const getSavingsText = (plan: typeof plans[0]) => {
+    if (plan.price.monthly === 0) return null;
+    const annualTotal = plan.price.annual * 12;
+    const monthlyTotal = plan.price.monthly * 12;
+    const savings = monthlyTotal - annualTotal;
+    return savings > 0 ? `Save $${savings}/year` : null;
+  };
+
   return (
     <div className="min-h-screen bg-transparent">
       <Header />
@@ -228,27 +236,36 @@ export default function PricingPage() {
           </div>
 
           {/* Pricing Table - Desktop */}
-          <div className="hidden lg:block overflow-x-auto pb-12">
-            <div className="min-w-[1200px]">
-                  {/* Sticky Header */}
-              <div className="sticky top-[56px] z-20 bg-white/95 backdrop-blur-xl border-b border-gray-200 shadow-sm transition-all duration-300">
-                <div className="grid grid-cols-[240px_repeat(5,1fr)] p-0">
-                  <div className="col-span-1 p-6 flex items-end">
+          <div className="hidden lg:block pb-12">
+            <div className="border border-gray-200 rounded-3xl bg-white shadow-sm overflow-visible">
+              {/* Non-sticky Plan Header */}
+              <div className="bg-white/95 backdrop-blur-xl border-b border-gray-200 overflow-visible">
+                <div className="grid grid-cols-[240px_repeat(5,1fr)] overflow-visible">
+                  <div className="col-span-1 p-6 flex items-end border-r border-gray-100">
                     <span className="text-xs font-bold text-[#1D1D1F]/40 uppercase tracking-[0.2em]">Features</span>
                   </div>
-                  {plans.map((plan) => (
-                    <div key={plan.id} className={`col-span-1 flex flex-col items-center text-center relative p-6 border-l border-gray-100 ${plan.id === 'plus' ? 'bg-blue-50/30' : ''}`}>
+                  {plans.map((plan) => {
+                    const savings = getSavingsText(plan);
+                    return (
+                    <div key={plan.id} className={`col-span-1 flex flex-col items-center text-center relative p-6 border-r border-gray-100 last:border-r-0 overflow-visible ${plan.id === 'plus' ? 'bg-blue-50/30' : ''}`}>
                       {plan.badge && (
-                        <div className="absolute -top-4 bg-gradient-to-r from-[#0066CC] to-[#0099ff] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg shadow-blue-500/30">
+                        <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#0066CC] to-[#0099ff] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg shadow-blue-500/30 z-10">
                           {plan.badge}
                         </div>
                       )}
                       <h3 className={`text-lg font-bold mb-1 ${plan.id === 'plus' ? 'text-[#0066CC]' : 'text-[#1D1D1F]'}`}>{plan.name}</h3>
-                      <div className="mb-4 flex items-baseline justify-center">
-                        <span className="text-2xl font-bold text-[#1D1D1F]">
-                          ${billingPeriod === 'monthly' ? plan.price.monthly : plan.price.annual}
-                        </span>
-                        {plan.price.monthly > 0 && <span className="text-xs text-[#1D1D1F]/60 ml-0.5">/mo</span>}
+                      <div className="mb-4 flex flex-col items-center justify-center min-h-[60px]">
+                        <div className="flex items-baseline mb-1">
+                          <span className="text-2xl font-bold text-[#1D1D1F]">
+                            ${billingPeriod === 'monthly' ? plan.price.monthly : plan.price.annual}
+                          </span>
+                          <span className="text-xs text-[#1D1D1F]/60 ml-0.5">{plan.price.monthly > 0 ? '/mo' : ''}</span>
+                        </div>
+                        <div className="h-[16px] flex items-center justify-center">
+                          {billingPeriod === 'annual' && savings ? (
+                            <span className="text-[10px] font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">{savings}</span>
+                          ) : null}
+                        </div>
                       </div>
                       <Link
                         to={`/register?plan=${plan.id}&interval=${billingPeriod}`}
@@ -265,80 +282,87 @@ export default function PricingPage() {
                         {plan.price.monthly === 0 ? 'Start Free' : 'Choose'}
                       </Link>
                     </div>
-                  ))}
+                  )})}
                 </div>
               </div>
 
-              {/* Table Body */}
-              <div className="bg-white rounded-b-3xl border-x border-b border-gray-200 shadow-sm">
-                {features.map((category) => (
-                  <div key={category.category} className="group">
-                    <div className="px-6 py-3 bg-gray-50/80 border-y border-gray-100">
-                      <h4 className="font-bold text-[#1D1D1F] text-xs uppercase tracking-wider">{category.category}</h4>
+              {/* Table Body with Categories */}
+              {features.map((category, categoryIndex) => (
+                <div key={category.category}>
+                  {/* Category Header */}
+                  <div className="bg-[#F5F5F7] border-y border-gray-200">
+                    <div className="grid grid-cols-[240px_repeat(5,1fr)] px-6 py-4">
+                      <h4 className="col-span-6 font-bold text-[#1D1D1F] text-sm uppercase tracking-wider">{category.category}</h4>
                     </div>
-                    {category.items.map((feature, featIndex) => (
-                      <div 
-                        key={feature.name} 
-                        className={`
-                          grid grid-cols-[240px_repeat(5,1fr)] items-center transition-colors hover:bg-gray-50
-                          ${featIndex !== category.items.length - 1 ? 'border-b border-gray-50' : ''}
-                        `}
-                      >
-                        <div className="col-span-1 flex items-center gap-2 p-6 pr-4">
-                          <span className="text-sm font-medium text-[#1D1D1F] leading-snug">{feature.name}</span>
-                          <div className="group/tooltip relative cursor-help">
-                            <HelpCircle className="w-3.5 h-3.5 text-gray-300 hover:text-[#0066CC] transition-colors" />
-                            <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-56 p-3 bg-[#1D1D1F] text-white text-xs leading-relaxed rounded-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
-                              {feature.description}
-                            </div>
-                          </div>
-                        </div>
-                        {feature.values.map((val, i) => (
-                          <div key={i} className={`col-span-1 flex justify-center text-center p-6 h-full items-center border-l border-gray-50 ${i === 2 ? 'bg-blue-50/10' : ''}`}>
-                            {typeof val === 'boolean' ? (
-                              val ? (
-                                <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shadow-sm">
-                                  <Check className="w-3.5 h-3.5 text-[#0066CC]" strokeWidth={3} />
-                                </div>
-                              ) : (
-                                <Minus className="w-4 h-4 text-gray-200" />
-                              )
-                            ) : val === '-' ? (
-                              <Minus className="w-4 h-4 text-gray-200" />
-                            ) : (
-                              <span className="text-sm font-medium text-[#1D1D1F]">{val}</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ))}
                   </div>
-                ))}
-              </div>
-
-              {/* Bottom CTA */}
-              <div className="grid grid-cols-[240px_repeat(5,1fr)] p-0 border-t border-gray-200 bg-gray-50/50 rounded-b-3xl mt-[-1px]">
-                <div className="col-span-1"></div>
-                {plans.map((plan) => (
-                  <div key={plan.id} className={`col-span-1 text-center p-6 border-l border-gray-200/50 ${plan.id === 'plus' ? 'bg-blue-50/30' : ''}`}>
-                    <Link
-                      to={`/register?plan=${plan.id}&interval=${billingPeriod}`}
+                  
+                  {/* Feature Rows */}
+                  {category.items.map((feature, featIndex) => (
+                    <div 
+                      key={feature.name} 
                       className={`
-                        inline-flex items-center gap-2 text-sm font-bold hover:underline justify-center
-                        ${plan.id === 'plus' ? 'text-[#0066CC]' : 'text-[#1D1D1F]'}
+                        grid grid-cols-[240px_repeat(5,1fr)] items-center transition-colors hover:bg-gray-50
+                        ${featIndex !== category.items.length - 1 || categoryIndex !== features.length - 1 ? 'border-b border-gray-100' : ''}
                       `}
                     >
-                      Choose {plan.name} <ArrowRight className="w-4 h-4" />
-                    </Link>
-                  </div>
-                ))}
+                      <div className="col-span-1 flex items-center gap-2 p-6 pr-4 border-r border-gray-100">
+                        <span className="text-sm font-medium text-[#1D1D1F] leading-snug">{feature.name}</span>
+                        <div className="group/tooltip relative cursor-help">
+                          <HelpCircle className="w-3.5 h-3.5 text-gray-300 hover:text-[#0066CC] transition-colors" />
+                          <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-56 p-3 bg-[#1D1D1F] text-white text-xs leading-relaxed rounded-xl opacity-0 group-hover/tooltip:opacity-100 transition-opacity pointer-events-none z-50 shadow-xl">
+                            {feature.description}
+                          </div>
+                        </div>
+                      </div>
+                      {feature.values.map((val, i) => (
+                        <div key={i} className={`col-span-1 flex justify-center text-center p-6 h-full items-center border-r border-gray-100 last:border-r-0 ${i === 2 ? 'bg-blue-50/10' : ''}`}>
+                          {typeof val === 'boolean' ? (
+                            val ? (
+                              <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shadow-sm">
+                                <Check className="w-3.5 h-3.5 text-[#0066CC]" strokeWidth={3} />
+                              </div>
+                            ) : (
+                              <Minus className="w-4 h-4 text-gray-200" />
+                            )
+                          ) : val === '-' ? (
+                            <Minus className="w-4 h-4 text-gray-200" />
+                          ) : (
+                            <span className="text-sm font-medium text-[#1D1D1F]">{val}</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ))}
+                </div>
+              ))}
+
+              {/* Bottom CTA */}
+              <div className="bg-gray-50/50 border-t border-gray-200">
+                <div className="grid grid-cols-[240px_repeat(5,1fr)] p-0">
+                  <div className="col-span-1 border-r border-gray-100"></div>
+                  {plans.map((plan) => (
+                    <div key={plan.id} className={`col-span-1 text-center p-6 border-r border-gray-100 last:border-r-0 ${plan.id === 'plus' ? 'bg-blue-50/30' : ''}`}>
+                      <Link
+                        to={`/register?plan=${plan.id}&interval=${billingPeriod}`}
+                        className={`
+                          inline-flex items-center gap-2 text-sm font-bold hover:underline justify-center
+                          ${plan.id === 'plus' ? 'text-[#0066CC]' : 'text-[#1D1D1F]'}
+                        `}
+                      >
+                        Choose {plan.name} <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
 
           {/* Mobile View - Cards with expanded details */}
           <div className="lg:hidden space-y-8">
-            {plans.map((plan) => (
+            {plans.map((plan) => {
+              const savings = getSavingsText(plan);
+              return (
               <div 
                 key={plan.id}
                 className={`
@@ -360,6 +384,9 @@ export default function PricingPage() {
                     </span>
                     <span className="text-[#1D1D1F]/60">/mo</span>
                   </div>
+                  {billingPeriod === 'annual' && savings && (
+                    <p className="text-xs font-semibold text-green-600 bg-green-50 px-2.5 py-1 rounded-full inline-block mb-2">{savings}</p>
+                  )}
                   <p className="text-[#1D1D1F]/60 text-sm">{plan.description}</p>
                 </div>
 
@@ -403,7 +430,7 @@ export default function PricingPage() {
                   ))}
                 </div>
             </div>
-            ))}
+            )})}
           </div>
 
           {/* FAQ Section */}

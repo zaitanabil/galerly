@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { Check, AlertCircle, Zap, CreditCard, Download, Settings, LogOut, Minus, HelpCircle, Cloud, Image, ChevronRight, FileText, ShieldCheck, ExternalLink } from 'lucide-react';
+import { Check, AlertCircle, Zap, CreditCard, Download, Settings, LogOut, Minus, HelpCircle, Cloud, Image, ChevronRight, FileText, ShieldCheck, ExternalLink, ArrowRight } from 'lucide-react';
 import * as billingService from '../services/billingService';
 
 // Map service interface to local interface if needed, or use service interface
@@ -548,7 +548,7 @@ export default function BillingPage() {
                 <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
                   <h2 className="text-lg font-medium text-[#1D1D1F] flex items-center gap-2">
                     <Zap className="w-5 h-5 text-amber-500" />
-                    Available Plans
+                    Compare Plans
                   </h2>
 
                   {/* Billing Toggle */}
@@ -580,13 +580,13 @@ export default function BillingPage() {
                   </div>
                 </div>
 
-                {/* Desktop Table */}
-                <div className="hidden lg:block overflow-x-auto pb-12">
-                  <div className="min-w-[900px]">
-                    {/* Sticky Header */}
-                    <div className="sticky top-16 z-20 bg-[#F5F5F7]/95 backdrop-blur-xl border-b border-gray-200 shadow-sm transition-all duration-300 rounded-t-2xl">
-                      <div className="grid grid-cols-[240px_repeat(4,1fr)] p-0">
-                        <div className="col-span-1 p-6 flex items-end">
+                {/* Compare Plans Table */}
+                <div className="hidden lg:block pb-12">
+                  <div className="border border-gray-200 rounded-3xl bg-white shadow-sm overflow-visible">
+                    {/* Non-sticky Plan Header */}
+                    <div className="bg-[#F5F5F7]/95 backdrop-blur-xl border-b border-gray-200 overflow-visible">
+                      <div className="grid grid-cols-[240px_repeat(4,1fr)] overflow-visible">
+                        <div className="col-span-1 p-6 flex items-end border-r border-gray-200">
                           <span className="text-xs font-bold text-[#1D1D1F]/40 uppercase tracking-[0.2em]">Features</span>
                         </div>
                         {UPGRADE_PLANS.map((plan) => {
@@ -594,23 +594,25 @@ export default function BillingPage() {
                            const isPopular = plan.id === 'plus';
                            const savings = getSavingsText(plan);
                            return (
-                          <div key={plan.id} className={`col-span-1 flex flex-col items-center text-center relative p-6 border-l border-gray-200/50 ${isPopular ? 'bg-blue-50/30' : ''}`}>
+                          <div key={plan.id} className={`col-span-1 flex flex-col items-center text-center relative p-6 border-r border-gray-200 last:border-r-0 overflow-visible ${isPopular ? 'bg-blue-50/30' : ''}`}>
                             {plan.badge && (
-                              <div className="absolute -top-4 bg-gradient-to-r from-[#0066CC] to-[#0099ff] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg shadow-blue-500/30">
+                              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-gradient-to-r from-[#0066CC] to-[#0099ff] text-white text-[10px] font-bold px-3 py-1 rounded-full uppercase tracking-wider shadow-lg shadow-blue-500/30 z-10">
                                 {plan.badge}
                               </div>
                             )}
                             <h3 className={`text-lg font-bold mb-1 ${isPopular ? 'text-[#0066CC]' : 'text-[#1D1D1F]'}`}>{plan.name}</h3>
-                            <div className="mb-4 flex flex-col items-center justify-center">
-                               <div className="flex items-baseline">
+                            <div className="mb-4 flex flex-col items-center justify-center min-h-[60px]">
+                               <div className="flex items-baseline mb-1">
                                   <span className="text-2xl font-bold text-[#1D1D1F]">
                                     ${billingPeriod === 'monthly' ? plan.price.monthly : plan.price.annual}
                                   </span>
-                                  {plan.price.monthly > 0 && <span className="text-xs text-[#1D1D1F]/60 ml-0.5">/mo</span>}
+                                  <span className="text-xs text-[#1D1D1F]/60 ml-0.5">/mo</span>
                                 </div>
-                                {billingPeriod === 'annual' && savings && (
-                                  <span className="text-[10px] font-semibold text-green-600 mt-0.5 bg-green-50 px-2 py-0.5 rounded-full">{savings}</span>
-                                )}
+                                <div className="h-[16px] flex items-center justify-center">
+                                  {billingPeriod === 'annual' && savings ? (
+                                    <span className="text-[10px] font-semibold text-green-600 bg-green-50 px-2 py-0.5 rounded-full">{savings}</span>
+                                  ) : null}
+                                </div>
                             </div>
                             <button
                               onClick={() => !isCurrent && handleUpgrade(plan.id)}
@@ -638,22 +640,26 @@ export default function BillingPage() {
                       </div>
                     </div>
 
-                    {/* Table Body */}
-                    <div className="bg-white rounded-b-3xl border-x border-b border-gray-200 shadow-sm">
-                      {FEATURES_TABLE.map((category) => (
-                        <div key={category.category} className="group">
-                          <div className="px-6 py-3 bg-gray-50/80 border-y border-gray-100">
-                            <h4 className="font-bold text-[#1D1D1F] text-xs uppercase tracking-wider">{category.category}</h4>
+                    {/* Table Body with Categories */}
+                    {FEATURES_TABLE.map((category, categoryIndex) => (
+                      <div key={category.category}>
+                        {/* Category Header */}
+                        <div className="bg-[#F5F5F7] border-y border-gray-200">
+                          <div className="grid grid-cols-[240px_repeat(4,1fr)] px-6 py-4">
+                            <h4 className="col-span-5 font-bold text-[#1D1D1F] text-sm uppercase tracking-wider">{category.category}</h4>
                           </div>
+                        </div>
+                        
+                        {/* Feature Rows */}
                           {category.items.map((feature, featIndex) => (
                             <div 
                               key={feature.name} 
                               className={`
                                 grid grid-cols-[240px_repeat(4,1fr)] items-center transition-colors hover:bg-gray-50
-                                ${featIndex !== category.items.length - 1 ? 'border-b border-gray-50' : ''}
+                              ${featIndex !== category.items.length - 1 || categoryIndex !== FEATURES_TABLE.length - 1 ? 'border-b border-gray-100' : ''}
                               `}
                             >
-                              <div className="col-span-1 flex items-center gap-2 p-6 pr-4">
+                            <div className="col-span-1 flex items-center gap-2 p-6 pr-4 border-r border-gray-200">
                                 <span className="text-sm font-medium text-[#1D1D1F] leading-snug">{feature.name}</span>
                                 <div className="group/tooltip relative cursor-help">
                                   <HelpCircle className="w-3.5 h-3.5 text-gray-300 hover:text-[#0066CC] transition-colors" />
@@ -662,12 +668,11 @@ export default function BillingPage() {
                                   </div>
                                 </div>
                               </div>
-                              {UPGRADE_PLANS.map((plan) => {
+                              {UPGRADE_PLANS.map((plan, i) => {
                                 const originalIndex = PLANS.findIndex(p => p.id === plan.id);
                                 const value = feature.values[originalIndex];
-                                const isPopular = plan.id === 'plus';
                                 return (
-                                  <div key={plan.id} className={`col-span-1 flex justify-center text-center p-6 h-full items-center border-l border-gray-50 ${isPopular ? 'bg-blue-50/10' : ''}`}>
+                                <div key={plan.id} className={`col-span-1 flex justify-center text-center p-6 h-full items-center border-r border-gray-200 last:border-r-0 ${i === 1 ? 'bg-blue-50/10' : ''}`}>
                                       {typeof value === 'boolean' ? (
                                           value ? (
                                             <div className="w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center shadow-sm">
@@ -686,6 +691,29 @@ export default function BillingPage() {
                           ))}
                         </div>
                       ))}
+
+                    {/* Bottom CTA */}
+                    <div className="bg-gray-50/50 border-t border-gray-200">
+                      <div className="grid grid-cols-[240px_repeat(4,1fr)]">
+                        <div className="col-span-1 border-r border-gray-200"></div>
+                        {UPGRADE_PLANS.map((plan) => {
+                          const isCurrent = subscription?.plan === plan.id;
+                          return (
+                            <div key={plan.id} className={`col-span-1 text-center p-6 border-r border-gray-200 last:border-r-0 ${plan.id === 'plus' ? 'bg-blue-50/30' : ''}`}>
+                              <button
+                                onClick={() => !isCurrent && handleUpgrade(plan.id)}
+                                disabled={isCurrent || checkoutLoading === plan.id}
+                                className={`
+                                  inline-flex items-center gap-2 text-sm font-bold justify-center transition-all
+                                  ${isCurrent ? 'text-gray-400 cursor-default' : plan.id === 'plus' ? 'text-[#0066CC] hover:underline' : 'text-[#1D1D1F] hover:underline'}
+                                `}
+                              >
+                                {isCurrent ? 'Current Plan' : `Upgrade to ${plan.name}`} <ArrowRight className="w-4 h-4" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
