@@ -138,7 +138,8 @@ class TestSetupGalleryAutomation:
                 'id': 'gallery-123',
                 'user_id': mock_user['id'],
                 'title': 'Wedding Photos',
-                'expiration_date': (datetime.utcnow() + timedelta(days=30)).isoformat() + 'Z',
+                'selection_deadline': (datetime.utcnow() + timedelta(days=7)).isoformat() + 'Z',
+                'created_at': datetime.utcnow().isoformat() + 'Z',
                 'client_emails': ['client@test.com']
             }
         }
@@ -146,7 +147,8 @@ class TestSetupGalleryAutomation:
         body = {
             'gallery_id': 'gallery-123',
             'automation_settings': {
-                'expiration_reminders': True
+                'selection_reminders': True,
+                'download_reminders': True
             }
         }
         
@@ -171,7 +173,7 @@ class TestSetupGalleryAutomation:
         
         body = {
             'gallery_id': 'gallery-123',
-            'automation_settings': {'expiration_reminders': True}
+            'automation_settings': {'selection_reminders': True}
         }
         
         response = handle_setup_gallery_automation(mock_user, body)

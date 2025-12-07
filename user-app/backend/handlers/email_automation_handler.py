@@ -10,7 +10,6 @@ from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb, galleries_table, users_table, photos_table
 from utils.response import create_response
 from utils.email import (
-    send_gallery_expiration_reminder_email,
     send_selection_reminder_email,
     send_download_reminder_email
 )
@@ -35,7 +34,7 @@ def handle_schedule_automated_email(user, body):
                 'upgrade_required': True
             })
         
-        email_type = body.get('email_type')  # 'expiration_reminder', 'selection_reminder', 'download_reminder'
+        email_type = body.get('email_type')  # 'selection_reminder', 'download_reminder', 'custom'
         gallery_id = body.get('gallery_id')
         scheduled_time = body.get('scheduled_time')  # ISO format
         recipient_email = body.get('recipient_email')
@@ -52,7 +51,7 @@ def handle_schedule_automated_email(user, body):
             return create_response(400, {'error': 'Invalid scheduled_time format'})
         
         # Validate email type
-        allowed_types = ['expiration_reminder', 'selection_reminder', 'download_reminder', 'custom']
+        allowed_types = ['selection_reminder', 'download_reminder', 'custom']
         if email_type not in allowed_types:
             return create_response(400, {'error': f'Invalid email type. Allowed: {", ".join(allowed_types)}'})
         
@@ -223,17 +222,7 @@ def _send_automated_email(email):
         
         success = False
         
-        if email_type == 'expiration_reminder':
-            expiration_date = gallery.get('expiration_date', 'soon')
-            success = send_gallery_expiration_reminder_email(
-                recipient_email,
-                user.get('name', 'Photographer'),
-                gallery.get('name', 'Your gallery'),
-                gallery_url,
-                expiration_date
-            )
-        
-        elif email_type == 'selection_reminder':
+        if email_type == 'selection_reminder':
             success = send_selection_reminder_email(
                 recipient_email,
                 gallery.get('client_name', 'Client'),
@@ -302,30 +291,6 @@ def handle_setup_gallery_automation(user, body):
         # Get current time with timezone info for comparison
         from datetime import timezone
         now_utc = datetime.now(timezone.utc)
-        
-        # Schedule expiration reminder (7 days before, 1 day before)
-        if automation_settings.get('expiration_reminders', True) and gallery.get('expiration_date'):
-            expiration_date = datetime.fromisoformat(gallery['expiration_date'].replace('Z', '+00:00'))
-            
-            # 7 days before
-            reminder_7d = expiration_date - timedelta(days=7)
-            if reminder_7d > now_utc:
-                scheduled_emails.append({
-                    'email_type': 'expiration_reminder',
-                    'scheduled_time': reminder_7d.isoformat().replace('+00:00', 'Z'),
-                    'recipient_email': gallery.get('client_email'),
-                    'gallery_id': gallery_id
-                })
-            
-            # 1 day before
-            reminder_1d = expiration_date - timedelta(days=1)
-            if reminder_1d > now_utc:
-                scheduled_emails.append({
-                    'email_type': 'expiration_reminder',
-                    'scheduled_time': reminder_1d.isoformat().replace('+00:00', 'Z'),
-                    'recipient_email': gallery.get('client_email'),
-                    'gallery_id': gallery_id
-                })
         
         # Schedule selection reminder (if selection_deadline is set)
         if automation_settings.get('selection_reminders', True) and gallery.get('selection_deadline'):
