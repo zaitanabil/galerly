@@ -43,6 +43,14 @@ def handle_schedule_automated_email(user, body):
         if not all([email_type, gallery_id, scheduled_time, recipient_email]):
             return create_response(400, {'error': 'Missing required fields'})
         
+        # Validate scheduled time is not in the past
+        try:
+            scheduled_dt = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+            if scheduled_dt < datetime.utcnow().replace(tzinfo=scheduled_dt.tzinfo):
+                return create_response(400, {'error': 'Cannot schedule emails in the past'})
+        except ValueError:
+            return create_response(400, {'error': 'Invalid scheduled_time format'})
+        
         # Validate email type
         allowed_types = ['expiration_reminder', 'selection_reminder', 'download_reminder', 'custom']
         if email_type not in allowed_types:
@@ -161,25 +169,19 @@ def handle_process_email_queue(event, context):
                 traceback.print_exc()
         
         result = {
-            'status': 'completed',
-            'emails_processed': len(pending_emails),
-            'emails_sent': sent_count,
-            'emails_failed': failed_count,
-            'timestamp': current_time_str
+            'processed': len(pending_emails),
+            'sent': sent_count,
+            'failed': failed_count
         }
         
         print(f"Email queue processing completed: {sent_count} sent, {failed_count} failed")
-        return result
+        return create_response(200, result)
         
     except Exception as e:
         print(f"Error processing email queue: {str(e)}")
         import traceback
         traceback.print_exc()
-        return {
-            'status': 'error',
-            'error': str(e),
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
-        }
+        return create_response(500, {'error': str(e)})
 
 
 def _send_automated_email(email):
@@ -285,15 +287,21 @@ def handle_setup_gallery_automation(user, body):
             return create_response(400, {'error': 'gallery_id required'})
         
         # Get gallery
-        gallery_response = galleries_table.scan(
-            FilterExpression=Attr('id').eq(gallery_id) & Attr('user_id').eq(user['id'])
-        )
-        galleries = gallery_response.get('Items', [])
-        if not galleries:
+        from utils.config import galleries_table
+        gallery_response = galleries_table.get_item(Key={'id': gallery_id})
+        if 'Item' not in gallery_response:
             return create_response(404, {'error': 'Gallery not found'})
         
-        gallery = galleries[0]
+        gallery = gallery_response['Item']
+        
+        # Verify ownership
+        if gallery.get('user_id') != user['id']:
+            return create_response(403, {'error': 'Unauthorized'})
         scheduled_emails = []
+        
+        # Get current time with timezone info for comparison
+        from datetime import timezone
+        now_utc = datetime.now(timezone.utc)
         
         # Schedule expiration reminder (7 days before, 1 day before)
         if automation_settings.get('expiration_reminders', True) and gallery.get('expiration_date'):
@@ -301,20 +309,20 @@ def handle_setup_gallery_automation(user, body):
             
             # 7 days before
             reminder_7d = expiration_date - timedelta(days=7)
-            if reminder_7d > datetime.utcnow():
+            if reminder_7d > now_utc:
                 scheduled_emails.append({
                     'email_type': 'expiration_reminder',
-                    'scheduled_time': reminder_7d.isoformat() + 'Z',
+                    'scheduled_time': reminder_7d.isoformat().replace('+00:00', 'Z'),
                     'recipient_email': gallery.get('client_email'),
                     'gallery_id': gallery_id
                 })
             
             # 1 day before
             reminder_1d = expiration_date - timedelta(days=1)
-            if reminder_1d > datetime.utcnow():
+            if reminder_1d > now_utc:
                 scheduled_emails.append({
                     'email_type': 'expiration_reminder',
-                    'scheduled_time': reminder_1d.isoformat() + 'Z',
+                    'scheduled_time': reminder_1d.isoformat().replace('+00:00', 'Z'),
                     'recipient_email': gallery.get('client_email'),
                     'gallery_id': gallery_id
                 })
@@ -325,10 +333,10 @@ def handle_setup_gallery_automation(user, body):
             
             # 3 days before deadline
             reminder_3d = deadline - timedelta(days=3)
-            if reminder_3d > datetime.utcnow():
+            if reminder_3d > now_utc:
                 scheduled_emails.append({
                     'email_type': 'selection_reminder',
-                    'scheduled_time': reminder_3d.isoformat() + 'Z',
+                    'scheduled_time': reminder_3d.isoformat().replace('+00:00', 'Z'),
                     'recipient_email': gallery.get('client_email'),
                     'gallery_id': gallery_id
                 })
@@ -339,10 +347,10 @@ def handle_setup_gallery_automation(user, body):
             created_at = datetime.fromisoformat(gallery['created_at'].replace('Z', '+00:00'))
             reminder_time = created_at + timedelta(days=reminder_days)
             
-            if reminder_time > datetime.utcnow():
+            if reminder_time > now_utc:
                 scheduled_emails.append({
                     'email_type': 'download_reminder',
-                    'scheduled_time': reminder_time.isoformat() + 'Z',
+                    'scheduled_time': reminder_time.isoformat().replace('+00:00', 'Z'),
                     'recipient_email': gallery.get('client_email'),
                     'gallery_id': gallery_id
                 })
