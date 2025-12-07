@@ -122,6 +122,8 @@ class TestCompleteMultipartUpload:
         # Setup
         mock_galleries.get_item.return_value = {'Item': mock_gallery}
         mock_s3.complete_multipart_upload.return_value = {'ETag': 'etag-123'}
+        # Add mock for head_object to provide file size
+        mock_s3.head_object.return_value = {'ContentLength': 50000000}  # 50MB
         mock_photos.put_item.return_value = {}
         
         event = {

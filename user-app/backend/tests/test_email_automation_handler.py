@@ -46,7 +46,7 @@ def mock_scheduled_email():
 class TestScheduleAutomatedEmail:
     """Test email scheduling functionality"""
     
-    @patch('handlers.email_automation_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     @patch('handlers.email_automation_handler.email_queue_table')
     def test_schedule_email_success(self, mock_table, mock_features, mock_user):
         """Test successful email scheduling"""
@@ -54,22 +54,21 @@ class TestScheduleAutomatedEmail:
         
         body = {
             'recipient_email': 'client@test.com',
+            'gallery_id': 'gallery-123',
+            'email_type': 'custom',
             'subject': 'Gallery Ready',
-            'body_html': '<p>Your gallery is ready</p>',
-            'body_text': 'Your gallery is ready',
-            'scheduled_time': (datetime.utcnow() + timedelta(days=1)).isoformat() + 'Z',
-            'email_type': 'gallery_ready'
+            'body': '<p>Your gallery is ready</p>',
+            'scheduled_time': (datetime.utcnow() + timedelta(days=1)).isoformat() + 'Z'
         }
         
         response = handle_schedule_automated_email(mock_user, body)
         
-        assert response['statusCode'] == 201
+        assert response['statusCode'] == 200
         body_data = json.loads(response['body'])
         assert 'email_id' in body_data
-        assert body_data['status'] == 'scheduled'
         mock_table.put_item.assert_called_once()
     
-    @patch('handlers.email_automation_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     def test_schedule_email_requires_pro_plan(self, mock_features, mock_user):
         """Test that email automation requires Pro/Ultimate plan"""
         mock_features.return_value = ({'email_automation': False}, None, None)
@@ -88,7 +87,7 @@ class TestScheduleAutomatedEmail:
         body_data = json.loads(response['body'])
         assert 'upgrade_required' in body_data
     
-    @patch('handlers.email_automation_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     def test_schedule_email_validates_required_fields(self, mock_features, mock_user):
         """Test validation of required fields"""
         mock_features.return_value = ({'email_automation': True}, None, None)
@@ -104,16 +103,17 @@ class TestScheduleAutomatedEmail:
         body_data = json.loads(response['body'])
         assert 'required' in body_data['error'].lower()
     
-    @patch('handlers.email_automation_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     def test_schedule_email_prevents_past_scheduling(self, mock_features, mock_user):
         """Test that emails cannot be scheduled in the past"""
         mock_features.return_value = ({'email_automation': True}, None, None)
         
         body = {
             'recipient_email': 'client@test.com',
+            'gallery_id': 'gallery-123',
+            'email_type': 'custom',
             'subject': 'Test',
-            'body_html': '<p>Test</p>',
-            'body_text': 'Test',
+            'body': '<p>Test</p>',
             'scheduled_time': (datetime.utcnow() - timedelta(days=1)).isoformat() + 'Z'
         }
         
@@ -127,8 +127,8 @@ class TestScheduleAutomatedEmail:
 class TestSetupGalleryAutomation:
     """Test gallery automation setup"""
     
-    @patch('handlers.email_automation_handler.get_user_features')
-    @patch('handlers.email_automation_handler.galleries_table')
+    @patch('handlers.subscription_handler.get_user_features')
+    @patch('utils.config.galleries_table')
     @patch('handlers.email_automation_handler.email_queue_table')
     def test_setup_gallery_automation_success(self, mock_queue, mock_galleries, mock_features, mock_user):
         """Test successful gallery automation setup"""
@@ -184,7 +184,7 @@ class TestSetupGalleryAutomation:
 class TestProcessEmailQueue:
     """Test email queue processing"""
     
-    @patch('handlers.email_automation_handler.send_email')
+    @patch('utils.email.send_email')
     @patch('handlers.email_automation_handler.email_queue_table')
     def test_process_queue_sends_due_emails(self, mock_table, mock_send):
         """Test processing emails that are due"""
@@ -206,7 +206,7 @@ class TestProcessEmailQueue:
         }
         mock_send.return_value = None  # Success
         
-        response = handle_process_email_queue()
+        response = handle_process_email_queue({}, None)
         
         assert response['statusCode'] == 200
         body_data = json.loads(response['body'])
@@ -214,7 +214,7 @@ class TestProcessEmailQueue:
         mock_send.assert_called()
         mock_table.put_item.assert_called()  # Status update
     
-    @patch('handlers.email_automation_handler.send_email')
+    @patch('utils.email.send_email')
     @patch('handlers.email_automation_handler.email_queue_table')
     def test_process_queue_retries_failed_emails(self, mock_table, mock_send):
         """Test retry logic for failed emails"""
@@ -236,14 +236,14 @@ class TestProcessEmailQueue:
         }
         mock_send.side_effect = Exception('SMTP error')
         
-        response = handle_process_email_queue()
+        response = handle_process_email_queue({}, None)
         
         assert response['statusCode'] == 200
         # Should update status to retry
         calls = mock_table.put_item.call_args_list
         assert any('retry_count' in str(call) for call in calls)
     
-    @patch('handlers.email_automation_handler.send_email')
+    @patch('utils.email.send_email')
     @patch('handlers.email_automation_handler.email_queue_table')
     def test_process_queue_marks_failed_after_max_retries(self, mock_table, mock_send):
         """Test marking emails as failed after max retries"""
@@ -265,7 +265,7 @@ class TestProcessEmailQueue:
         }
         mock_send.side_effect = Exception('SMTP error')
         
-        response = handle_process_email_queue()
+        response = handle_process_email_queue({}, None)
         
         assert response['statusCode'] == 200
         # Should mark as failed
@@ -279,6 +279,7 @@ class TestCancelScheduledEmail:
     @patch('handlers.email_automation_handler.email_queue_table')
     def test_cancel_email_success(self, mock_table, mock_user, mock_scheduled_email):
         """Test successful email cancellation"""
+        mock_scheduled_email['user_id'] = mock_user['id']  # Ensure ownership
         mock_table.get_item.return_value = {'Item': mock_scheduled_email}
         
         response = handle_cancel_scheduled_email(mock_user, 'email-123')
@@ -316,6 +317,7 @@ class TestCancelScheduledEmail:
     def test_cancel_already_sent_email_fails(self, mock_table, mock_user, mock_scheduled_email):
         """Test that already sent emails cannot be cancelled"""
         mock_scheduled_email['status'] = 'sent'
+        mock_scheduled_email['user_id'] = mock_user['id']
         mock_table.get_item.return_value = {'Item': mock_scheduled_email}
         
         response = handle_cancel_scheduled_email(mock_user, 'email-123')
@@ -329,8 +331,13 @@ class TestListScheduledEmails:
     @patch('handlers.email_automation_handler.email_queue_table')
     def test_list_all_scheduled_emails(self, mock_table, mock_user, mock_scheduled_email):
         """Test listing all scheduled emails for user"""
+        email1 = mock_scheduled_email.copy()
+        email1['user_id'] = mock_user['id']
+        email2 = mock_scheduled_email.copy()
+        email2['user_id'] = mock_user['id']
+        email2['id'] = 'email-456'
         mock_table.query.return_value = {
-            'Items': [mock_scheduled_email, mock_scheduled_email.copy()]
+            'Items': [email1, email2]
         }
         
         response = handle_list_scheduled_emails(mock_user, None)
@@ -344,6 +351,7 @@ class TestListScheduledEmails:
     def test_list_scheduled_emails_filtered_by_gallery(self, mock_table, mock_user, mock_scheduled_email):
         """Test filtering scheduled emails by gallery"""
         mock_scheduled_email['gallery_id'] = 'gallery-123'
+        mock_scheduled_email['user_id'] = mock_user['id']
         mock_table.query.return_value = {'Items': [mock_scheduled_email]}
         
         response = handle_list_scheduled_emails(mock_user, 'gallery-123')

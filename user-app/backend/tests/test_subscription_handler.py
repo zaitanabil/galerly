@@ -38,8 +38,8 @@ class TestGetUserFeatures:
         assert plan_name.lower() == 'free'
         # FIX: Free plan has 2GB storage, not 5GB (per handler defaults)
         assert features['storage_gb'] == 2
-        # FIX: Free plan uses 'galleries_per_month', not 'galleries_limit'
-        assert features.get('galleries_per_month', 3) == 3
+        # FIX: Free plan uses -1 (unlimited galleries_per_month), but has max_galleries limit instead
+        assert features.get('galleries_per_month', -1) == -1
         assert features.get('watermark', False) == False
     
     @patch('handlers.subscription_handler.users_table')

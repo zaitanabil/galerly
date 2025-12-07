@@ -119,12 +119,13 @@ def handle_update_branding_settings(user, body):
                 update_expressions.append('theme_font_family = :theme_font')
                 expression_values[':theme_font'] = str(theme['font_family'])
         
+        # Check if any fields to update (before adding updated_at)
+        if not update_expressions:
+            return create_response(400, {'error': 'No valid fields to update'})
+        
         # Add updated timestamp
         update_expressions.append('updated_at = :updated_at')
         expression_values[':updated_at'] = datetime.utcnow().isoformat() + 'Z'
-        
-        if not update_expressions:
-            return create_response(400, {'error': 'No valid fields to update'})
         
         # Update user record
         users_table.update_item(

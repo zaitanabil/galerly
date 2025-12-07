@@ -146,7 +146,13 @@ class TestGetUploadUrl:
         """Test video upload rejected for plans without video support"""
         mock_table.get_item.return_value = {'Item': mock_gallery}
         mock_enforce.return_value = (True, None)
-        mock_features.return_value = ({'video_quality': 'none', 'video_minutes': 0}, None, None)
+        # Mock with complete feature dict
+        mock_features.return_value = ({
+            'video_quality': 'none',
+            'video_minutes': 0,
+            'galleries_per_month': -1,
+            'storage_gb': 2
+        }, None, None)
         
         event = {
             'body': json.dumps({
@@ -373,7 +379,12 @@ class TestFileTypeValidation:
         mock_user['plan'] = 'pro'
         mock_table.get_item.return_value = {'Item': mock_gallery}
         mock_enforce.return_value = (True, None)
-        mock_features.return_value = ({'raw_support': True}, None, None)
+        # Mock with complete feature dict
+        mock_features.return_value = ({
+            'raw_support': True,
+            'galleries_per_month': -1,
+            'storage_gb': 100
+        }, None, None)
         
         mock_s3.generate_presigned_post.return_value = {
             'url': 'https://s3.amazonaws.com/bucket',
