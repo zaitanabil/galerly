@@ -5,31 +5,29 @@ import pytest
 import json
 import base64
 import sys
+import importlib
 from unittest.mock import patch, MagicMock
 from decimal import Decimal
-from handlers.photo_upload_presigned import (
-    handle_get_upload_url,
-    handle_direct_upload,
-    handle_confirm_upload
-)
 
 
 # Fixture to ensure clean module imports for photo_upload_presigned tests
 @pytest.fixture(autouse=True)
 def clean_module_imports():
     """Force clean import state to prevent cross-test contamination"""
-    # Clear any cached imports that might interfere with mocks
-    modules_to_clear = [
-        'handlers.photo_upload_presigned',
-        'handlers.subscription_handler'
-    ]
-    for mod in modules_to_clear:
-        if mod in sys.modules:
-            # Don't actually delete - just ensure patches work
-            pass
+    # Force reload of the handler module to clear cached imports
+    if 'handlers.photo_upload_presigned' in sys.modules:
+        importlib.reload(sys.modules['handlers.photo_upload_presigned'])
     yield
     # Cleanup after test
     pass
+
+
+# Import handlers AFTER defining the fixture to ensure clean state
+from handlers.photo_upload_presigned import (
+    handle_get_upload_url,
+    handle_direct_upload,
+    handle_confirm_upload
+)
 
 
 @pytest.fixture
@@ -395,19 +393,33 @@ class TestFileTypeValidation:
     @patch('handlers.photo_upload_presigned.enforce_storage_limit')
     @patch('utils.config.galleries_table')
     @patch('handlers.photo_upload_presigned.s3_client')
-    def test_allowed_raw_formats(self, mock_s3, mock_table, mock_enforce, mock_features, mock_user, mock_gallery):
+    def test_allowed_raw_formats(self, mock_s3, mock_table, mock_enforce, mock_features, mock_user, mock_gallery, monkeypatch):
         """Test that RAW formats are accepted with proper plan"""
+        # Clear utils.config table cache
+        import utils.config
+        utils.config._tables_cache.clear()
+        
+        # Clear LazyTable cache if it exists
+        if hasattr(utils.config.galleries_table, '_table'):
+            utils.config.galleries_table._table = None
+        
+        # Set global_mock_table (LazyTable will use this in test mode)
+        from tests.conftest import global_mock_table
+        global_mock_table.reset_mock()
+        global_mock_table.get_item.return_value = {'Item': mock_gallery}
+        
+        # Also set the patch mock
+        mock_table.get_item.return_value = {'Item': mock_gallery}
+        
         # Reset user plan
         mock_user['plan'] = 'pro'
         
-        # Explicitly reset all mocks to ensure clean state
-        mock_table.reset_mock()
+        # Reset other mocks
         mock_enforce.reset_mock()
         mock_features.reset_mock()
         mock_s3.reset_mock()
         
-        # Set return values after reset
-        mock_table.get_item.return_value = {'Item': mock_gallery}
+        # Set return values
         mock_enforce.return_value = (True, None)
         mock_features.return_value = ({
             'raw_support': True,
