@@ -576,10 +576,12 @@ def handle_reset_password(body):
 def handle_delete_account(user, cookie_header=None):
     """
     Initiate account deletion as a background job
-    Returns immediately with job_id for status tracking
+    In LocalStack mode: Process deletion synchronously for immediate testing
+    In Production: Queue as background job for asynchronous processing
     """
     try:
-        from handlers.background_jobs_handler import create_background_job
+        from handlers.background_jobs_handler import create_background_job, process_account_deletion
+        from utils.config import AWS_ENDPOINT_URL
         
         # Extract session token from cookie to clear it immediately
         session_token = None
@@ -605,6 +607,29 @@ def handle_delete_account(user, cookie_header=None):
             metadata={'initiated_at': datetime.utcnow().isoformat() + 'Z'}
         )
         
+        # In LocalStack mode: Process deletion synchronously
+        if AWS_ENDPOINT_URL and 'localstack' in AWS_ENDPOINT_URL.lower():
+            print(f"Processing account deletion synchronously for user {user['email']}")
+            success = process_account_deletion(
+                job_id=job_id,
+                user_id=user['id'],
+                user_email=user['email']
+            )
+            
+            # Clear session cookie
+            is_local = os.environ.get('ENVIRONMENT') == 'local'
+            secure_flag = '; Secure' if not is_local else ''
+            cookie_value = f'galerly_session=; HttpOnly{secure_flag}; SameSite=Strict; Path=/; Max-Age=0'
+            
+            if success:
+                return create_response(200, {
+                    'message': 'Account deleted successfully',
+                    'job_id': job_id
+                }, headers={'Set-Cookie': cookie_value})
+            else:
+                return create_response(500, {'error': 'Failed to delete account'})
+        
+        # Production mode: Queue as background job for async processing
         # Clear session cookie
         is_local = os.environ.get('ENVIRONMENT') == 'local'
         secure_flag = '; Secure' if not is_local else ''
