@@ -981,11 +981,6 @@ def handler(event, context):
         if path.startswith('/v1/email-automation/scheduled/') and method == 'DELETE':
             email_id = path.split('/')[-1]
             return handle_cancel_scheduled_email(user, email_id)
-                else:
-                    return create_response(400, {'error': 'Invalid preview path'})
-            except (ValueError, IndexError):
-                return create_response(400, {'error': 'Invalid preview path'})
-            return handle_preview_template(user, template_type, body)
         
         # Manual expiry check (photographer can test expiry notifications)
         if path == '/v1/galleries/check-expiring' and method == 'POST':
