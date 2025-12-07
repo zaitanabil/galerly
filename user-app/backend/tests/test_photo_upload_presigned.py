@@ -17,6 +17,15 @@ def clean_module_imports():
     # Force reload of the handler module to clear cached imports
     if 'handlers.photo_upload_presigned' in sys.modules:
         importlib.reload(sys.modules['handlers.photo_upload_presigned'])
+    
+    # Clear table cache in utils.config for ALL LazyTable instances
+    import utils.config
+    utils.config._tables_cache.clear()
+    for attr_name in dir(utils.config):
+        attr = getattr(utils.config, attr_name)
+        if hasattr(attr, '_table') and hasattr(attr, '_env_var'):  # It's a LazyTable
+            attr._table = None
+    
     yield
     # Cleanup after test
     pass
@@ -389,39 +398,30 @@ class TestFileTypeValidation:
             response = handle_get_upload_url('gallery-123', mock_user, event)
             assert response['statusCode'] == 200, f"Format {ext} should be allowed"
     
+    @patch('handlers.subscription_handler.get_user_features')  # Patch at subscription_handler level for multipart
     @patch('handlers.photo_upload_presigned.get_user_features')
     @patch('handlers.photo_upload_presigned.enforce_storage_limit')
     @patch('utils.config.galleries_table')
     @patch('handlers.photo_upload_presigned.s3_client')
-    def test_allowed_raw_formats(self, mock_s3, mock_table, mock_enforce, mock_features, mock_user, mock_gallery, monkeypatch):
+    def test_allowed_raw_formats(self, mock_s3, mock_table, mock_enforce, mock_features, mock_features_subscription, mock_user, mock_gallery):
         """Test that RAW formats are accepted with proper plan"""
-        # Clear utils.config table cache
-        import utils.config
-        utils.config._tables_cache.clear()
-        
-        # Clear LazyTable cache if it exists
-        if hasattr(utils.config.galleries_table, '_table'):
-            utils.config.galleries_table._table = None
-        
-        # Set global_mock_table (LazyTable will use this in test mode)
+        # ALSO configure global_mock_table directly since LazyTable uses it in test mode
         from tests.conftest import global_mock_table
-        global_mock_table.reset_mock()
         global_mock_table.get_item.return_value = {'Item': mock_gallery}
-        
-        # Also set the patch mock
-        mock_table.get_item.return_value = {'Item': mock_gallery}
         
         # Reset user plan
         mock_user['plan'] = 'pro'
         
-        # Reset other mocks
-        mock_enforce.reset_mock()
-        mock_features.reset_mock()
-        mock_s3.reset_mock()
-        
-        # Set return values
+        # Set mock return values (same order as test_get_upload_url_success)
+        mock_table.get_item.return_value = {'Item': mock_gallery}
         mock_enforce.return_value = (True, None)
+        # Mock both photo_upload_presigned and subscription_handler get_user_features
         mock_features.return_value = ({
+            'raw_support': True,
+            'galleries_per_month': -1,
+            'storage_gb': 100
+        }, None, None)
+        mock_features_subscription.return_value = ({
             'raw_support': True,
             'galleries_per_month': -1,
             'storage_gb': 100
