@@ -258,7 +258,7 @@ def _send_automated_email(email):
 def handle_setup_gallery_automation(user, body):
     """
     Setup automated emails for a gallery
-    Schedules expiration reminders, selection reminders based on gallery settings
+    Schedules selection reminders and download reminders based on gallery settings
     """
     try:
         # Check plan

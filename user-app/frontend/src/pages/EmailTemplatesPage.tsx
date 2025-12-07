@@ -23,7 +23,6 @@ interface TemplateDetails {
 
 const TEMPLATE_LABELS: Record<string, string> = {
   gallery_ready: 'Gallery Ready',
-  gallery_expiring: 'Gallery Expiring Soon',
   gallery_shared_with_account: 'Gallery Shared (Existing User)',
   gallery_shared_no_account: 'Gallery Shared (New User)',
   new_photos_added: 'New Photos Added',

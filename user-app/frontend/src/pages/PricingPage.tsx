@@ -123,7 +123,7 @@ export default function PricingPage() {
         },
         { 
           name: 'Email Automation', 
-          description: 'Send automated emails for gallery expiry, download reminders, and more.',
+          description: 'Send automated emails for selection reminders, download notifications, and custom messages.',
           values: [false, false, false, true, true] 
         },
         { 

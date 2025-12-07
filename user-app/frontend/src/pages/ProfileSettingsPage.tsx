@@ -29,7 +29,6 @@ interface NotificationPreferences {
     new_photos_added: boolean;
     gallery_ready: boolean;
     selection_reminder: boolean;
-    gallery_expiring: boolean;
     custom_messages: boolean;
   };
   photographer_notifications: {
@@ -66,7 +65,6 @@ export default function ProfileSettingsPage() {
         new_photos_added: true,
         gallery_ready: true,
         selection_reminder: true,
-        gallery_expiring: true,
         custom_messages: true
     },
     photographer_notifications: {
@@ -779,14 +777,14 @@ export default function ProfileSettingsPage() {
                         <label className="flex items-center gap-3 cursor-pointer">
                             <input
                                 type="checkbox"
-                                checked={preferences.client_notifications.gallery_expiring}
+                                checked={preferences.client_notifications.custom_messages}
                                 onChange={(e) => setPreferences({
                                     ...preferences,
-                                    client_notifications: { ...preferences.client_notifications, gallery_expiring: e.target.checked }
+                                    client_notifications: { ...preferences.client_notifications, custom_messages: e.target.checked }
                                 })}
                                 className="w-5 h-5 text-[#0066CC] rounded focus:ring-[#0066CC]"
                             />
-                            <span className="text-sm text-[#1D1D1F]">Gallery expiring soon</span>
+                            <span className="text-sm text-[#1D1D1F]">Custom messages from photographer</span>
                         </label>
                     </div>
                 </div>
