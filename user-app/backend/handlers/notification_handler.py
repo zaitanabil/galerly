@@ -10,7 +10,6 @@ from utils.email import (
     send_gallery_ready_email,
     send_selection_reminder_email,
     send_custom_email,
-    send_gallery_expiring_email,
     send_client_selected_photos_email,
     send_client_feedback_email,
     send_payment_received_email,
@@ -29,7 +28,6 @@ DEFAULT_PREFERENCES = {
         'new_photos_added': True,
         'gallery_ready': True,
         'selection_reminder': True,
-        'gallery_expiring': True,
         'payment_received': True,
         'custom_messages': True
     },
@@ -160,20 +158,6 @@ def notify_selection_reminder(user_id, gallery_id, client_email, client_name, ph
         return False
     except Exception as e:
         print(f"Error sending selection reminder: {str(e)}")
-        return False
-
-
-def notify_gallery_expiring(user_id, gallery_id, client_email, client_name, photographer_name, gallery_url, days_remaining):
-    """Send notification when gallery is about to expire"""
-    try:
-        if should_send_notification(user_id, 'gallery_expiring'):
-            return send_gallery_expiring_email(
-                client_email, client_name, photographer_name,
-                gallery_id, gallery_url, days_remaining, user_id=user_id
-            )
-        return False
-    except Exception as e:
-        print(f"Error sending gallery expiring notification: {str(e)}")
         return False
 
 

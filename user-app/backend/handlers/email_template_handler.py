@@ -18,7 +18,6 @@ CUSTOMIZABLE_TEMPLATES = [
     'gallery_ready',
     'selection_reminder',
     'custom_message',
-    'gallery_expiring_soon',
     'client_selected_photos',
     'client_feedback_received'
 ]
@@ -31,7 +30,6 @@ TEMPLATE_VARIABLES = {
     'gallery_ready': ['client_name', 'photographer_name', 'gallery_name', 'gallery_url', 'message'],
     'selection_reminder': ['client_name', 'photographer_name', 'gallery_name', 'gallery_url', 'message'],
     'custom_message': ['client_name', 'photographer_name', 'subject', 'title', 'message', 'button_html'],
-    'gallery_expiring_soon': ['client_name', 'photographer_name', 'gallery_name', 'gallery_url', 'days_remaining'],
     'client_selected_photos': ['photographer_name', 'client_name', 'gallery_name', 'gallery_url', 'selection_count'],
     'client_feedback_received': ['photographer_name', 'client_name', 'gallery_name', 'gallery_url', 'rating', 'feedback']
 }

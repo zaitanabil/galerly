@@ -108,7 +108,6 @@ export default function EmailAutomationPage() {
 
   const getEmailTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
-      'expiration_reminder': 'Expiration Reminder',
       'selection_reminder': 'Selection Reminder',
       'download_reminder': 'Download Reminder',
       'custom': 'Custom Message'

@@ -1788,7 +1788,11 @@ export default function GalleryPage() {
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="text-blue-600 mt-0.5">•</span>
-                            <span>Set expiration dates for temporary galleries</span>
+                            <span>Automated selection reminders</span>
+                          </li>
+                          <li className="flex items-start gap-2">
+                            <span className="text-blue-600 mt-0.5">•</span>
+                            <span>Client download tracking and reminders</span>
                           </li>
                           <li className="flex items-start gap-2">
                             <span className="text-blue-600 mt-0.5">•</span>
