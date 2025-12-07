@@ -159,7 +159,7 @@ class TestSetupGalleryAutomation:
         assert 'scheduled_emails' in body_data or 'count' in body_data
     
     @patch('handlers.email_automation_handler.get_user_features')
-    @patch('handlers.email_automation_handler.galleries_table')
+    @patch('utils.config.galleries_table')
     def test_setup_gallery_automation_validates_ownership(self, mock_galleries, mock_features, mock_user):
         """Test that users can only setup automation for their galleries"""
         mock_features.return_value = ({'email_templates': True}, None, None)
