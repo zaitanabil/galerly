@@ -81,8 +81,8 @@ def test_generate_unique_username_available():
     
     # Mock: no existing users with this username
     with patch('handlers.auth_handler.check_username_exists', return_value=False):
-    username = generate_unique_username("Jane Smith", "jane@example.com")
-    assert username == "janesmith"
+        username = generate_unique_username("Jane Smith", "jane@example.com")
+        assert username == "janesmith"
 
 
 def test_generate_unique_username_collision():
@@ -91,12 +91,12 @@ def test_generate_unique_username_collision():
     
     # Simulate collision: first check returns True (exists), second returns False (available)
     with patch('handlers.auth_handler.check_username_exists', side_effect=[True, False]):
-    username = generate_unique_username("John Doe", "johndoe2@example.com")
-    
+        username = generate_unique_username("John Doe", "johndoe2@example.com")
+        
         # Should get johndoe1
-    assert username.startswith("johndoe")
-    assert username != "johndoe"  # Must be different
-    assert len(username) <= 50  # Within limit
+        assert username.startswith("johndoe")
+        assert username != "johndoe"  # Must be different
+        assert len(username) <= 50  # Within limit
 
 
 def test_generate_unique_username_multiple_collisions():
@@ -105,10 +105,10 @@ def test_generate_unique_username_multiple_collisions():
     
     # Simulate multiple collisions: johndoe, johndoe1, johndoe2 exist, johndoe3 available
     with patch('handlers.auth_handler.check_username_exists', side_effect=[True, True, True, False]):
-    username = generate_unique_username("John Doe", "john3@example.com")
-    
-    # Should get johndoe3
-    assert username == "johndoe3"
+        username = generate_unique_username("John Doe", "john3@example.com")
+        
+        # Should get johndoe3
+        assert username == "johndoe3"
 
 
 def test_generate_unique_username_fallback_to_email():
@@ -117,8 +117,8 @@ def test_generate_unique_username_fallback_to_email():
     
     # Mock: username from email is available
     with patch('handlers.auth_handler.check_username_exists', return_value=False):
-    username = generate_unique_username("!!!", "testuser@example.com")
-    assert username == "testuser"
+        username = generate_unique_username("!!!", "testuser@example.com")
+        assert username == "testuser"
 
 
 def test_generate_unique_username_very_short_name():
@@ -127,8 +127,8 @@ def test_generate_unique_username_very_short_name():
     
     # Mock: generated username is available
     with patch('handlers.auth_handler.check_username_exists', return_value=False):
-    username = generate_unique_username("A B", "ab@example.com")
-    assert len(username) >= 3  # Must meet minimum length
+        username = generate_unique_username("A B", "ab@example.com")
+        assert len(username) >= 3  # Must meet minimum length
 
 
 def test_handle_register_auto_generates_username():
