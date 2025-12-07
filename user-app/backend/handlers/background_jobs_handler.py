@@ -105,12 +105,12 @@ def process_account_deletion(job_id, user_id, user_email):
         current_step = 0
         
         # Step 1: Get all user galleries
+        # Galleries table uses user_id as partition key
         current_step += 1
         update_job_status(job_id, 'in_progress', progress=(current_step / total_steps) * 100)
         
         galleries_response = galleries_table.query(
-            IndexName='PhotographerIdIndex',
-            KeyConditionExpression=Key('photographer_id').eq(user_id)
+            KeyConditionExpression=Key('user_id').eq(user_id)
         )
         galleries = galleries_response.get('Items', [])
         gallery_ids = [g['id'] for g in galleries]
