@@ -56,8 +56,10 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock"
       # Mount initialization scripts
       - "../local/init-scripts:/etc/localstack/init/ready.d"
-      # Mount .env.local for init scripts
-      - "../backend/.env.local:/etc/localstack/init/.env.local:ro"
+      # Mount .env.development for init scripts
+      - "../.env.development:/etc/localstack/init/.env.local:ro"
+      # Mount setup_dynamodb.py for table creation
+      - "../user-app/backend/setup_dynamodb.py:/app/setup_dynamodb.py:ro"
     networks:
       - galerly-local
 
@@ -79,19 +81,19 @@ services:
   backend:
     container_name: ${BACKEND_CONTAINER_NAME:-galerly-backend-local}
     build:
-      context: ../backend
+      context: ../user-app/backend
       dockerfile: Dockerfile.local
     ports:
       - "${BACKEND_PORT:-5001}:5001"
     env_file:
-      - ../backend/.env.local
+      - ../.env.development
     environment:
       # Override for container networking (use container name for LocalStack)
       - AWS_ENDPOINT_URL=http://localstack:${LOCALSTACK_PORT:-4566}
       # Ensure FRONTEND_URL is set for local CORS
       - FRONTEND_URL=http://localhost:5173
     volumes:
-      - ../backend:/app
+      - ../user-app/backend:/app
     depends_on:
       - localstack
     networks:
@@ -102,7 +104,7 @@ services:
   frontend:
     container_name: ${FRONTEND_CONTAINER_NAME:-galerly-frontend-local}
     build:
-      context: ../frontend
+      context: ../user-app/frontend
       dockerfile: Dockerfile.local
     ports:
       - "${FRONTEND_PORT:-5173}:5173"
@@ -124,7 +126,7 @@ services:
       - VITE_ENABLE_ANALYTICS=false
       - VITE_ENABLE_ERROR_REPORTING=false
     volumes:
-      - ../frontend:/app
+      - ../user-app/frontend:/app
       - /app/node_modules
     depends_on:
       - backend

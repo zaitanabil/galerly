@@ -1,0 +1,12 @@
+{
+  "Comment": "Email Automation Queue Processor - Runs hourly to send scheduled emails",
+  "ScheduleExpression": "rate(1 hour)",
+  "State": "ENABLED",
+  "Targets": [
+    {
+      "Arn": "arn:aws:lambda:us-east-1:ACCOUNT_ID:function:galerly-api",
+      "Id": "EmailQueueProcessor",
+      "Input": "{\"resource\": \"/process-email-queue\", \"httpMethod\": \"POST\", \"path\": \"/v1/scheduled/process-email-queue\", \"headers\": {\"X-Scheduled-Task\": \"email-queue-processor\"}}"
+    }
+  ]
+}

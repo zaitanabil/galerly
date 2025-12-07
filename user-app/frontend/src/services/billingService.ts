@@ -1,0 +1,171 @@
+// Billing service - handles subscription and payment operations
+import { api } from '../utils/api';
+
+export interface SubscriptionDetails {
+  id: string;
+  user_id: string;
+  stripe_subscription_id?: string;
+  stripe_customer_id?: string;
+  plan: string;
+  status: string;
+  interval?: 'monthly' | 'annual';
+  current_period_start?: string;
+  current_period_end?: string;
+  cancel_at_period_end?: boolean;
+  payment_method?: {
+    type: string;
+    last4?: string;
+    brand?: string;
+    exp_month?: number;
+    exp_year?: number;
+  };
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Subscription {
+  subscription: SubscriptionDetails | null;
+  plan: string;
+  status: string;
+  plan_details?: Record<string, unknown>;
+  pending_plan?: string;
+  pending_plan_change_at?: string;
+}
+
+export interface Invoice {
+  id: string;
+  stripe_invoice_id?: string;
+  amount: number;
+  currency: string;
+  status: string;
+  invoice_pdf?: string;
+  created_at: string;
+}
+
+export interface UsageStats {
+  plan: {
+    plan: string;
+    plan_name: string;
+    galleries_per_month: number;
+    storage_gb: number;
+  };
+  gallery_limit: {
+    used: number;
+    limit: number;
+    remaining: number;
+    allowed: boolean;
+  };
+  storage_limit: {
+    used_gb: number;
+    limit_gb: number;
+    remaining_gb: number;
+    usage_percent: number;
+  };
+  video_limit?: {
+    used_minutes: number;
+    limit_minutes: number;
+    usage_percent: number;
+    remaining_minutes: number;
+    quality: string;
+    video_count: number;
+  };
+}
+
+// Create Stripe checkout session
+export async function createCheckoutSession(planId: string, interval: 'monthly' | 'annual' = 'monthly') {
+  // Backend expects 'plan' in the body (e.g., 'plus', 'pro')
+  return api.post<{ sessionId: string; url: string }>('/billing/checkout', {
+    plan: planId,
+    interval,
+  });
+}
+
+// Get current subscription
+export async function getSubscription() {
+  return api.get<Subscription>('/billing/subscription');
+}
+
+// Cancel subscription
+export async function cancelSubscription() {
+  return api.post('/billing/subscription/cancel');
+}
+
+// Update payment method (redirects to Stripe Customer Portal)
+export async function updatePaymentMethod() {
+  return api.post<{ url: string }>('/billing/customer-portal', {
+    return_url: window.location.href
+  });
+}
+
+// Change plan
+export async function changePlan(newPlan: string, priceId: string) {
+  return api.post('/billing/subscription/change-plan', {
+    plan: newPlan,
+    price_id: priceId,
+  });
+}
+
+// Check downgrade limits
+export async function checkDowngradeLimits(targetPlan: string) {
+  return api.get<{ can_downgrade: boolean; issues: string[] }>(
+    `/billing/subscription/check-downgrade?target_plan=${targetPlan}`
+  );
+}
+
+// Downgrade subscription
+export async function downgradeSubscription(targetPlan: string) {
+  return api.post('/billing/subscription/downgrade', {
+    target_plan: targetPlan,
+  });
+}
+
+// Get billing history
+export async function getBillingHistory(params?: { page?: number; limit?: number }) {
+  const queryParams = new URLSearchParams();
+  if (params?.page) queryParams.append('page', params.page.toString());
+  if (params?.limit) queryParams.append('limit', params.limit.toString());
+  
+  const queryString = queryParams.toString();
+  const endpoint = queryString ? `/billing/history?${queryString}` : '/billing/history';
+  
+  return api.get<{ invoices: Invoice[]; total: number }>(endpoint);
+}
+
+// Get invoice PDF
+export async function getInvoicePdf(invoiceId: string) {
+  return api.get<{ pdf_url: string }>(`/billing/invoice/${invoiceId}/pdf`);
+}
+
+// Get usage stats
+export async function getUsage() {
+  return api.get<UsageStats>('/subscription/usage');
+}
+
+// Refund operations
+export async function checkRefundEligibility() {
+  return api.get<{ eligible: boolean; reason?: string }>('/billing/refund/check');
+}
+
+export async function requestRefund(reason: string) {
+  return api.post('/billing/refund/request', { reason });
+}
+
+export async function getRefundStatus() {
+  return api.get('/billing/refund/status');
+}
+
+export default {
+  createCheckoutSession,
+  getSubscription,
+  cancelSubscription,
+  updatePaymentMethod,
+  changePlan,
+  checkDowngradeLimits,
+  downgradeSubscription,
+  getBillingHistory,
+  getInvoicePdf,
+  getUsage,
+  checkRefundEligibility,
+  requestRefund,
+  getRefundStatus,
+};

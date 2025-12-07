@@ -1,0 +1,97 @@
+# Background Jobs DynamoDB Table
+GalerlyBackgroundJobsTable:
+  Type: AWS::DynamoDB::Table
+  Properties:
+    TableName: galerly-background-jobs
+    BillingMode: PAY_PER_REQUEST
+    AttributeDefinitions:
+      - AttributeName: job_id
+        AttributeType: S
+      - AttributeName: user_email
+        AttributeType: S
+      - AttributeName: created_at
+        AttributeType: S
+    KeySchema:
+      - AttributeName: job_id
+        KeyType: HASH
+    GlobalSecondaryIndexes:
+      - IndexName: UserEmailIndex
+        KeySchema:
+          - AttributeName: user_email
+            KeyType: HASH
+          - AttributeName: created_at
+            KeyType: RANGE
+        Projection:
+          ProjectionType: ALL
+    TimeToLiveSpecification:
+      AttributeName: ttl
+      Enabled: true
+    Tags:
+      - Key: Environment
+        Value: !Ref Environment
+      - Key: Application
+        Value: Galerly
+
+# Lambda function to process background jobs
+BackgroundJobProcessorFunction:
+  Type: AWS::Serverless::Function
+  Properties:
+    FunctionName: galerly-background-job-processor
+    CodeUri: .
+    Handler: background_job_processor.lambda_handler
+    Runtime: python3.11
+    Timeout: 900  # 15 minutes max for long-running jobs
+    MemorySize: 1024
+    Environment:
+      Variables:
+        DYNAMODB_TABLE_USERS: !Ref GalerlyUsersTable
+        DYNAMODB_TABLE_GALLERIES: !Ref GalerlyGalleriesTable
+        DYNAMODB_TABLE_PHOTOS: !Ref GalerlyPhotosTable
+        DYNAMODB_TABLE_SESSIONS: !Ref GalerlySessionsTable
+        DYNAMODB_TABLE_CONTRACTS: !Ref GalerlyContractsTable
+        DYNAMODB_TABLE_INVOICES: !Ref GalerlyInvoicesTable
+        DYNAMODB_TABLE_APPOINTMENTS: !Ref GalerlyAppointmentsTable
+        DYNAMODB_TABLE_VIDEO_ANALYTICS: !Ref GalerlyVideoAnalyticsTable
+        DYNAMODB_TABLE_VISITOR_TRACKING: !Ref GalerlyVisitorTrackingTable
+        DYNAMODB_TABLE_BACKGROUND_JOBS: !Ref GalerlyBackgroundJobsTable
+        S3_BUCKET: !Ref S3BucketName
+        ENVIRONMENT: !Ref Environment
+    Policies:
+      - DynamoDBCrudPolicy:
+          TableName: !Ref GalerlyBackgroundJobsTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref GalerlyUsersTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref GalerlyGalleriesTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref GalerlyPhotosTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref GalerlySessionsTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref GalerlyContractsTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref GalerlyInvoicesTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref GalerlyAppointmentsTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref GalerlyVideoAnalyticsTable
+      - DynamoDBCrudPolicy:
+          TableName: !Ref GalerlyVisitorTrackingTable
+      - S3CrudPolicy:
+          BucketName: !Ref S3BucketName
+    Events:
+      # Triggered when new jobs are created
+      DynamoDBEvent:
+        Type: DynamoDB
+        Properties:
+          Stream: !GetAtt GalerlyBackgroundJobsTable.StreamArn
+          StartingPosition: TRIM_HORIZON
+          BatchSize: 1
+          FilterCriteria:
+            Filters:
+              - Pattern: '{"dynamodb":{"NewImage":{"status":{"S":["pending"]}}}}'
+
+# Enable DynamoDB Streams on background jobs table
+# This allows the processor Lambda to be triggered automatically
+# when new jobs are created
+

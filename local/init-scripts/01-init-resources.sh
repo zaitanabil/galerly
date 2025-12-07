@@ -50,4 +50,41 @@ for bucket in "$S3_PHOTOS_BUCKET" "$S3_BUCKET" "$S3_RENDITIONS_BUCKET"; do
         }' || true
 done
 
+# Create DynamoDB tables
+echo "🗄️  Creating DynamoDB tables..."
+
+# Run Python setup script to create all tables
+if [ -f /app/setup_dynamodb.py ]; then
+    echo "Running setup_dynamodb.py create..."
+    python3 /app/setup_dynamodb.py create || echo "⚠️  setup_dynamodb.py failed, falling back to manual table creation"
+fi
+
+# If setup_dynamodb.py didn't work or doesn't exist, create essential tables manually
+if [ -z "$(aws --endpoint-url="$AWS_ENDPOINT_URL" dynamodb list-tables --query 'TableNames[0]' --output text 2>/dev/null)" ]; then
+    echo "⚠️  No tables found, creating essential tables manually..."
+    
+    # Create essential tables if setup script is not available
+    TABLES=(
+        "users_table:$DYNAMODB_TABLE_USERS"
+        "galleries_table:$DYNAMODB_TABLE_GALLERIES"
+        "photos_table:$DYNAMODB_TABLE_PHOTOS"
+        "sessions_table:$DYNAMODB_TABLE_SESSIONS"
+        "visitor_table:$DYNAMODB_TABLE_VISITOR_TRACKING"
+    )
+    
+    for table_def in "${TABLES[@]}"; do
+        table_name="${table_def#*:}"
+        if [ -n "$table_name" ]; then
+            echo "Creating table: $table_name"
+            aws --endpoint-url="$AWS_ENDPOINT_URL" dynamodb create-table \
+                --table-name "$table_name" \
+                --attribute-definitions \
+                    AttributeName=id,AttributeType=S \
+                --key-schema \
+                    AttributeName=id,KeyType=HASH \
+                --billing-mode PAY_PER_REQUEST || echo "Table $table_name may already exist"
+        fi
+    done
+fi
+
 echo "✅ LocalStack initialization complete"
