@@ -55,8 +55,8 @@ def mock_event():
 class TestGetUploadUrl:
     """Test presigned URL generation"""
     
-    @patch('handlers.subscription_handler.get_user_features')
-    @patch('handlers.subscription_handler.enforce_storage_limit')
+    @patch('handlers.photo_upload_presigned.get_user_features')
+    @patch('handlers.photo_upload_presigned.enforce_storage_limit')
     @patch('utils.config.galleries_table')
     @patch('handlers.photo_upload_presigned.s3_client')
     def test_get_upload_url_success(self, mock_s3, mock_table, mock_enforce, mock_features, mock_user, mock_gallery, mock_event):
@@ -89,7 +89,7 @@ class TestGetUploadUrl:
         assert response['statusCode'] == 403
     
     @patch('utils.config.galleries_table')
-    @patch('handlers.subscription_handler.enforce_storage_limit')
+    @patch('handlers.photo_upload_presigned.enforce_storage_limit')
     def test_get_upload_url_storage_limit_exceeded(self, mock_enforce, mock_table, mock_user, mock_gallery, mock_event):
         """Test upload rejected when storage limit exceeded"""
         mock_table.get_item.return_value = {'Item': mock_gallery}
@@ -116,8 +116,8 @@ class TestGetUploadUrl:
         
         assert response['statusCode'] == 400
     
-    @patch('handlers.subscription_handler.get_user_features')
-    @patch('handlers.subscription_handler.enforce_storage_limit')
+    @patch('handlers.photo_upload_presigned.get_user_features')
+    @patch('handlers.photo_upload_presigned.enforce_storage_limit')
     @patch('utils.config.galleries_table')
     def test_get_upload_url_invalid_file_type(self, mock_table, mock_enforce, mock_features, mock_user, mock_gallery):
         """Test upload rejected for invalid file type"""
@@ -139,11 +139,13 @@ class TestGetUploadUrl:
         body = json.loads(response['body'])
         assert 'Invalid file type' in body['error']
     
-    @patch('handlers.subscription_handler.get_user_features')
-    @patch('handlers.subscription_handler.enforce_storage_limit')
+    @patch('handlers.photo_upload_presigned.get_user_features')
+    @patch('handlers.photo_upload_presigned.enforce_storage_limit')
     @patch('utils.config.galleries_table')
     def test_get_upload_url_video_not_allowed(self, mock_table, mock_enforce, mock_features, mock_user, mock_gallery):
         """Test video upload rejected for plans without video support"""
+        # Ensure mock is properly set for this test
+        mock_table.reset_mock()
         mock_table.get_item.return_value = {'Item': mock_gallery}
         mock_enforce.return_value = (True, None)
         # Mock with complete feature dict
@@ -168,8 +170,8 @@ class TestGetUploadUrl:
         body = json.loads(response['body'])
         assert 'Video uploads are not available' in body['error']
     
-    @patch('handlers.subscription_handler.get_user_features')
-    @patch('handlers.subscription_handler.enforce_storage_limit')
+    @patch('handlers.photo_upload_presigned.get_user_features')
+    @patch('handlers.photo_upload_presigned.enforce_storage_limit')
     @patch('utils.config.galleries_table')
     def test_get_upload_url_raw_not_allowed(self, mock_table, mock_enforce, mock_features, mock_user, mock_gallery):
         """Test RAW upload rejected for plans without RAW support"""
@@ -196,7 +198,7 @@ class TestGetUploadUrl:
 class TestDirectUpload:
     """Test direct backend upload for LocalStack"""
     
-    @patch('handlers.subscription_handler.get_user_features')
+    @patch('handlers.photo_upload_presigned.get_user_features')
     @patch('utils.config.galleries_table')
     @patch('handlers.photo_upload_presigned.s3_client')
     def test_direct_upload_success(self, mock_s3, mock_table, mock_features, mock_user, mock_gallery):
@@ -341,8 +343,8 @@ class TestConfirmUpload:
 class TestFileTypeValidation:
     """Test file type validation for different formats"""
     
-    @patch('handlers.subscription_handler.get_user_features')
-    @patch('handlers.subscription_handler.enforce_storage_limit')
+    @patch('handlers.photo_upload_presigned.get_user_features')
+    @patch('handlers.photo_upload_presigned.enforce_storage_limit')
     @patch('utils.config.galleries_table')
     @patch('handlers.photo_upload_presigned.s3_client')
     def test_allowed_image_formats(self, mock_s3, mock_table, mock_enforce, mock_features, mock_user, mock_gallery):
@@ -370,16 +372,24 @@ class TestFileTypeValidation:
             response = handle_get_upload_url('gallery-123', mock_user, event)
             assert response['statusCode'] == 200, f"Format {ext} should be allowed"
     
-    @patch('handlers.subscription_handler.get_user_features')
-    @patch('handlers.subscription_handler.enforce_storage_limit')
+    @patch('handlers.photo_upload_presigned.get_user_features')
+    @patch('handlers.photo_upload_presigned.enforce_storage_limit')
     @patch('utils.config.galleries_table')
     @patch('handlers.photo_upload_presigned.s3_client')
     def test_allowed_raw_formats(self, mock_s3, mock_table, mock_enforce, mock_features, mock_user, mock_gallery):
         """Test that RAW formats are accepted with proper plan"""
+        # Reset user plan
         mock_user['plan'] = 'pro'
+        
+        # Explicitly reset all mocks to ensure clean state
+        mock_table.reset_mock()
+        mock_enforce.reset_mock()
+        mock_features.reset_mock()
+        mock_s3.reset_mock()
+        
+        # Set return values after reset
         mock_table.get_item.return_value = {'Item': mock_gallery}
         mock_enforce.return_value = (True, None)
-        # Mock with complete feature dict
         mock_features.return_value = ({
             'raw_support': True,
             'galleries_per_month': -1,
@@ -410,8 +420,8 @@ class TestMultipartUpload:
     """Test multipart upload handling for large files"""
     
     @patch('handlers.multipart_upload_handler.handle_initialize_multipart_upload')
-    @patch('handlers.subscription_handler.get_user_features')
-    @patch('handlers.subscription_handler.enforce_storage_limit')
+    @patch('handlers.photo_upload_presigned.get_user_features')
+    @patch('handlers.photo_upload_presigned.enforce_storage_limit')
     @patch('utils.config.galleries_table')
     def test_large_file_uses_multipart(self, mock_table, mock_enforce, mock_features, mock_multipart, mock_user, mock_gallery, mock_event):
         """Test that large files trigger multipart upload"""
