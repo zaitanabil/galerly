@@ -2,25 +2,18 @@
 Background job processing for long-running tasks
 Handles account deletion, bulk operations, etc.
 """
-import os
 import json
 from datetime import datetime
 from decimal import Decimal
-from utils.config import dynamodb, s3_client, S3_BUCKET
+from utils.config import (
+    s3_client, S3_BUCKET,
+    users_table, galleries_table, photos_table, sessions_table,
+    contracts_table, invoices_table, appointments_table,
+    visitor_tracking_table, background_jobs_table, analytics_table,
+    video_analytics_table
+)
 from utils.response import create_response
 from boto3.dynamodb.conditions import Key, Attr
-
-# DynamoDB tables
-users_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_USERS'))
-galleries_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_GALLERIES'))
-photos_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_PHOTOS'))
-sessions_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_SESSIONS'))
-contracts_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_CONTRACTS'))
-invoices_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_INVOICES'))
-appointments_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_APPOINTMENTS'))
-video_analytics_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_VIDEO_ANALYTICS'))
-visitor_tracking_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_VISITOR_TRACKING'))
-background_jobs_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_BACKGROUND_JOBS'))
 
 
 def create_background_job(job_type, user_id, user_email, metadata=None):

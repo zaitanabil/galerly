@@ -232,6 +232,9 @@ appointments_table = LazyTable('DYNAMODB_TABLE_APPOINTMENTS')
 contracts_table = LazyTable('DYNAMODB_TABLE_CONTRACTS')
 raw_vault_table = LazyTable('DYNAMODB_TABLE_RAW_VAULT')
 seo_settings_table = LazyTable('DYNAMODB_TABLE_SEO_SETTINGS')
+background_jobs_table = LazyTable('DYNAMODB_TABLE_BACKGROUND_JOBS')
+visitor_tracking_table = LazyTable('DYNAMODB_TABLE_VISITOR_TRACKING')
+video_analytics_table = LazyTable('DYNAMODB_TABLE_VIDEO_ANALYTICS')
 
 # Debug logging for LocalStack (skip in test mode for speed)
 if IS_LOCAL and AWS_ENDPOINT_URL and not IS_TEST_MODE:

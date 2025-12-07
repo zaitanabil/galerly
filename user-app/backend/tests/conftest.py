@@ -32,6 +32,7 @@ os.environ.setdefault('DYNAMODB_TABLE_NEWSLETTERS', 'galerly-newsletters-local')
 os.environ.setdefault('DYNAMODB_TABLE_CONTACT', 'galerly-contact-local')
 os.environ.setdefault('DYNAMODB_TABLE_VIDEO_ANALYTICS', 'galerly-video-analytics-local')
 os.environ.setdefault('DYNAMODB_TABLE_VISITOR_TRACKING', 'galerly-visitor-tracking-local')
+os.environ.setdefault('DYNAMODB_TABLE_BACKGROUND_JOBS', 'galerly-background-jobs')
 
 # Add backend directory to path BEFORE any imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -110,6 +111,7 @@ os.environ.setdefault('DYNAMODB_TABLE_NEWSLETTERS', 'galerly-newsletters-local')
 os.environ.setdefault('DYNAMODB_TABLE_CONTACT', 'galerly-contact-local')
 os.environ.setdefault('DYNAMODB_TABLE_VIDEO_ANALYTICS', 'galerly-video-analytics-local')
 os.environ.setdefault('DYNAMODB_TABLE_VISITOR_TRACKING', 'galerly-visitor-tracking-local')
+os.environ.setdefault('DYNAMODB_TABLE_BACKGROUND_JOBS', 'galerly-background-jobs')
 
 # Start patching boto3 IMMEDIATELY
 # FIX: Store patchers globally so tests can stop/restart them if needed

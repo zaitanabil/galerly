@@ -4,12 +4,8 @@ Tracks video views, watch time, and engagement
 """
 from datetime import datetime
 from decimal import Decimal
-from utils.config import dynamodb
+from utils.config import video_analytics_table
 from utils.response import create_response
-import os
-
-# Video analytics table
-video_analytics_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_VIDEO_ANALYTICS'))
 
 
 def handle_track_video_view(body):
