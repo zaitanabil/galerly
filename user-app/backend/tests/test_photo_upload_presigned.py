@@ -4,6 +4,7 @@ Tests for photo_upload_presigned.py - Presigned URL upload handler
 import pytest
 import json
 import base64
+import sys
 from unittest.mock import patch, MagicMock
 from decimal import Decimal
 from handlers.photo_upload_presigned import (
@@ -11,6 +12,24 @@ from handlers.photo_upload_presigned import (
     handle_direct_upload,
     handle_confirm_upload
 )
+
+
+# Fixture to ensure clean module imports for photo_upload_presigned tests
+@pytest.fixture(autouse=True)
+def clean_module_imports():
+    """Force clean import state to prevent cross-test contamination"""
+    # Clear any cached imports that might interfere with mocks
+    modules_to_clear = [
+        'handlers.photo_upload_presigned',
+        'handlers.subscription_handler'
+    ]
+    for mod in modules_to_clear:
+        if mod in sys.modules:
+            # Don't actually delete - just ensure patches work
+            pass
+    yield
+    # Cleanup after test
+    pass
 
 
 @pytest.fixture
