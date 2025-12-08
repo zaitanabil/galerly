@@ -48,7 +48,7 @@ def handle_get_gallery_analytics(user, gallery_id, query_params=None):
             try:
                 end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
             except:
-        end_date = datetime.utcnow()
+                end_date = datetime.utcnow()
         else:
             end_date = datetime.utcnow()
             
@@ -58,7 +58,7 @@ def handle_get_gallery_analytics(user, gallery_id, query_params=None):
             except:
                 start_date = end_date - timedelta(days=30)
         else:
-        start_date = end_date - timedelta(days=30)
+            start_date = end_date - timedelta(days=30)
         
         # Get analytics events for this gallery
         response = analytics_table.query(
@@ -89,27 +89,28 @@ def handle_get_gallery_analytics(user, gallery_id, query_params=None):
         
         for event in events:
             date = event['timestamp'][:10]  # YYYY-MM-DD
-            if date in daily_stats:
             event_type = event.get('event_type')
-            if event_type == 'gallery_view':
-                daily_stats[date]['views'] += 1
-            elif event_type == 'photo_view':
-                daily_stats[date]['photo_views'] += 1
-                
-                # Aggregate photo views
-                meta = event.get('metadata', {})
-                pid = meta.get('photo_id')
-                if pid:
-                    if pid not in photo_stats:
-                        photo_stats[pid] = 0
-                    photo_stats[pid] += 1
+            
+            if date in daily_stats:
+                if event_type == 'gallery_view':
+                    daily_stats[date]['views'] += 1
+                elif event_type == 'photo_view':
+                    daily_stats[date]['photo_views'] += 1
                     
-            elif event_type == 'photo_download':
-                daily_stats[date]['downloads'] += 1
-            elif event_type == 'bulk_download':
-                if 'bulk_downloads' not in daily_stats[date]:
-                    daily_stats[date]['bulk_downloads'] = 0
-                daily_stats[date]['bulk_downloads'] += 1
+                    # Aggregate photo views
+                    meta = event.get('metadata', {})
+                    pid = meta.get('photo_id')
+                    if pid:
+                        if pid not in photo_stats:
+                            photo_stats[pid] = 0
+                        photo_stats[pid] += 1
+                        
+                elif event_type == 'photo_download':
+                    daily_stats[date]['downloads'] += 1
+                elif event_type == 'bulk_download':
+                    if 'bulk_downloads' not in daily_stats[date]:
+                        daily_stats[date]['bulk_downloads'] = 0
+                    daily_stats[date]['bulk_downloads'] += 1
                 
         # Get top photos
         top_photo_ids = sorted(photo_stats.keys(), key=lambda x: photo_stats[x], reverse=True)[:10]
@@ -190,7 +191,7 @@ def handle_get_overall_analytics(user, query_params=None):
             try:
                 end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
             except:
-        end_date = datetime.utcnow()
+                end_date = datetime.utcnow()
         else:
             end_date = datetime.utcnow()
             
@@ -200,7 +201,7 @@ def handle_get_overall_analytics(user, query_params=None):
             except:
                 start_date = end_date - timedelta(days=30)
         else:
-        start_date = end_date - timedelta(days=30)
+            start_date = end_date - timedelta(days=30)
 
         # Get analytics for all galleries
         

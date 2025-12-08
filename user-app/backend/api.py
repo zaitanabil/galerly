@@ -1083,7 +1083,7 @@ def handler(event, context):
                 return handle_get_client_preferences(user, gallery_id)
             else:
                 # GET /v1/analytics/galleries/{gallery_id} - Use engagement analytics summary
-            gallery_id = path.split('/')[-1]
+                gallery_id = path.split('/')[-1]
                 query_params = event.get('queryStringParameters') or {}
                 use_engagement = query_params.get('use_engagement', 'true').lower() == 'true'
                 if use_engagement:
