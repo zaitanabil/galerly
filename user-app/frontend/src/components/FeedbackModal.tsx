@@ -10,12 +10,13 @@ interface FeedbackModalProps {
   onClose: () => void;
   galleryId: string;
   photoId?: string; // Optional: if provided, this is a photo comment/edit request
-  annotation?: string; // Optional: SVG path or JSON data
+  annotation?: string; // Optional: SVG path or JSON data (for images)
+  timestamp?: number; // Optional: Video timestamp in seconds (for videos)
   initialComment?: string;
   onCommentAdded?: (comment: Comment) => void; // Callback to update UI
 }
 
-export default function FeedbackModal({ isOpen, onClose, galleryId, photoId, annotation, initialComment, onCommentAdded }: FeedbackModalProps) {
+export default function FeedbackModal({ isOpen, onClose, galleryId, photoId, annotation, timestamp, initialComment, onCommentAdded }: FeedbackModalProps) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -64,6 +65,13 @@ export default function FeedbackModal({ isOpen, onClose, galleryId, photoId, ann
       }
   }, [initialComment, isOpen]);
 
+  // Format timestamp for display
+  const formatTimestamp = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
   if (!isOpen) return null;
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -77,14 +85,15 @@ export default function FeedbackModal({ isOpen, onClose, galleryId, photoId, ann
 
     try {
       if (photoId) {
-          // SUBMIT PHOTO COMMENT / EDIT REQUEST
+          // SUBMIT PHOTO COMMENT / EDIT REQUEST (with timestamp for videos)
           const response = await photoService.addComment(
               photoId,
               formData.comments,
               undefined, // parentId
               formData.clientName,
               formData.clientEmail,
-              annotation
+              annotation, // For images: lasso annotation
+              timestamp  // For videos: timestamp in seconds
           );
           
           if (response.success && response.data) {
@@ -160,6 +169,7 @@ export default function FeedbackModal({ isOpen, onClose, galleryId, photoId, ann
   );
 
   const isEditRequest = !!photoId;
+  const isVideoComment = timestamp !== undefined;
 
   return (
     <div className="fixed inset-0 z-[20000] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
@@ -167,9 +177,25 @@ export default function FeedbackModal({ isOpen, onClose, galleryId, photoId, ann
         
         {/* Header */}
         <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gradient-to-r from-gray-50 to-white">
+          <div>
           <h2 className="text-xl font-serif font-medium text-[#1D1D1F]">
-              {isEditRequest ? 'Request Edit / Modification' : 'Share Your Feedback'}
+              {isVideoComment ? 'Add Video Comment' : isEditRequest ? 'Request Edit / Modification' : 'Share Your Feedback'}
           </h2>
+            {isVideoComment && (
+              <p className="text-sm text-[#1D1D1F]/60 mt-1 flex items-center gap-2">
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                Comment at {formatTimestamp(timestamp)}
+              </p>
+            )}
+            {annotation && !isVideoComment && (
+              <p className="text-sm text-[#1D1D1F]/60 mt-1 flex items-center gap-2">
+                <PenTool className="w-4 h-4" />
+                You've marked an area for editing
+              </p>
+            )}
+          </div>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
             <X className="w-5 h-5 text-gray-400" />
           </button>
@@ -228,10 +254,19 @@ export default function FeedbackModal({ isOpen, onClose, galleryId, photoId, ann
                 </div>
               )}
 
-              {annotation && (
+              {annotation && !isVideoComment && (
                   <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-center gap-3">
                       <PenTool className="w-5 h-5 text-yellow-600" />
                       <span className="text-sm text-yellow-800 font-medium">Edit zone marked on photo</span>
+              </div>
+              )}
+              
+              {isVideoComment && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg flex items-center gap-3">
+                      <svg className="w-5 h-5 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <span className="text-sm text-blue-800 font-medium">Video timestamp: {formatTimestamp(timestamp!)}</span>
               </div>
               )}
 

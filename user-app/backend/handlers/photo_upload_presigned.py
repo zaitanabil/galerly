@@ -312,13 +312,46 @@ def handle_confirm_upload(gallery_id, user, event):
             metadata = extract_image_metadata(image_data, filename)
             
             print(f"📋 Extracted metadata: format={metadata.get('format')}, "
+                  f"type={metadata.get('type')}, "
                   f"dimensions={metadata.get('dimensions')}, "
                   f"camera={metadata.get('camera', {}).get('model', 'unknown')}")
+            
+            # VIDEO DURATION ENFORCEMENT
+            # Check if this is a video and enforce duration limits
+            file_extension = os.path.splitext(filename)[1].lower()
+            video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm']
+            if file_extension in video_extensions:
+                duration_seconds = metadata.get('duration_seconds')
+                if duration_seconds:
+                    duration_minutes = duration_seconds / 60.0
+                    
+                    # Enforce video duration limit
+                    from handlers.subscription_handler import get_user_features
+                    from utils.video_utils import enforce_video_duration_limit
+                    
+                    features, _, _ = get_user_features(user)
+                    allowed, error_msg = enforce_video_duration_limit(user, duration_minutes, features)
+                    
+                    if not allowed:
+                        # DELETE the video from S3 - exceeds plan limit
+                        try:
+                            s3_client.delete_object(Bucket=S3_BUCKET, Key=s3_key)
+                            print(f"🚫 Deleted video {s3_key} - exceeds plan limit")
+                        except Exception as delete_error:
+                            print(f"Failed to delete video: {str(delete_error)}")
+                        
+                        return create_response(403, {
+                            'error': error_msg,
+                            'duration_minutes': round(duration_minutes, 2),
+                            'action': 'Video has been rejected and deleted'
+                        })
+                    
+                    print(f"✅ Video duration OK: {duration_minutes:.2f} minutes")
             
             # ==========================================
             # STORAGE STRATEGY: Single source of truth
             # ==========================================
-            # Store ONLY the original file (RAW, HEIC, JPEG, etc.)
+            # Store ONLY the original file (RAW, HEIC, JPEG, video, etc.)
             # Renditions generated asynchronously by processing Lambda
             # Original preserved for download (no quality loss)
             # 
@@ -452,12 +485,24 @@ def handle_confirm_upload(gallery_id, user, event):
         from utils.config import AWS_ENDPOINT_URL
         if AWS_ENDPOINT_URL and 'localstack' in AWS_ENDPOINT_URL.lower():
             try:
-                from utils.image_processor import process_upload_async
-                print(f"🔄 Processing image for LocalStack: {s3_key}")
-                # Pass image_data to avoid re-downloading from S3
-                result = process_upload_async(s3_key, S3_BUCKET, image_data=image_data)
+                # Check if this is a video file
+                file_extension = os.path.splitext(filename)[1].lower()
+                video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm']
+                is_video = file_extension in video_extensions
+                
+                if is_video:
+                    # Use video processor for videos
+                    from utils.video_processor import process_video_upload_async
+                    print(f"🎬 Processing video for LocalStack: {s3_key}")
+                    result = process_video_upload_async(s3_key, S3_BUCKET, image_data=image_data)
+                else:
+                    # Use image processor for images
+                    from utils.image_processor import process_upload_async
+                    print(f"🔄 Processing image for LocalStack: {s3_key}")
+                    result = process_upload_async(s3_key, S3_BUCKET, image_data=image_data)
+                
                 if result.get('success'):
-                    print(f"Renditions generated successfully")
+                    print(f"✅ Processing completed successfully")
                     
                     # Calculate total storage: original + all renditions
                     renditions = result.get('renditions', {})
@@ -474,6 +519,13 @@ def handle_confirm_upload(gallery_id, user, event):
                     photo['status'] = 'active'
                     photo['size_mb'] = Decimal(str(round(total_storage_mb, 2)))
                     photo['renditions_size_mb'] = Decimal(str(round(renditions_size_mb, 2)))
+                    
+                    # For videos, add duration info if available
+                    if is_video and metadata.get('duration_seconds'):
+                        photo['duration_seconds'] = Decimal(str(metadata['duration_seconds']))
+                        photo['duration_minutes'] = Decimal(str(metadata['duration_minutes']))
+                        photo['type'] = 'video'
+                    
                     photos_table.put_item(Item=photo)
                     
                     # Update gallery storage to include renditions
@@ -490,13 +542,18 @@ def handle_confirm_upload(gallery_id, user, event):
                     except Exception as storage_error:
                         print(f"Failed to update gallery storage for renditions: {storage_error}")
                 else:
-                    print(f" Rendition generation failed: {result.get('error')}")
+                    print(f"⚠️ Processing failed: {result.get('error')}")
             except Exception as proc_error:
-                print(f" LocalStack processing error: {str(proc_error)}")
+                print(f"⚠️ LocalStack processing error: {str(proc_error)}")
+                import traceback
+                traceback.print_exc()
                 # Don't fail the upload if processing fails
         
         # Update gallery photo count, storage, and thumbnail (for first photo)
         # Use atomic update to avoid race conditions when uploading multiple photos
+        previous_photo_count = gallery.get('photo_count', 0)
+        new_photo_count = previous_photo_count + 1  # Define new_photo_count before any try/except
+        
         try:
             galleries_table.update_item(
                 Key={'user_id': user['id'], 'id': gallery_id},
@@ -509,12 +566,9 @@ def handle_confirm_upload(gallery_id, user, event):
                     ':zero': 0
                 }
             )
-            previous_photo_count = gallery.get('photo_count', 0)
         except Exception as e:
             print(f"Failed to update gallery stats atomically: {e}")
             # Fallback to non-atomic update
-            previous_photo_count = gallery.get('photo_count', 0)
-            new_photo_count = previous_photo_count + 1
             current_storage_mb = gallery.get('storage_used', 0)
             if isinstance(current_storage_mb, Decimal):
                 current_storage_mb = float(current_storage_mb)

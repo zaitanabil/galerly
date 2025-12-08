@@ -4,6 +4,9 @@ import { useParams, Link } from 'react-router-dom';
 import { MapPin, Instagram, Globe, Mail, ArrowLeft } from 'lucide-react';
 import Header from '../components/Header';
 import Footer from '../components/Footer';
+import AboutSection from '../components/AboutSection';
+import ServicesSection from '../components/ServicesSection';
+import TestimonialsSection from '../components/TestimonialsSection';
 import { api } from '../utils/api';
 import { cdnBaseUrl } from '../config/env';
 
@@ -213,7 +216,7 @@ export default function PortfolioPage() {
           </div>
 
           {/* Portfolio Grid */}
-          <div>
+          <div className="mb-16">
             <h2 className="text-2xl font-serif font-medium text-[#1D1D1F] mb-6">
               Portfolio
             </h2>
@@ -239,6 +242,15 @@ export default function PortfolioPage() {
               </div>
             )}
           </div>
+
+          {/* About Section */}
+          {userId && <AboutSection photographer={photographer} />}
+
+          {/* Services Section */}
+          {userId && <ServicesSection photographerId={userId} />}
+
+          {/* Testimonials Section */}
+          {userId && <TestimonialsSection photographerId={userId} showSubmitForm={true} />}
         </div>
       </main>
       

@@ -435,6 +435,13 @@ def handle_add_comment(photo_id, user, body):
         
         # Create comment with enhanced structure
         comment_id = str(uuid.uuid4())
+        
+        # Convert timestamp to Decimal if present (DynamoDB requirement)
+        timestamp = body.get('timestamp')
+        if timestamp is not None:
+            from decimal import Decimal
+            timestamp = Decimal(str(timestamp))
+        
         comment = {
             'id': comment_id,
             'text': comment_text,
@@ -446,6 +453,7 @@ def handle_add_comment(photo_id, user, body):
             'mentions': mentions,  # List of mentioned usernames
             'reactions': {},  # Format: {'like': [user_ids], 'heart': [user_ids]}
             'annotation': body.get('annotation'), # Store annotation data (points, color, etc.)
+            'timestamp': timestamp, # For video comments: timestamp in seconds (as Decimal)
             'is_edited': False,
             'created_at': datetime.utcnow().isoformat() + 'Z',
             'updated_at': datetime.utcnow().isoformat() + 'Z'
@@ -599,8 +607,17 @@ def handle_update_comment(photo_id, comment_id, user, body):
             ExpressionAttributeValues={':gid': photo.get('gallery_id')}
         )
         gallery = gallery_response.get('Items', [{}])[0] if gallery_response.get('Items') else {}
-        is_gallery_owner = gallery.get('user_id') == user['id']
-        is_comment_author = comment.get('user_id') == user['id']
+        
+        # Check permissions - handle both authenticated and guest users
+        is_gallery_owner = False
+        is_comment_author = False
+        
+        if user and user.get('id'):
+            is_gallery_owner = gallery.get('user_id') == user['id']
+            is_comment_author = comment.get('user_id') == user['id']
+        elif not user:
+            # For unauthenticated requests: cannot update without user context
+            return create_response(403, {'error': 'Authentication required to update comments'})
         
         # Handle reaction updates (ANYONE can react, no permission check needed)
         if 'reaction' in body:
@@ -690,8 +707,20 @@ def handle_delete_comment(photo_id, comment_id, user):
             ExpressionAttributeValues={':gid': photo.get('gallery_id')}
         )
         gallery = gallery_response.get('Items', [{}])[0] if gallery_response.get('Items') else {}
-        is_gallery_owner = gallery.get('user_id') == user['id']
-        is_comment_author = comment.get('user_id') == user['id']
+        
+        # Check if user is gallery owner (requires authenticated user)
+        is_gallery_owner = False
+        if user and user.get('id'):
+            is_gallery_owner = gallery.get('user_id') == user['id']
+        
+        # Check if user is comment author
+        is_comment_author = False
+        if user and user.get('id'):
+            # For authenticated users or guests: check if IDs match
+            is_comment_author = comment.get('user_id') == user['id']
+        elif not user:
+            # For unauthenticated requests: cannot delete without user context
+            return create_response(403, {'error': 'Authentication required to delete comments'})
         
         if not (is_comment_author or is_gallery_owner):
             return create_response(403, {'error': 'Permission denied: You can only delete your own comments'})
@@ -715,7 +744,7 @@ def handle_delete_comment(photo_id, comment_id, user):
         # Update photo in DynamoDB
         photos_table.put_item(Item=photo)
         
-        print(f"Comment {comment_id} deleted by {user.get('email')}")
+        print(f"Comment {comment_id} deleted by {user.get('email') if user.get('email') else user.get('id')}")
         return create_response(200, {'message': 'Comment deleted successfully'})
         
     except Exception as e:

@@ -359,11 +359,12 @@ def handle_get_client_gallery(gallery_id, user, query_params=None):
             query_kwargs = {
                 'IndexName': 'GalleryIdIndex',
                 'KeyConditionExpression': Key('gallery_id').eq(gallery_id),
-                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, #url, original_download_url, original_filename, title, description, filename, #sz, width, height, favorites, favorites_count, comments',
+                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, #url, original_download_url, original_filename, title, description, filename, #sz, width, height, favorites, favorites_count, comments, #typ, duration_seconds, duration_minutes, codec',
                 'ExpressionAttributeNames': {
                     '#st': 'status',
                     '#sz': 'size',
-                    '#url': 'url'  # reserved word
+                    '#url': 'url',  # reserved word
+                    '#typ': 'type'  # Include type field for video detection
                 },
                 'Limit': page_size
             }
@@ -545,11 +546,12 @@ def handle_get_client_gallery_by_token(share_token, query_params=None):
             query_kwargs = {
                 'IndexName': 'GalleryIdIndex',
                 'KeyConditionExpression': Key('gallery_id').eq(gallery_id),
-                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, #url, original_download_url, original_filename, title, description, filename, #sz, width, height, comments, favorites_count',
+                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, #url, original_download_url, original_filename, title, description, filename, #sz, width, height, comments, favorites_count, #typ, duration_seconds, duration_minutes, codec',
                 'ExpressionAttributeNames': {
                     '#st': 'status',
                     '#sz': 'size',
-                    '#url': 'url'  # reserved word
+                    '#url': 'url',  # reserved word
+                    '#typ': 'type'  # Include type field for video detection
                 },
                 'Limit': page_size
             }

@@ -191,6 +191,19 @@ def handle_create_gallery(user, body):
     # Get frontend URL from environment
     frontend_url = os.environ.get('FRONTEND_URL')
     
+    # Check plan features for edit requests
+    from handlers.subscription_handler import get_user_features
+    features, _, _ = get_user_features(user)
+    
+    # Default to True if allowed by plan, False if not
+    allow_edits_requested = body.get('allowEdits', True)
+    allow_edits = False  # Default for free plan
+    
+    if allow_edits_requested:
+        if features.get('edit_requests'):
+            allow_edits = True
+        # If Free plan tries to enable, silently disable (no error on creation)
+    
     # No expiration for galleries - they never expire
     # Only storage quota matters
     
@@ -209,7 +222,7 @@ def handle_create_gallery(user, body):
         'password': body.get('password', ''),
         'allow_downloads': body.get('allowDownload', True),
         'allow_comments': body.get('allowComments', True),
-        'allow_edits': body.get('allowEdits', True),
+        'allow_edits': allow_edits,  # Use plan-checked value
         'photo_count': 0,
         'view_count': 0,
         'storage_used': 0,
@@ -305,11 +318,12 @@ def handle_get_gallery(gallery_id, user=None, query_params=None):
             query_kwargs = {
                 'IndexName': 'GalleryIdIndex',
                 'KeyConditionExpression': Key('gallery_id').eq(gallery_id),
-                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, #url, original_download_url, original_filename, title, description, filename, #sz, width, height, favorites, comments',
+                'ProjectionExpression': 'id, gallery_id, #st, created_at, updated_at, thumbnail_url, medium_url, #url, original_download_url, original_filename, title, description, filename, #sz, width, height, favorites, comments, #typ, duration_seconds, duration_minutes, codec',
                 'ExpressionAttributeNames': {
                     '#st': 'status',  # reserved word
                     '#sz': 'size',  # reserved word
-                    '#url': 'url'  # reserved word
+                    '#url': 'url',  # reserved word
+                    '#typ': 'type'  # Include type field for video detection
                 },
                 'Limit': page_size
             }
@@ -343,16 +357,16 @@ def handle_get_gallery(gallery_id, user=None, query_params=None):
         # Set gallery data (works whether try succeeded or failed)
         gallery['photos'] = gallery_photos
         
-        # Inject Plan-based Features (Branding, Favorites)
+        # Inject Plan-based Features (Branding only - favorites are now free for all)
         from handlers.subscription_handler import get_user_features
         features, _, _ = get_user_features(user)
         
         gallery['hide_branding'] = features.get('remove_branding', False)
-        # We override the setting if the plan doesn't support it
-        if not features.get('client_favorites', False):
-            gallery['settings'] = gallery.get('settings', {})
-            gallery['settings']['favorites_enabled'] = False
-            gallery['allow_favorites'] = False # Legacy/frontend compat
+        # Client favorites are now available to all plans - no restriction needed
+        
+        # Override allow_edits if plan doesn't support it
+        if gallery.get('allow_edits') and not features.get('edit_requests'):
+            gallery['allow_edits'] = False
         
         # SELF-HEALING: Verify and fix photo_count if needed
         # This ensures the dashboard and list views show the correct number
@@ -477,6 +491,16 @@ def handle_update_gallery(gallery_id, user, body):
             gallery['allow_comments'] = val
         if 'allow_edits' in body or 'allowEdits' in body:
             val = body.get('allow_edits') or body.get('allowEdits')
+            # Check plan permission for edit requests
+            if val:  # Only check if trying to enable
+                from handlers.subscription_handler import get_user_features
+                features, _, _ = get_user_features(user)
+                if not features.get('edit_requests'):
+                    return create_response(403, {
+                        'error': 'Edit requests are available on Starter, Plus, Pro, and Ultimate plans.',
+                        'upgrade_required': True,
+                        'required_feature': 'edit_requests'
+                    })
             gallery['allow_edits'] = val
         if 'tags' in body:
             # Support tags array for gallery organization

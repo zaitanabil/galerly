@@ -545,6 +545,232 @@ TABLES = {
             {'AttributeName': 'user_id', 'KeyType': 'HASH'}
         ],
         'GlobalSecondaryIndexes': []
+    },
+    get_table_name('galerly-leads'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'photographer_id', 'AttributeType': 'S'},
+            {'AttributeName': 'created_at', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'PhotographerIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'photographer_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    get_table_name('galerly-followup-sequences'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'photographer_id', 'AttributeType': 'S'},
+            {'AttributeName': 'lead_id', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'PhotographerIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'photographer_id', 'KeyType': 'HASH'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            },
+            {
+                'IndexName': 'LeadIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'lead_id', 'KeyType': 'HASH'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    get_table_name('galerly-testimonials'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'photographer_id', 'AttributeType': 'S'},
+            {'AttributeName': 'created_at', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'PhotographerIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'photographer_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    get_table_name('galerly-services'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'photographer_id', 'AttributeType': 'S'},
+            {'AttributeName': 'display_order', 'AttributeType': 'N'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'PhotographerIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'photographer_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'display_order', 'KeyType': 'RANGE'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    get_table_name('galerly-sales'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'photographer_id', 'AttributeType': 'S'},
+            {'AttributeName': 'created_at', 'AttributeType': 'S'},
+            {'AttributeName': 'customer_email', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'PhotographerIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'photographer_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            },
+            {
+                'IndexName': 'CustomerEmailIndex',
+                'KeySchema': [
+                    {'AttributeName': 'customer_email', 'KeyType': 'HASH'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    get_table_name('galerly-packages'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'photographer_id', 'AttributeType': 'S'},
+            {'AttributeName': 'display_order', 'AttributeType': 'N'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'PhotographerIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'photographer_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'display_order', 'KeyType': 'RANGE'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    get_table_name('galerly-downloads'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'customer_email', 'AttributeType': 'S'},
+            {'AttributeName': 'sale_id', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'CustomerEmailIndex',
+                'KeySchema': [
+                    {'AttributeName': 'customer_email', 'KeyType': 'HASH'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            },
+            {
+                'IndexName': 'SaleIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'sale_id', 'KeyType': 'HASH'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    get_table_name('galerly-payment-reminders'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'photographer_id', 'AttributeType': 'S'},
+            {'AttributeName': 'invoice_id', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'PhotographerIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'photographer_id', 'KeyType': 'HASH'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            },
+            {
+                'IndexName': 'InvoiceIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'invoice_id', 'KeyType': 'HASH'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    get_table_name('galerly-onboarding-workflows'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'photographer_id', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'PhotographerIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'photographer_id', 'KeyType': 'HASH'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    
+    # Feature Requests table
+    get_table_name('galerly-feature-requests'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'status', 'AttributeType': 'S'},
+            {'AttributeName': 'created_at', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'StatusCreatedIndex',
+                'KeySchema': [
+                    {'AttributeName': 'status', 'KeyType': 'HASH'},
+                    {'AttributeName': 'created_at', 'KeyType': 'RANGE'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
     }
 }
 
@@ -744,6 +970,14 @@ def main():
     if command == 'create':
         create_all_tables()
         optimize_tables()
+        # Setup S3 buckets for LocalStack
+        if AWS_ENDPOINT_URL:
+            try:
+                from setup_s3_buckets import setup_s3_buckets
+                print("")
+                setup_s3_buckets()
+            except Exception as e:
+                print(f"⚠️  S3 bucket setup failed: {str(e)}")
     elif command == 'optimize':
         optimize_tables()
     elif command == 'list':

@@ -22,7 +22,7 @@ const PLANS = [
   {
     id: 'starter',
     name: 'Starter',
-    price: { monthly: 12, annual: 10 },
+    price: { monthly: 10, annual: 8 },
     description: 'For new pros',
     accent: 'bg-gray-100 text-gray-900',
     buttonVariant: 'secondary',
@@ -38,7 +38,7 @@ const PLANS = [
   {
     id: 'plus',
     name: 'Plus',
-    price: { monthly: 29, annual: 24 },
+    price: { monthly: 24, annual: 19 },
     badge: 'BEST VALUE',
     description: 'Most popular',
     accent: 'bg-[#0066CC] text-white',
@@ -56,7 +56,7 @@ const PLANS = [
   {
     id: 'pro',
     name: 'Pro',
-    price: { monthly: 59, annual: 49 },
+    price: { monthly: 49, annual: 39 },
     description: 'For studios',
     accent: 'bg-gray-900 text-white',
     buttonVariant: 'dark',
@@ -73,7 +73,7 @@ const PLANS = [
   {
     id: 'ultimate',
     name: 'Ultimate',
-    price: { monthly: 119, annual: 99 },
+    price: { monthly: 99, annual: 79 },
     description: 'Max power',
     accent: 'bg-gray-900 text-white',
     buttonVariant: 'dark',

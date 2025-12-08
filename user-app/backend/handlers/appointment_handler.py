@@ -157,6 +157,31 @@ def handle_create_public_appointment_request(photographer_id, body):
         
         appointments_table.put_item(Item=appointment)
         
+        # Create lead from booking request
+        try:
+            from handlers.leads_handler import handle_capture_lead
+            
+            # Create lead data from appointment request
+            lead_body = {
+                'name': body['client_name'],
+                'email': body['client_email'],
+                'phone': body.get('phone', ''),
+                'service_type': body['service_type'],
+                'budget': body.get('budget', 'not_specified'),
+                'timeline': 'within_month',  # Booking request implies urgency
+                'event_date': start.split('T')[0] if 'T' in start else '',
+                'message': f"Booking request for {body['service_type']}. {body.get('notes', '')}".strip(),
+                'source': 'booking_request',
+                'referral_source': body.get('referral_source', '')
+            }
+            
+            # Capture lead (this will trigger scoring and follow-up sequences)
+            handle_capture_lead(photographer_id, lead_body)
+            print(f"Lead created from booking request: {appt_id}")
+        except Exception as lead_error:
+            print(f"Failed to create lead from booking: {str(lead_error)}")
+            # Don't fail the appointment creation if lead creation fails
+        
         # Send notification to Photographer
         try:
             send_email(

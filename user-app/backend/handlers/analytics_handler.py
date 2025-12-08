@@ -27,7 +27,7 @@ def track_event(user_id, gallery_id, event_type, metadata=None):
         return False
 
 
-def handle_get_gallery_analytics(user, gallery_id):
+def handle_get_gallery_analytics(user, gallery_id, query_params=None):
     """Get analytics for a specific gallery"""
     try:
         # Verify gallery ownership
@@ -39,10 +39,28 @@ def handle_get_gallery_analytics(user, gallery_id):
         if 'Item' not in gallery_response:
             return create_response(404, {'error': 'Gallery not found'})
         
-        # Get analytics events for this gallery
+        # Get date range from query parameters or use default (30 days)
+        query_params = query_params or {}
+        end_date_str = query_params.get('end_date')
+        start_date_str = query_params.get('start_date')
+        
+        if end_date_str:
+            try:
+                end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+            except:
         end_date = datetime.utcnow()
+        else:
+            end_date = datetime.utcnow()
+            
+        if start_date_str:
+            try:
+                start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+            except:
+                start_date = end_date - timedelta(days=30)
+        else:
         start_date = end_date - timedelta(days=30)
         
+        # Get analytics events for this gallery
         response = analytics_table.query(
             IndexName='GalleryIdIndex',
             KeyConditionExpression=Key('gallery_id').eq(gallery_id) & Key('timestamp').between(
@@ -60,15 +78,18 @@ def handle_get_gallery_analytics(user, gallery_id):
         downloads = sum(1 for e in events if e.get('event_type') == 'photo_download')
         bulk_downloads = sum(1 for e in events if e.get('event_type') == 'bulk_download')
         
-        # Time series data (last 30 days)
+        # Time series data - initialize all days in range
         daily_stats = {}
+        num_days = (end_date - start_date).days + 1
+        for i in range(num_days):
+            d = (start_date + timedelta(days=i)).strftime('%Y-%m-%d')
+            daily_stats[d] = {'views': 0, 'photo_views': 0, 'downloads': 0}
+        
         photo_stats = {}
         
         for event in events:
             date = event['timestamp'][:10]  # YYYY-MM-DD
-            if date not in daily_stats:
-                daily_stats[date] = {'views': 0, 'photo_views': 0, 'downloads': 0}
-            
+            if date in daily_stats:
             event_type = event.get('event_type')
             if event_type == 'gallery_view':
                 daily_stats[date]['views'] += 1
@@ -114,12 +135,15 @@ def handle_get_gallery_analytics(user, gallery_id):
             except Exception as e:
                 print(f"Error fetching photo details: {e}")
         
+        # Convert daily_stats to list for frontend
+        daily_stats_list = [{'date': k, 'views': v['views'], 'downloads': v['downloads']} for k, v in sorted(daily_stats.items())]
+        
         return create_response(200, {
             'gallery_id': gallery_id,
             'period': {
                 'start': start_date.isoformat() + 'Z',
                 'end': end_date.isoformat() + 'Z',
-                'days': 30
+                'days': num_days
             },
             'metrics': {
                 'total_views': views,
@@ -128,7 +152,7 @@ def handle_get_gallery_analytics(user, gallery_id):
                 'downloads': downloads,
                 'bulk_downloads': bulk_downloads
             },
-            'daily_stats': daily_stats,
+            'daily_stats': daily_stats_list,
             'top_photos': top_photos
         })
     except Exception as e:
@@ -136,7 +160,7 @@ def handle_get_gallery_analytics(user, gallery_id):
         return create_response(500, {'error': 'Failed to get analytics'})
 
 
-def handle_get_overall_analytics(user):
+def handle_get_overall_analytics(user, query_params=None):
     """Get overall analytics for user"""
     try:
         # Get all user's galleries
@@ -153,12 +177,32 @@ def handle_get_overall_analytics(user):
                 'total_photo_views': 0,
                 'total_downloads': 0,
                 'total_bulk_downloads': 0,
-                'gallery_stats': []
+                'gallery_stats': [],
+                'daily_stats': []
             })
         
-        # Get analytics for all galleries
+        # Get date range from query parameters or use default (30 days)
+        query_params = query_params or {}
+        end_date_str = query_params.get('end_date')
+        start_date_str = query_params.get('start_date')
+        
+        if end_date_str:
+            try:
+                end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+            except:
         end_date = datetime.utcnow()
+        else:
+            end_date = datetime.utcnow()
+            
+        if start_date_str:
+            try:
+                start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+            except:
+                start_date = end_date - timedelta(days=30)
+        else:
         start_date = end_date - timedelta(days=30)
+
+        # Get analytics for all galleries
         
         all_events = []
         for gallery_id in gallery_ids:
@@ -185,8 +229,9 @@ def handle_get_overall_analytics(user):
         daily_stats = {}
         photo_stats = {}
         
-        # Initialize last 30 days in daily_stats
-        for i in range(30):
+        # Initialize days based on actual date range
+        num_days = (end_date - start_date).days + 1
+        for i in range(num_days):
             d = (start_date + timedelta(days=i)).strftime('%Y-%m-%d')
             daily_stats[d] = {'views': 0, 'downloads': 0}
 
@@ -265,7 +310,7 @@ def handle_get_overall_analytics(user):
             'period': {
                 'start': start_date.isoformat() + 'Z',
                 'end': end_date.isoformat() + 'Z',
-                'days': 30
+                'days': num_days
             },
             'daily_stats': daily_stats_list,
             'gallery_stats': gallery_stats[:10],  # Top 10 galleries

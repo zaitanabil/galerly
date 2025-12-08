@@ -81,7 +81,8 @@ def get_user_features(user):
             'client_invoicing': False,
             'scheduler': False,
             'e_signatures': False,
-            'watermarking': False
+            'watermarking': False,
+            'edit_requests': False
         }
         
         # Collect all feature IDs: from plan definition + manual overrides
@@ -197,6 +198,10 @@ def get_user_features(user):
             features['analytics_level'] = 'pro'
         elif 'analytics_advanced' in feature_ids:
             features['analytics_level'] = 'advanced'
+        
+        # Edit Requests (Starter+)
+        if 'edit_requests' in feature_ids:
+            features['edit_requests'] = True
             
         return features, normalized_plan_id, plan_def['name']
 

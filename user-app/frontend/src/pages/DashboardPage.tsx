@@ -2,14 +2,13 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useGalleries, useDashboardStats, useBulkDownloads } from '../hooks/useApi';
-import { 
-  Plus, Image as ImageIcon, Users, Settings, LogOut, 
-  Download, Eye, HardDrive, ChevronRight, Activity, Calendar, Zap
+import { useActiveViewers } from '../hooks/useViewerTracking';
+import {
+  Plus, Image as ImageIcon, Users, Settings, LogOut,
+  Download, Eye, HardDrive, ChevronRight, Activity, Zap
 } from 'lucide-react';
 import { getImageUrl } from '../config/env';
-import { 
-  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
-} from 'recharts';
+import RealtimeGlobe from '../components/RealtimeGlobe';
 
 interface DashboardStats {
   stats: {
@@ -44,7 +43,8 @@ export default function DashboardPage() {
   const { data: galleriesData, loading: galleriesLoading } = useGalleries();
   const { data: statsData, loading: statsLoading } = useDashboardStats();
   const { data: bulkDownloadsData } = useBulkDownloads();
-  
+  const { data: activeViewersData } = useActiveViewers(true);
+
   const galleries = galleriesData?.galleries || [];
   const loading = galleriesLoading || statsLoading;
   
@@ -60,16 +60,8 @@ export default function DashboardPage() {
     storage_limit_gb: 0
   };
   
-  const analytics = dashboardData?.analytics || {};
-  const dailyStats = analytics.daily_stats || [];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const recentActivity = (bulkDownloadsData as any)?.events?.slice(0, 5) || [];
-  
-  // Format chart data
-  const chartData = dailyStats.map((d: { date: string; views: number; downloads: number }) => ({
-    ...d,
-    date: new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-  }));
 
   if (loading) {
     return (
@@ -176,69 +168,13 @@ export default function DashboardPage() {
           {/* Main Content Column */}
           <div className="lg:col-span-2 space-y-8">
             
-            {/* Analytics Chart */}
-            <div className="bg-white p-8 rounded-[32px] border border-gray-200/60 shadow-[0_2px_12px_rgba(0,0,0,0.02)] animate-fade-in-up" style={delay(4)}>
-              <div className="flex items-center justify-between mb-8">
-              <div>
-                  <h2 className="text-xl font-medium text-[#1D1D1F] mb-1">Performance</h2>
-                  <p className="text-sm text-[#1D1D1F]/60">Views and downloads over the last 30 days</p>
-                </div>
-                <div className="flex items-center gap-2 text-xs font-medium text-[#1D1D1F]/50 bg-[#F5F5F7] px-4 py-2 rounded-full">
-                  <Calendar className="w-3.5 h-3.5" />
-                  Last 30 Days
-                </div>
-              </div>
-              
-              <div className="h-[320px] w-full">
-                {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#0066CC" stopOpacity={0.08}/>
-                      <stop offset="95%" stopColor="#0066CC" stopOpacity={0}/>
-                    </linearGradient>
-                        <linearGradient id="colorDownloads" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="#F97316" stopOpacity={0.08}/>
-                          <stop offset="95%" stopColor="#F97316" stopOpacity={0}/>
-                        </linearGradient>
-                  </defs>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E5E5" opacity={0.5} />
-                  <XAxis 
-                    dataKey="date" 
-                    axisLine={false} 
-                    tickLine={false} 
-                        tick={{ fill: '#1D1D1F', fontSize: 11, opacity: 0.4 }} 
-                    dy={10}
-                  />
-                  <YAxis 
-                    axisLine={false} 
-                    tickLine={false} 
-                        tick={{ fill: '#1D1D1F', fontSize: 11, opacity: 0.4 }} 
-                  />
-                  <Tooltip 
-                    contentStyle={{ 
-                          backgroundColor: 'rgba(255, 255, 255, 0.8)', 
-                          backdropFilter: 'blur(12px)',
-                          borderRadius: '16px', 
-                          border: '1px solid rgba(255,255,255,0.5)', 
-                          boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
-                          fontSize: '12px',
-                          padding: '12px'
-                        }}
-                        cursor={{ stroke: '#1D1D1F', strokeWidth: 1, strokeDasharray: '4 4', opacity: 0.1 }}
-                      />
-                      <Area type="monotone" dataKey="views" stroke="#0066CC" strokeWidth={2.5} fillOpacity={1} fill="url(#colorViews)" activeDot={{ r: 6, strokeWidth: 0, fill: '#0066CC' }} />
-                      <Area type="monotone" dataKey="downloads" stroke="#F97316" strokeWidth={2.5} fillOpacity={1} fill="url(#colorDownloads)" activeDot={{ r: 6, strokeWidth: 0, fill: '#F97316' }} />
-                </AreaChart>
-              </ResponsiveContainer>
-                ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-[#1D1D1F]/30 bg-[#F5F5F7]/30 rounded-2xl border border-dashed border-gray-200">
-                    <Activity className="w-8 h-8 mb-2 opacity-20" />
-                    <span className="text-sm">No analytics data available yet</span>
-          </div>
-        )}
-                        </div>
+            {/* Real-time Globe Section */}
+            <div className="animate-fade-in-up" style={delay(4)}>
+              <RealtimeGlobe 
+                viewers={activeViewersData?.viewers || []}
+                totalActive={activeViewersData?.total_active || 0}
+                byCountry={activeViewersData?.by_country || {}}
+              />
             </div>
 
             {/* Recent Galleries */}

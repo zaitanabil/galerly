@@ -167,6 +167,9 @@ export const useBrandedModal = () => {
     promptValue: '',
   });
 
+  // Use ref to store current prompt value to avoid stale closure
+  const promptValueRef = React.useRef<string>('');
+
   const showAlert = (title: string, message: string, type: 'success' | 'error' | 'info' = 'info') => {
     return new Promise<void>((resolve) => {
       setModalState({
@@ -210,6 +213,9 @@ export const useBrandedModal = () => {
     defaultValue: string = ''
   ) => {
     return new Promise<string | null>((resolve) => {
+      // Initialize ref with default value
+      promptValueRef.current = defaultValue;
+      
       setModalState({
         isOpen: true,
         title,
@@ -219,7 +225,11 @@ export const useBrandedModal = () => {
         promptPlaceholder: placeholder,
         confirmText: 'Submit',
         cancelText: 'Cancel',
-        onConfirm: () => resolve(modalState.promptValue || null),
+        onConfirm: () => {
+          // Use ref value which has the latest input
+          const value = promptValueRef.current || null;
+          resolve(value);
+        },
         onCancel: () => resolve(null),
         resolve,
       });
@@ -236,6 +246,8 @@ export const useBrandedModal = () => {
   };
 
   const handlePromptChange = (value: string) => {
+    // Update both state and ref
+    promptValueRef.current = value;
     setModalState((prev) => ({ ...prev, promptValue: value }));
   };
 

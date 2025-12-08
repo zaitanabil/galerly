@@ -32,7 +32,7 @@ export default function Pricing() {
     {
       id: 'starter',
       name: 'Starter',
-      price: { monthly: 12, annual: 10 },
+      price: { monthly: 10, annual: 8 },
       period: '/mo',
       description: 'For new pros',
       features: [
@@ -49,7 +49,7 @@ export default function Pricing() {
     {
       id: 'plus',
       name: 'Plus',
-      price: { monthly: 29, annual: 24 },
+      price: { monthly: 24, annual: 19 },
       badge: 'BEST VALUE',
       period: '/mo',
       description: 'Most popular',
@@ -68,7 +68,7 @@ export default function Pricing() {
     {
       id: 'pro',
       name: 'Pro',
-      price: { monthly: 59, annual: 49 },
+      price: { monthly: 49, annual: 39 },
       period: '/mo',
       description: 'For studios',
       features: [
@@ -86,7 +86,7 @@ export default function Pricing() {
     {
       id: 'ultimate',
       name: 'Ultimate',
-      price: { monthly: 119, annual: 99 },
+      price: { monthly: 99, annual: 79 },
       period: '/mo',
       description: 'Max power',
       features: [

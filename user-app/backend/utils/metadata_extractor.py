@@ -1,6 +1,6 @@
 """
 Enhanced Metadata Extraction - Steps 6-8
-Extracts and preserves comprehensive metadata from uploaded images
+Extracts and preserves comprehensive metadata from uploaded images and videos
 """
 import os
 from datetime import datetime
@@ -19,9 +19,16 @@ except ImportError:
     print(" PIL not available - metadata extraction disabled")
 
 
+def is_video_file(filename):
+    """Check if file is a video based on extension"""
+    video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm', '.mpeg', '.mpg']
+    ext = os.path.splitext(filename)[1].lower()
+    return ext in video_extensions
+
+
 def extract_image_metadata(image_data, filename):
     """
-    Step 7: Extract comprehensive metadata from image
+    Step 7: Extract comprehensive metadata from image or video
     
     Returns:
         dict: Metadata including:
@@ -31,13 +38,22 @@ def extract_image_metadata(image_data, filename):
             - GPS: location if available
             - Color: color profile, color space
             - Timestamps: capture time, modification time
+            - Video: duration, codec (if video file)
     """
+    # Check if this is a video file
+    if is_video_file(filename):
+        # Use video processor for video metadata extraction
+        from utils.video_processor import extract_video_metadata
+        return extract_video_metadata(image_data, filename)
+    
+    # Handle image files
     metadata = {
         'filename': filename,
         'file_size': len(image_data),
         'size_mb': round(len(image_data) / (1024 * 1024), 2),
         'upload_timestamp': datetime.utcnow().isoformat() + 'Z',
         'format': None,
+        'type': 'image',
         'dimensions': None,
         'camera': {},
         'exif': {},

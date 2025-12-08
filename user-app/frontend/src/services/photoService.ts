@@ -26,6 +26,9 @@ export interface Photo {
   status?: string;
   type?: 'image' | 'video';
   hls_url?: string;
+  duration_seconds?: number;
+  duration_minutes?: number;
+  codec?: Record<string, any>;
 }
 
 export interface Comment {
@@ -44,7 +47,8 @@ export interface Comment {
     dislike?: string[];
   };
   is_edited?: boolean;
-  annotation?: string;
+  annotation?: string; // For image lasso annotations
+  timestamp?: number; // For video timestamps (in seconds)
 }
 
 export interface UploadUrlResponse {
@@ -100,14 +104,16 @@ export async function addComment(
   parentId?: string,
   authorName?: string,
   authorEmail?: string,
-  annotation?: string // JSON string of points or SVG path
+  annotation?: string, // For images: JSON string of points or SVG path
+  timestamp?: number // For videos: timestamp in seconds
 ) {
   return api.post<Comment>(`/photos/${photoId}/comments`, { 
     text,
     parent_id: parentId,
     author_name: authorName,
     author_email: authorEmail,
-    annotation
+    annotation,
+    timestamp
   });
 }
 
@@ -117,12 +123,39 @@ export async function updateComment(
   commentId: string, 
   data: { text?: string; reaction?: string; action?: 'toggle' }
 ) {
-  return api.put<Comment>(`/photos/${photoId}/comments/${commentId}`, data);
+  // For guest users, send their info in headers for permission check
+  const guestName = localStorage.getItem('guest_name');
+  const guestEmail = localStorage.getItem('guest_email');
+  
+  const headers: Record<string, string> = {};
+  if (guestName) {
+    headers['X-Guest-Name'] = guestName;
+  }
+  if (guestEmail) {
+    headers['X-Guest-Email'] = guestEmail;
+  }
+  
+  // api.put signature: (endpoint, body?, options?)
+  return api.put<Comment>(`/photos/${photoId}/comments/${commentId}`, data, { headers });
 }
 
 // Delete comment
 export async function deleteComment(photoId: string, commentId: string) {
-  return api.delete(`/photos/${photoId}/comments/${commentId}`);
+  // For guest users, send their info in headers for permission check
+  const guestName = localStorage.getItem('guest_name');
+  const guestEmail = localStorage.getItem('guest_email');
+  
+  const headers: Record<string, string> = {};
+  if (guestName) {
+    headers['X-Guest-Name'] = guestName;
+  }
+  if (guestEmail) {
+    headers['X-Guest-Email'] = guestEmail;
+  }
+  
+  // api.delete signature: (endpoint, body?, options?)
+  // Pass headers as the third parameter (options)
+  return api.delete(`/photos/${photoId}/comments/${commentId}`, undefined, { headers });
 }
 
 // Search photos

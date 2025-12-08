@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import * as photoService from '../services/photoService';
 import { Comment } from '../services/photoService';
-import { Send, Heart, ThumbsUp, ThumbsDown, MessageCircle, Edit2, Trash2, PenTool } from 'lucide-react';
+import { Send, Heart, ThumbsUp, ThumbsDown, MessageCircle, Edit2, Trash2, PenTool, Clock } from 'lucide-react';
 import { useBrandedModal } from './BrandedModal';
 
 interface CommentSectionProps {
@@ -27,6 +27,7 @@ export default function CommentSection({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [loading, setLoading] = useState(false);
+  const [lastDeletionTime, setLastDeletionTime] = useState<number>(0);
 
   // Poll for comments
   useEffect(() => {
@@ -37,6 +38,14 @@ export default function CommentSection({
             if (response.success && response.data && response.data.comments) {
                 // Check if comments are different before updating to avoid loops/redraws
                 const newComments = response.data.comments;
+                
+                // Don't update if we just deleted something (within 2 seconds)
+                // This prevents the poll from bringing back stale data
+                const timeSinceDeletion = Date.now() - lastDeletionTime;
+                if (timeSinceDeletion < 2000) {
+                    return;
+                }
+                
                 if (JSON.stringify(newComments) !== JSON.stringify(comments)) {
                     onCommentsChange(newComments);
                 }
@@ -54,7 +63,7 @@ export default function CommentSection({
     }, 5000);
     
     return () => clearInterval(pollInterval);
-  }, [photoId, comments, onCommentsChange]);
+  }, [photoId, comments, onCommentsChange, lastDeletionTime]);
 
   const handleAddComment = async (parentId?: string) => {
     const text = parentId ? (document.getElementById(`reply-input-${parentId}`) as HTMLInputElement)?.value : newComment;
@@ -138,11 +147,38 @@ export default function CommentSection({
     if (!confirmed) return;
     
     try {
-      await photoService.deleteComment(photoId, commentId);
-      // Remove comment and any replies locally
-      onCommentsChange(comments.filter(c => c.id !== commentId && c.parent_id !== commentId));
+      // Mark deletion time to prevent polling from overwriting
+      setLastDeletionTime(Date.now());
+      
+      const response = await photoService.deleteComment(photoId, commentId);
+      
+      // Only update if deletion was successful
+      if (response.success) {
+        // Remove comment and any replies locally (immediate UI update)
+        const updatedComments = comments.filter(c => c.id !== commentId && c.parent_id !== commentId);
+        onCommentsChange(updatedComments);
+        
+        // Force refresh from backend after a delay to ensure backend has processed
+        setTimeout(async () => {
+          try {
+            const refreshResponse = await photoService.getPhoto(photoId);
+            if (refreshResponse.success && refreshResponse.data && refreshResponse.data.comments) {
+              onCommentsChange(refreshResponse.data.comments);
+              // Reset deletion time after successful refresh
+              setLastDeletionTime(0);
+            }
+          } catch (error) {
+            console.error('Error refreshing comments after deletion:', error);
+            setLastDeletionTime(0);
+          }
+        }, 1000);
+      } else {
+        // Reset deletion time if deletion failed
+        setLastDeletionTime(0);
+      }
     } catch (error) {
       console.error('Error deleting comment:', error);
+      setLastDeletionTime(0);
     }
   };
 
@@ -175,6 +211,12 @@ export default function CommentSection({
     return date.toLocaleDateString();
   };
 
+  const formatVideoTimestamp = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${String(secs).padStart(2, '0')}`;
+  };
+
   // Organize comments into threads
   const rootComments = comments.filter(c => !c.parent_id).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
   const getReplies = (parentId: string) => comments.filter(c => c.parent_id === parentId).sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
@@ -203,12 +245,13 @@ export default function CommentSection({
     const hasDisliked = user?.id && comment.reactions?.dislike?.includes(user.id);
     
     const hasAnnotation = !!comment.annotation;
+    const hasTimestamp = comment.timestamp !== undefined && comment.timestamp !== null;
 
     return (
       <div key={comment.id} className={`group ${isReply ? 'ml-8 mt-2' : 'mt-4'}`}>
         <div className={`p-4 rounded-2xl ${isReply ? 'bg-gray-50/50 border border-gray-100' : 'bg-gray-50'}`}>
           <div className="flex justify-between items-start mb-2">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-medium text-[#1D1D1F] text-sm">{comment.user_name || 'Anonymous'}</span>
               <span className="text-xs text-[#1D1D1F]/40">{formatTime(comment.created_at)}</span>
               {hasAnnotation && (
@@ -216,20 +259,34 @@ export default function CommentSection({
                       <PenTool className="w-3 h-3" /> Edit Request
                   </span>
               )}
+              {hasTimestamp && (
+                  <span className="flex items-center gap-1 text-[10px] font-medium bg-blue-100 text-blue-800 px-1.5 py-0.5 rounded border border-blue-200">
+                      <Clock className="w-3 h-3" /> {formatVideoTimestamp(comment.timestamp)}
+                  </span>
+              )}
               {comment.is_edited && <span className="text-xs text-[#1D1D1F]/40">(edited)</span>}
             </div>
             
             {canEdit && (
-              <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex items-center gap-1">
                 <button 
-                  onClick={() => { setEditingId(comment.id); setEditText(comment.text); }}
-                  className="p-1 hover:bg-gray-200 rounded text-[#1D1D1F]/60"
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    setEditingId(comment.id); 
+                    setEditText(comment.text); 
+                  }}
+                  className="p-1 hover:bg-gray-200 rounded text-[#1D1D1F]/60 transition-colors"
+                  title="Edit comment"
                 >
                   <Edit2 className="w-3 h-3" />
                 </button>
                 <button 
-                  onClick={() => handleDeleteComment(comment.id)}
-                  className="p-1 hover:bg-red-100 rounded text-red-500"
+                  onClick={(e) => { 
+                    e.stopPropagation(); 
+                    handleDeleteComment(comment.id); 
+                  }}
+                  className="p-1 hover:bg-red-100 rounded text-red-500 transition-colors"
+                  title="Delete comment"
                 >
                   <Trash2 className="w-3 h-3" />
                 </button>

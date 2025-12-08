@@ -26,7 +26,7 @@ def create_response(status_code, body, headers=None):
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': frontend_url,
         'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type,Authorization,Cookie',
+        'Access-Control-Allow-Headers': 'Content-Type,Authorization,Cookie,X-Guest-Name,X-Guest-Email',
         'Access-Control-Allow-Credentials': 'true',
         # Content Security Policy - Protect against XSS
         'Content-Security-Policy': "default-src 'self'; img-src 'self' https://*.s3.amazonaws.com data:; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' https://*.amazonaws.com;",

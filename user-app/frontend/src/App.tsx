@@ -40,6 +40,9 @@ const SignContractPage = lazy(() => import('./pages/SignContractPage'));
 const PublicBookingPage = lazy(() => import('./pages/PublicBookingPage'));
 const RAWVaultPage = lazy(() => import('./pages/RAWVaultPage'));
 const EmailAutomationPage = lazy(() => import('./pages/EmailAutomationPage'));
+const CRMPage = lazy(() => import('./pages/CRMPage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const NotificationPreferencesPage = lazy(() => import('./pages/NotificationPreferencesPage'));
 
 // Loading Fallback
 const PageLoader = () => (
@@ -108,6 +111,7 @@ function App() {
               }
             />
             <Route path="/client-gallery/:galleryId" element={<ClientGalleryPage />} />
+            <Route path="/client-gallery" element={<ClientGalleryPage />} /> {/* Token-based access via query param */}
             
             {/* Photographer Protected Routes */}
             <Route
@@ -213,6 +217,30 @@ function App() {
               element={
                 <ProtectedRoute requireRole="photographer">
                   <EmailAutomationPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/crm"
+              element={
+                <ProtectedRoute requireRole="photographer">
+                  <CRMPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <SettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings/notifications"
+              element={
+                <ProtectedRoute>
+                  <NotificationPreferencesPage />
                 </ProtectedRoute>
               }
             />

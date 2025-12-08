@@ -3,6 +3,7 @@ Tests for Multipart Upload Handler
 Tests large file upload functionality with resume capability
 """
 import pytest
+import json
 from unittest.mock import Mock, patch, MagicMock
 from handlers.multipart_upload_handler import (
     handle_initialize_multipart_upload,
@@ -52,7 +53,7 @@ class TestInitializeMultipartUpload:
         
         # Assert
         assert response['statusCode'] == 200
-        body = eval(response['body'])
+        body = json.loads(response['body'])
         # Handler returns multipart_upload_id instead of upload_id
         assert 'upload_id' in body or 'multipart_upload_id' in body
         assert 'upload_parts' in body
@@ -70,7 +71,7 @@ class TestInitializeMultipartUpload:
         
         # Assert
         assert response['statusCode'] == 403
-        body = eval(response['body'])
+        body = json.loads(response['body'])
         assert 'Access denied' in body['error']
     
     @patch('handlers.multipart_upload_handler.galleries_table')
@@ -85,7 +86,7 @@ class TestInitializeMultipartUpload:
         
         # Assert
         assert response['statusCode'] == 400
-        body = eval(response['body'])
+        body = json.loads(response['body'])
         assert 'filename and file_size required' in body['error']
     
     @patch('handlers.multipart_upload_handler.galleries_table')
@@ -135,7 +136,7 @@ class TestCompleteMultipartUpload:
         
         # Assert
         assert response['statusCode'] == 200
-        body = eval(response['body'])
+        body = json.loads(response['body'])
         # Handler returns message/photo_id instead of success
         assert 'message' in body or 'success' in body or 'photo_id' in body
         assert 'photo_id' in body
@@ -152,7 +153,7 @@ class TestCompleteMultipartUpload:
         
         # Assert
         assert response['statusCode'] == 400
-        body = eval(response['body'])
+        body = json.loads(response['body'])
         assert 'photo_id, upload_id, and parts required' in body['error']
 
 
@@ -192,6 +193,6 @@ class TestAbortMultipartUpload:
         
         # Assert
         assert response['statusCode'] == 400
-        body = eval(response['body'])
+        body = json.loads(response['body'])
         assert 'photo_id and upload_id required' in body['error']
 

@@ -12,8 +12,9 @@ def mock_favorites_dependencies():
     with patch('handlers.client_favorites_handler.client_favorites_table') as mock_favorites, \
          patch('handlers.client_favorites_handler.photos_table') as mock_photos, \
          patch('handlers.client_favorites_handler.galleries_table') as mock_galleries, \
-         patch('utils.config.users_table') as mock_users, \
-         patch('handlers.subscription_handler.get_user_features') as mock_features:
+         patch('handlers.client_favorites_handler.users_table') as mock_users, \
+         patch('handlers.subscription_handler.get_user_features') as mock_features, \
+         patch('handlers.client_favorites_handler.auto_register_guest_client') as mock_auto_register:
         # Setup default mocks
         mock_photos.get_item.return_value = {
             'Item': {
@@ -23,21 +24,38 @@ def mock_favorites_dependencies():
                 'user_id': 'user_123'
             }
         }
-        # FIX: Include client_emails with sample_user's email for access control
+        # Include client_emails with sample_user's email for access control
         mock_galleries.get_item.return_value = {
             'Item': {
                 'id': 'gallery_123',
                 'user_id': 'user_123',
                 'title': 'Test Gallery',
-                'client_emails': ['test@example.com']  # Match sample_user email
+                'client_emails': ['test@example.com'],
+                'share_token': 'test_token_123'  # Add share token for testing
             }
         }
-        mock_users.get_item.return_value = {
-            'Item': {
+        mock_galleries.query.return_value = {
+            'Items': [{
+                'id': 'gallery_123',
+                'user_id': 'user_123',
+                'title': 'Test Gallery',
+                'client_emails': ['test@example.com'],
+                'share_token': 'test_token_123'
+            }]
+        }
+        mock_users.query.return_value = {
+            'Items': [{
                 'id': 'user_123',
                 'email': 'photographer@test.com',
                 'plan': 'pro'
-            }
+            }]
+        }
+        # Mock auto-register to return a simple user object
+        mock_auto_register.return_value = {
+            'id': 'guest_user_123',
+            'email': 'guest@example.com',
+            'role': 'client',
+            'is_guest': True
         }
         # Mock photographer features - allow favorites
         mock_features.return_value = (
@@ -50,7 +68,8 @@ def mock_favorites_dependencies():
             'photos': mock_photos,
             'galleries': mock_galleries,
             'users': mock_users,
-            'features': mock_features
+            'features': mock_features,
+            'auto_register': mock_auto_register
         }
 
 class TestAddFavorite:
@@ -60,7 +79,7 @@ class TestAddFavorite:
         """Add photo to favorites successfully."""
         from handlers.client_favorites_handler import handle_add_favorite
         
-        mock_favorites_dependencies['favorites'].query.return_value = {'Items': []}
+        mock_favorites_dependencies['favorites'].get_item.return_value = {}  # No existing favorite
         
         body = {
             'photo_id': 'photo_123',
@@ -70,16 +89,36 @@ class TestAddFavorite:
         
         assert result['statusCode'] in [200, 201]
     
+    def test_add_favorite_with_share_token(self, mock_favorites_dependencies):
+        """Add favorite via shared link (guest user)."""
+        from handlers.client_favorites_handler import handle_add_favorite
+        
+        mock_favorites_dependencies['favorites'].get_item.return_value = {}  # No existing favorite
+        
+        # Guest user (no auth, using share token)
+        body = {
+            'photo_id': 'photo_123',
+            'gallery_id': 'gallery_123',
+            'client_email': 'guest@example.com',
+            'client_name': 'Guest User',
+            'token': 'test_token_123'
+        }
+        result = handle_add_favorite(None, body)  # No user session
+        
+        assert result['statusCode'] in [200, 201]
+        # Verify auto-register was called
+        mock_favorites_dependencies['auto_register'].assert_called_once()
+    
     def test_add_favorite_duplicate(self, sample_user, mock_favorites_dependencies):
         """Add favorite that already exists."""
         from handlers.client_favorites_handler import handle_add_favorite
         
         existing_favorite = {
-            'user_id': sample_user['id'],
+            'client_email': sample_user['email'],
             'photo_id': 'photo_123',
             'gallery_id': 'gallery_123'
         }
-        mock_favorites_dependencies['favorites'].query.return_value = {'Items': [existing_favorite]}
+        mock_favorites_dependencies['favorites'].get_item.return_value = {'Item': existing_favorite}
         
         body = {
             'photo_id': 'photo_123',
@@ -97,6 +136,31 @@ class TestAddFavorite:
         result = handle_add_favorite(sample_user, body)
         
         assert result['statusCode'] == 400
+    
+    def test_add_favorite_access_denied_no_token(self, mock_favorites_dependencies):
+        """Add favorite without access (no token, not in client_emails)."""
+        from handlers.client_favorites_handler import handle_add_favorite
+        
+        # Update gallery to not include this email
+        mock_favorites_dependencies['galleries'].get_item.return_value = {
+            'Item': {
+                'id': 'gallery_123',
+                'user_id': 'user_123',
+                'title': 'Test Gallery',
+                'client_emails': [],  # Empty list
+                'share_token': 'test_token_123'
+            }
+        }
+        
+        body = {
+            'photo_id': 'photo_123',
+            'gallery_id': 'gallery_123',
+            'client_email': 'unauthorized@example.com'
+            # No token provided
+        }
+        result = handle_add_favorite(None, body)
+        
+        assert result['statusCode'] == 403
 
 class TestRemoveFavorite:
     """Tests for handle_remove_favorite endpoint."""

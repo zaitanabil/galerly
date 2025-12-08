@@ -22,13 +22,19 @@ import {
   Download,
   Trash2,
   Pencil,
+  PlayCircle,
+  BarChart3,
 } from 'lucide-react';
 import { uploadManager, UploadProgress } from '../utils/uploadManager';
 import { isVideoFile, getVideoDuration, checkVideoDurationLimit, getVideoDurationLimitForPlan } from '../utils/videoUtils';
 import DuplicateResolutionModal from '../components/DuplicateResolutionModal';
 import ShareModal from '../components/ShareModal';
 import { Photo, Comment } from '../services/photoService';
+import * as analyticsService from '../services/analyticsService';
+import { ClientEngagementSummary } from '../services/analyticsService';
 import CommentSection from '../components/CommentSection';
+import ClientInsights from '../components/ClientInsights';
+import GalleryInsightsDashboard from '../components/GalleryInsightsDashboard';
 import ProgressiveImage from '../components/ProgressiveImage';
 import { useSlideshow } from '../hooks/useSlideshow';
 import { useSwipe } from '../hooks/useSwipe';
@@ -87,6 +93,8 @@ export default function GalleryPage() {
   
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [showMobileComments, setShowMobileComments] = useState(false);
+  const [showInsights, setShowInsights] = useState(true); // Show insights by default for photographers
+  const [photoEngagement, setPhotoEngagement] = useState<Record<string, ClientEngagementSummary>>({});
 
   // Photo modal state
   const [modalOpen, setModalOpen] = useState(false);
@@ -94,6 +102,7 @@ export default function GalleryPage() {
 
   // Settings modal state
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
+  const [analyticsModalOpen, setAnalyticsModalOpen] = useState(false);
   const [settingsForm, setSettingsForm] = useState({
     name: '',
     description: '',
@@ -132,11 +141,6 @@ export default function GalleryPage() {
   const [lastTap, setLastTap] = useState(0);
   const [imgDims, setImgDims] = useState<{width: number, height: number} | null>(null);
 
-  // Reset dims when photo changes
-  useEffect(() => {
-    setImgDims(null);
-  }, [currentPhotoIndex]);
-
   const [lastScrollTime, setLastScrollTime] = useState(0);
   const [filterFavorites, setFilterFavorites] = useState(false);
 
@@ -144,10 +148,69 @@ export default function GalleryPage() {
   const navigatePhotoRef = useRef<(dir: number) => void>(() => {});
   const { stop: stopSlideshow } = useSlideshow(
     () => navigatePhotoRef.current(1), 
-    3000
+    Number(import.meta.env.VITE_SLIDESHOW_INTERVAL) || 3000
   );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Video playback state
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+
+  // Compute current photo
+  const currentPhoto = photos[currentPhotoIndex];
+
+  // Reset dims when photo changes
+  useEffect(() => {
+    setImgDims(null);
+  }, [currentPhotoIndex]);
+
+  // Auto-play videos when modal opens or photo changes (TikTok style)
+  useEffect(() => {
+    if (modalOpen && currentPhoto && currentPhoto.type === 'video' && videoRef.current) {
+      // Reset progress
+      setVideoProgress(0);
+      // Delay to ensure video is loaded (from env)
+      const autoplayDelay = Number(import.meta.env.VITE_VIDEO_AUTOPLAY_DELAY) || 300;
+      const timer = setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.play()
+            .then(() => setIsVideoPlaying(true))
+            .catch(() => setIsVideoPlaying(false));
+        }
+      }, autoplayDelay);
+      return () => clearTimeout(timer);
+    } else {
+      setIsVideoPlaying(false);
+      setVideoProgress(0);
+    }
+  }, [modalOpen, currentPhotoIndex, currentPhoto]);
+
+  // Pause video when modal closes
+  useEffect(() => {
+    if (!modalOpen && videoRef.current) {
+      videoRef.current.pause();
+      setIsVideoPlaying(false);
+      setVideoProgress(0);
+    }
+  }, [modalOpen]);
+
+  // Update video progress for smooth progress bar
+  useEffect(() => {
+    if (isVideoPlaying && videoRef.current) {
+      const updateProgress = () => {
+        if (videoRef.current && videoRef.current.duration) {
+          setVideoProgress((videoRef.current.currentTime / videoRef.current.duration) * 100);
+        }
+      };
+      
+      // Progress update interval from env
+      const progressInterval = Number(import.meta.env.VITE_VIDEO_PROGRESS_UPDATE_INTERVAL) || 100;
+      const interval = setInterval(updateProgress, progressInterval);
+      return () => clearInterval(interval);
+    }
+  }, [isVideoPlaying]);
 
   const loadGallery = useCallback(async (loadMore = false) => {
     if (!galleryId) return;
@@ -162,7 +225,9 @@ export default function GalleryPage() {
     }
 
     try {
-      const params: { page_size: number; last_key?: unknown } = { page_size: 50 };
+      const params: { page_size: number; last_key?: unknown } = { 
+        page_size: Number(import.meta.env.VITE_PAGE_SIZE) || 50 
+      };
       if (loadMore && pagination.next_key) {
         params.last_key = pagination.next_key;
       }
@@ -189,6 +254,17 @@ export default function GalleryPage() {
             comments_count: p.comments?.length || 0
           }));
           setPhotos(photosWithCounts);
+          
+          // Load engagement data for all photos (photographer insights)
+          if (!loadMore && galleryId) {
+            analyticsService.getGalleryEngagement(galleryId).then(engagementData => {
+              const engagementMap: Record<string, ClientEngagementSummary> = {};
+              engagementData.forEach(item => {
+                engagementMap[item.photo_id] = item;
+              });
+              setPhotoEngagement(engagementMap);
+            }).catch(err => console.error('Failed to load engagement data:', err));
+          }
           
           // Initialize settings form only on first load
           setSettingsForm({
@@ -217,7 +293,7 @@ export default function GalleryPage() {
             next_key: galleryRes.data.pagination.next_key
           });
         } else {
-           // Fallback if pagination not returned (e.g. < 50 photos)
+           // Fallback if pagination not returned
            setPagination({ has_more: false });
         }
       } else {
@@ -261,14 +337,70 @@ export default function GalleryPage() {
     setCurrentPhotoIndex(newIndex);
   }, [currentPhotoIndex, photos.length]);
 
+  // Toggle video play/pause (TikTok style)
+  const toggleVideoPlayback = useCallback(() => {
+    if (videoRef.current) {
+      if (isVideoPlaying) {
+        videoRef.current.pause();
+        setIsVideoPlaying(false);
+      } else {
+        videoRef.current.play()
+          .then(() => setIsVideoPlaying(true))
+          .catch(() => {}); // Silently handle autoplay prevention
+      }
+    }
+  }, [isVideoPlaying]);
+
+  // Keyboard navigation for modal (TikTok-style up/down + left/right)
+  useEffect(() => {
+    if (!modalOpen) return;
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if typing in input
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
+
+      switch(e.key) {
+        case 'ArrowUp':
+        case 'ArrowLeft':
+          e.preventDefault();
+          navigatePhoto(-1);
+          break;
+        case 'ArrowDown':
+        case 'ArrowRight':
+          e.preventDefault();
+          navigatePhoto(1);
+          break;
+        case 'Escape':
+          e.preventDefault();
+          closeModal();
+          break;
+        case ' ':
+        case 'Spacebar': // Older browsers
+          e.preventDefault(); // Always prevent page scroll
+          // Space bar for video play/pause only
+          if (currentPhoto?.type === 'video') {
+            toggleVideoPlayback();
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [modalOpen, navigatePhoto, currentPhoto, toggleVideoPlayback]);
+
   const handleWheel = useCallback((e: React.WheelEvent) => {
     const now = Date.now();
-    if (now - lastScrollTime < 300) return; // Debounce 300ms
+    const debounceDelay = Number(import.meta.env.VITE_SCROLL_DEBOUNCE_DELAY) || 300;
+    const scrollThreshold = Number(import.meta.env.VITE_SCROLL_THRESHOLD) || 50;
 
-    if (e.deltaY > 50) {
+    if (now - lastScrollTime < debounceDelay) return; // Debounce from env
+
+    if (e.deltaY > scrollThreshold) {
         navigatePhoto(1);
         setLastScrollTime(now);
-    } else if (e.deltaY < -50) {
+    } else if (e.deltaY < -scrollThreshold) {
         navigatePhoto(-1);
         setLastScrollTime(now);
     }
@@ -836,8 +968,6 @@ export default function GalleryPage() {
     );
   }
 
-  const currentPhoto = photos[currentPhotoIndex];
-
   return (
     <div className="min-h-screen bg-[#F5F5F7]">
       {/* Header */}
@@ -881,6 +1011,13 @@ export default function GalleryPage() {
                   Download All
                 </button>
               )}
+              <button
+                onClick={() => setAnalyticsModalOpen(true)}
+                className="px-4 py-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white rounded-full text-sm font-medium hover:from-blue-600 hover:to-indigo-600 transition-all flex items-center gap-2 shadow-lg"
+              >
+                <BarChart3 className="w-4 h-4" />
+                Gallery Insights
+              </button>
               <button
                 onClick={handleShareGallery}
                 className="px-4 py-2 bg-white border border-gray-200 text-[#1D1D1F] rounded-full text-sm font-medium hover:bg-gray-50 transition-all flex items-center gap-2"
@@ -1078,6 +1215,36 @@ export default function GalleryPage() {
                       openPhotoModal(originalIndex);
                   }}
                 />
+
+                {/* Video Play Button Overlay */}
+                {photo.type === 'video' && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="bg-black/50 rounded-full p-4 backdrop-blur-sm">
+                      <PlayCircle className="w-12 h-12 text-white" strokeWidth={1.5} />
+                    </div>
+                  </div>
+                )}
+
+                {/* Video Duration Badge */}
+                {photo.type === 'video' && photo.duration_seconds && (
+                  <div className="absolute bottom-3 right-3 bg-black/75 text-white text-xs px-2 py-1 rounded backdrop-blur-sm font-medium">
+                    {Math.floor(photo.duration_seconds / 60)}:{String(Math.floor(photo.duration_seconds % 60)).padStart(2, '0')}
+                  </div>
+                )}
+                
+                {/* Client Engagement Badge - Shows interest level */}
+                {photoEngagement[photo.id] && photoEngagement[photo.id].engagement_score >= 50 && (
+                  <div className={`absolute bottom-3 left-3 px-2 py-1 rounded text-xs font-medium backdrop-blur-sm flex items-center gap-1 ${
+                    photoEngagement[photo.id].engagement_score >= 80
+                      ? 'bg-green-500/90 text-white'
+                      : 'bg-blue-500/90 text-white'
+                  }`}>
+                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                    </svg>
+                    {photoEngagement[photo.id].engagement_score >= 80 ? 'High' : 'Good'} Interest
+                  </div>
+                )}
                 
                 {/* Actions - Top Right */}
                 <div className="absolute top-3 right-3 z-30 flex items-center gap-3">
@@ -1123,11 +1290,10 @@ export default function GalleryPage() {
 
                     {/* Right: Stats */}
                     <div className="flex items-center gap-4">
-                      {/* Favorites count */}
+                      {/* Favorites count - showing count only, heart icon is in top-right */}
                       {(gallery?.settings?.favorites_enabled ?? true) && (photo.favorites_count || 0) > 0 && (
                         <div className="flex items-center gap-1.5">
-                          <Heart className="w-4 h-4 text-white drop-shadow-md" />
-                          <span className="text-white text-xs font-medium drop-shadow-md">{photo.favorites_count}</span>
+                          <span className="text-white text-xs font-medium drop-shadow-md">{photo.favorites_count} likes</span>
                         </div>
                       )}
                       {/* Comments count */}
@@ -1223,9 +1389,9 @@ export default function GalleryPage() {
                 <div className="absolute inset-0 bg-black/20" />
              </div>
 
-            {/* Image Area */}
+            {/* Image/Video Area */}
              <div 
-                className={`relative z-10 max-w-full max-h-full flex items-center justify-center cursor-pointer ${slideDirection === 'up' ? 'animate-slide-up' : slideDirection === 'down' ? 'animate-slide-down' : ''}`}
+                className={`relative z-10 max-w-full max-h-full flex items-center justify-center ${currentPhoto.type === 'video' ? '' : 'cursor-pointer'} ${slideDirection === 'up' ? 'animate-slide-up' : slideDirection === 'down' ? 'animate-slide-down' : ''}`}
                 style={{ 
                     width: (currentPhoto.width || imgDims?.width) ? 'auto' : '100%', 
                     height: (currentPhoto.height || imgDims?.height) ? 'auto' : '100%',
@@ -1235,9 +1401,16 @@ export default function GalleryPage() {
                 }}
                 key={currentPhoto.id}
                 onClick={(e) => {
+                    // For videos, click handling is on video element directly
+                    if (currentPhoto.type === 'video') {
+                      return;
+                    }
+                    
+                    // Image double-tap to favorite
                     e.stopPropagation();
                     const now = Date.now();
-                    if (now - lastTap < 300) {
+                    const doubleTapThreshold = Number(import.meta.env.VITE_DOUBLE_TAP_THRESHOLD) || 300;
+                    if (now - lastTap < doubleTapThreshold) {
                         handleToggleFavorite(currentPhoto.id);
                     } else {
                         setShowControls(prev => !prev);
@@ -1245,6 +1418,126 @@ export default function GalleryPage() {
                     setLastTap(now);
                 }}
              >
+              {currentPhoto.type === 'video' ? (
+                /* TikTok-style Video Player - Click to play/pause, auto-play on scroll */
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <video
+                    ref={videoRef}
+                    preload="auto"
+                    poster={getImageUrl(currentPhoto.thumbnail_url || '')}
+                    className="w-full h-full object-contain shadow-2xl drop-shadow-2xl cursor-pointer"
+                    style={{ maxHeight: '100vh' }}
+                    loop
+                    playsInline
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleVideoPlayback();
+                    }}
+                    onLoadedMetadata={(e) => {
+                      // Store video dimensions for aspect ratio
+                      const video = e.currentTarget;
+                      if (video.videoWidth && video.videoHeight) {
+                        setImgDims({ width: video.videoWidth, height: video.videoHeight });
+                      }
+                    }}
+                    onPlay={() => setIsVideoPlaying(true)}
+                    onPause={() => setIsVideoPlaying(false)}
+                  >
+                    {/* Use original video URL (not medium_url which is JPEG thumbnail) */}
+                    <source src={getImageUrl(currentPhoto.url)} type="video/mp4" />
+                    <source src={getImageUrl(currentPhoto.url)} type="video/quicktime" />
+                    Your browser does not support the video tag.
+                  </video>
+
+                  {/* Play button overlay - Apple-style with smooth transitions */}
+                  {!isVideoPlaying && (
+                    <div
+                      className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300 ease-out"
+                    >
+                      <div className="relative">
+                        {/* Outer glow ring */}
+                        <div className="absolute inset-0 bg-white/20 rounded-full blur-2xl scale-150 animate-pulse" />
+                        {/* Main button */}
+                        <div className="relative bg-gradient-to-br from-white/30 to-white/10 rounded-full p-8 backdrop-blur-xl border border-white/20 shadow-2xl transform transition-transform duration-300 ease-out hover:scale-110">
+                          <PlayCircle className="w-16 h-16 text-white drop-shadow-2xl" strokeWidth={1.5} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Progress bar - PIXIESET-style with Apple smoothness */}
+                  <div
+                    className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-t from-black/40 to-transparent backdrop-blur-sm cursor-pointer hover:h-2 transition-all duration-300 ease-out group"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (videoRef.current && videoRef.current.duration) {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const clickX = e.clientX - rect.left;
+                        const newTime = (clickX / rect.width) * videoRef.current.duration;
+                        videoRef.current.currentTime = newTime;
+                        setVideoProgress((newTime / videoRef.current.duration) * 100);
+                      }
+                    }}
+                  >
+                    {/* Background track */}
+                    <div className="absolute bottom-0 left-0 right-0 h-full bg-white/10 rounded-full" />
+                    
+                    {/* Progress fill with gradient */}
+                    <div
+                      className="absolute bottom-0 left-0 h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-75 ease-out shadow-lg"
+                      style={{ width: `${videoProgress}%` }}
+                    >
+                      {/* Playhead indicator - appears on hover */}
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-out transform group-hover:scale-110" />
+                    </div>
+
+                    {/* Timestamp markers for comments - Interactive */}
+                    {currentPhoto.comments?.map((comment) => {
+                      if (comment.timestamp !== undefined && videoRef.current?.duration) {
+                        const markerPosition = (comment.timestamp / videoRef.current.duration) * 100;
+                        const formatTime = (seconds: number) => {
+                          const mins = Math.floor(seconds / 60);
+                          const secs = Math.floor(seconds % 60);
+                          return `${mins}:${String(secs).padStart(2, '0')}`;
+                        };
+                        
+                        return (
+                          <div
+                            key={`marker-${comment.id}`}
+                            className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-blue-500 rounded-full shadow-lg hover:scale-150 hover:bg-blue-400 transition-all duration-200 ease-out cursor-pointer z-10 group/marker"
+                            style={{ left: `${markerPosition}%` }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (videoRef.current && comment.timestamp !== undefined) {
+                                videoRef.current.currentTime = comment.timestamp;
+                                setVideoProgress((comment.timestamp / videoRef.current.duration) * 100);
+                              }
+                            }}
+                          >
+                            {/* Tooltip on hover - Apple style */}
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 px-3 py-1.5 bg-black/90 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover/marker:opacity-100 transition-all duration-200 ease-out pointer-events-none backdrop-blur-xl shadow-2xl">
+                              <div className="font-medium">{formatTime(comment.timestamp)}</div>
+                              <div className="text-white/70 text-[10px] mt-0.5 max-w-[200px] truncate">
+                                {comment.text}
+                              </div>
+                              {/* Arrow */}
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                                <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black/90" />
+                              </div>
+                            </div>
+                            
+                            {/* Pulse animation for new comments */}
+                            <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-75" />
+                          </div>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
+                </div>
+              ) : (
+                /* Image Display */
+                <>
               <ProgressiveImage
                 src={getImageUrl(currentPhoto.medium_url || currentPhoto.url)}
                 placeholderSrc={getImageUrl(currentPhoto.thumbnail_url || currentPhoto.url)}
@@ -1258,7 +1551,7 @@ export default function GalleryPage() {
                 }}
               />
 
-              {/* Render Saved Annotations from Comments */}
+                  {/* Render Saved Annotations from Comments (Images Only) */}
               {currentPhoto.comments?.map((comment) => {
                   if (!comment.annotation) return null;
                   try {
@@ -1287,6 +1580,8 @@ export default function GalleryPage() {
                       return null;
                   }
               })}
+                </>
+              )}
             </div>
           </div>
 
@@ -1303,18 +1598,47 @@ export default function GalleryPage() {
               </p>
            </div>
 
-          {/* Mobile Comments Sheet (Updated to Bottom-up Sheet) */}
+          {/* Mobile Comments/Insights Sheet (Photographer View) */}
           <div 
-            className={`absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl transition-transform duration-300 z-[3000] flex flex-col h-[60%] ${showMobileComments ? 'translate-y-0' : 'translate-y-[120%]'}`}
+            className={`absolute bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl transition-transform duration-300 z-[3000] flex flex-col h-[70%] ${showMobileComments ? 'translate-y-0' : 'translate-y-[120%]'}`}
             onClick={(e) => e.stopPropagation()}
           >
-             <div className="flex items-center justify-between p-4 border-b border-gray-200">
-                <h3 className="font-medium text-[#1D1D1F]">Comments</h3>
-                <button onClick={() => setShowMobileComments(false)} className="p-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
+             {/* Tabs Header */}
+             <div className="flex items-center border-b border-gray-200">
+                <button 
+                  onClick={() => setShowInsights(false)} 
+                  className={`flex-1 px-4 py-3 font-medium text-sm transition-colors ${!showInsights ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600'}`}
+                >
+                  Comments ({currentPhoto.comments?.length || 0})
+                </button>
+                <button 
+                  onClick={() => setShowInsights(true)} 
+                  className={`flex-1 px-4 py-3 font-medium text-sm transition-colors ${showInsights ? 'text-blue-600 border-b-2 border-blue-600' : 'text-gray-600'}`}
+                >
+                  Client Insights
+                </button>
+                <button onClick={() => setShowMobileComments(false)} className="p-2 mr-2 bg-gray-100 rounded-full hover:bg-gray-200 transition-colors">
                     <X className="w-5 h-5 text-[#1D1D1F]" />
                 </button>
              </div>
+             
+             {/* Tab Content */}
              <div className="flex-1 overflow-y-auto p-4">
+                {showInsights ? (
+                  <ClientInsights
+                    photoId={currentPhoto.id}
+                    engagement={photoEngagement[currentPhoto.id] || null}
+                    isVideo={currentPhoto.type === 'video'}
+                    videoDuration={videoRef.current?.duration}
+                    currentVideoTime={videoRef.current?.currentTime}
+                    onSeekVideo={(time) => {
+                      if (videoRef.current) {
+                        videoRef.current.currentTime = time;
+                        setVideoProgress((time / videoRef.current.duration) * 100);
+                      }
+                    }}
+                  />
+                ) : (
                 <CommentSection
                   photoId={currentPhoto.id}
                   comments={currentPhoto.comments || []}
@@ -1322,6 +1646,7 @@ export default function GalleryPage() {
                   allowComments={gallery?.allow_comments || true}
                   isGalleryOwner={true}
                 />
+                )}
              </div>
           </div>
 
@@ -1639,20 +1964,51 @@ export default function GalleryPage() {
                           />
                         </label>
                         
-                        <label className="flex items-center justify-between p-4 bg-[#F5F5F7] rounded-xl cursor-pointer hover:bg-gray-100 transition-all">
+                        <label 
+                          className="flex items-center justify-between p-4 bg-[#F5F5F7] rounded-xl cursor-pointer hover:bg-gray-100 transition-all"
+                          onClick={async (e) => {
+                            // Check if user is on free plan and trying to enable
+                            if (user?.plan === 'free' && !settingsForm.allow_edits) {
+                              e.preventDefault();
+                              const confirmed = await showConfirm(
+                                'Upgrade Required',
+                                'Edit requests are available on paid plans.',
+                                'Upgrade',
+                                'Cancel'
+                              );
+                              if (confirmed) {
+                                navigate('/billing');
+                              }
+                              return;
+                            }
+                          }}
+                        >
                           <div className="flex items-center gap-4">
                             <div className={`w-11 h-6 rounded-full transition-all ${settingsForm.allow_edits ? 'bg-[#0066CC]' : 'bg-gray-300'}`}>
                               <div className={`w-5 h-5 bg-white rounded-full shadow-sm transition-all mt-0.5 ${settingsForm.allow_edits ? 'ml-5' : 'ml-0.5'}`} />
                             </div>
-                            <div>
-                              <p className="font-medium text-[#1D1D1F]">Allow Edit Requests</p>
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="font-medium text-[#1D1D1F]">Allow Edit Requests</p>
+                                {user?.plan === 'free' && (
+                                  <span className="text-xs bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-0.5 rounded-full font-semibold">
+                                    STARTER+
+                                  </span>
+                                )}
+                              </div>
                               <p className="text-xs text-[#1D1D1F]/60">Clients can request photo edits</p>
                             </div>
                           </div>
                           <input
                             type="checkbox"
                             checked={settingsForm.allow_edits}
-                            onChange={(e) => setSettingsForm({ ...settingsForm, allow_edits: e.target.checked })}
+                            onChange={(e) => {
+                              // Only allow toggle if not free plan
+                              if (user?.plan !== 'free') {
+                                setSettingsForm({ ...settingsForm, allow_edits: e.target.checked });
+                              }
+                            }}
+                            disabled={user?.plan === 'free' && !settingsForm.allow_edits}
                             className="sr-only"
                           />
                         </label>
@@ -1832,6 +2188,38 @@ export default function GalleryPage() {
         galleryId={galleryId!}
         title={gallery?.name}
       />
+
+      {/* Analytics Dashboard Modal */}
+      {analyticsModalOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 border-b border-gray-200">
+              <h2 className="text-2xl font-semibold text-gray-900">Gallery Insights</h2>
+              <button
+                onClick={() => setAnalyticsModalOpen(false)}
+                className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+              >
+                <X className="w-6 h-6 text-gray-600" />
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              <GalleryInsightsDashboard
+                galleryId={galleryId!}
+                photos={photos.map(p => ({
+                  id: p.id,
+                  filename: p.filename,
+                  thumbnail_url: p.thumbnail_url,
+                  url: p.url,
+                  type: p.type
+                }))}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Branded Modal */}
       <ModalComponent />

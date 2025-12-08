@@ -1,4 +1,3 @@
-// Client Gallery View page - Client's view of a specific gallery
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -7,6 +6,7 @@ import * as clientService from '../services/clientService';
 import analyticsService from '../services/analyticsService';
 import { Photo, Comment } from '../services/photoService';
 import { useBrandedModal } from '../components/BrandedModal';
+import { useViewerTracking } from '../hooks/useViewerTracking';
 import {
   ArrowLeft,
   Download,
@@ -16,12 +16,12 @@ import {
   MessageSquare,
   Share2,
   Pencil,
+  PlayCircle,
 } from 'lucide-react';
 import FeedbackModal from '../components/FeedbackModal';
 import ShareModal from '../components/ShareModal';
 import CommentSection from '../components/CommentSection';
   import ProgressiveImage from '../components/ProgressiveImage';
-  import VideoPlayer from '../components/VideoPlayer';
   import { useSlideshow } from '../hooks/useSlideshow';
   import { useSwipe } from '../hooks/useSwipe';
 
@@ -43,7 +43,16 @@ export default function ClientGalleryPage() {
   const { galleryId } = useParams<{ galleryId: string }>();
   const { user, isAuthenticated } = useAuth();
   const { showAlert, showConfirm, showPrompt, ModalComponent } = useBrandedModal();
+  
   const [gallery, setGallery] = useState<ClientGallery | null>(null);
+  
+  // Track viewer presence for real-time globe
+  useViewerTracking({
+    gallery_id: galleryId,
+    page_type: 'client_gallery',
+    gallery_name: gallery?.name || 'Gallery',
+    enabled: !!galleryId
+  });
   const [photos, setPhotos] = useState<Photo[]>([]);
   const [selectedPhoto, setSelectedPhoto] = useState<Photo | null>(null);
   const [loading, setLoading] = useState(true);
@@ -62,23 +71,97 @@ export default function ClientGalleryPage() {
   const [slideDirection, setSlideDirection] = useState<'up' | 'down' | null>(null);
   const [lastTap, setLastTap] = useState(0);
   
-  // Annotation state
+  // Video playback state (TikTok-style)
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const [isVideoPlaying, setIsVideoPlaying] = useState(false);
+  const [videoProgress, setVideoProgress] = useState(0);
+  const [videoTimestamp, setVideoTimestamp] = useState<number | null>(null); // For timestamp comments
+  const [showTimestampCapture, setShowTimestampCapture] = useState(false); // Visual feedback for timestamp capture
+  
+  // Engagement tracking state
+  const viewStartTime = useRef<Record<string, number>>({}); // Track start time per photo ID
+  const sessionStartTime = useRef<number>(Date.now());
+  const hasTrackedView = useRef<Set<string>>(new Set());
+  
+  // Annotation state (only for images, not videos)
   const [isEditing, setIsEditing] = useState(false);
   const [drawingPoints, setDrawingPoints] = useState<{x: number, y: number}[]>([]);
   const [isDrawing, setIsDrawing] = useState(false);
   const imageContainerRef = useRef<HTMLDivElement>(null);
   const [imgDims, setImgDims] = useState<{width: number, height: number} | null>(null);
 
-  // Reset dims when photo changes
+  // Reset dims and annotation state when photo changes
   useEffect(() => {
     setImgDims(null);
+    setDrawingPoints([]);
+    setIsEditing(false);
+    setVideoTimestamp(null);
   }, [selectedPhoto?.id]);
+
+  // Track engagement when viewing a photo/video
+  useEffect(() => {
+    // Use galleryId from params or from loaded gallery object
+    const targetGalleryId = galleryId || gallery?.id;
+    if (!selectedPhoto || !targetGalleryId) return;
+
+    const photoId = selectedPhoto.id;
+    
+    // Track view start time for this specific photo
+    viewStartTime.current[photoId] = Date.now();
+
+    // Track initial view (once per photo per session)
+    if (!hasTrackedView.current.has(photoId)) {
+      hasTrackedView.current.add(photoId);
+
+      if (selectedPhoto.type === 'video') {
+        analyticsService.trackVideoEngagement(
+          targetGalleryId,
+          photoId,
+          'play',
+          0,
+          (Date.now() - sessionStartTime.current) / 1000
+        );
+      } else {
+        analyticsService.trackPhotoEngagement(
+          targetGalleryId,
+          photoId,
+          'view',
+          0
+        );
+      }
+    }
+    
+    // Track time spent when leaving
+    return () => {
+      const startTime = viewStartTime.current[photoId] || Date.now();
+      const duration = (Date.now() - startTime) / 1000; // seconds
+      
+      if (selectedPhoto.type === 'video') {
+        // Track video completion or partial view
+        const eventType = duration > 0 ? 'pause' : 'complete';
+        analyticsService.trackVideoEngagement(
+          targetGalleryId,
+          photoId,
+          eventType,
+          videoRef.current?.currentTime || 0,
+          (Date.now() - sessionStartTime.current) / 1000
+        );
+      } else if (duration > 0.5) { // Only track if viewed for more than 0.5s
+        analyticsService.trackPhotoEngagement(
+          targetGalleryId,
+          photoId,
+          'view',
+          duration
+        );
+      }
+    };
+  }, [selectedPhoto?.id, galleryId, gallery?.id, selectedPhoto?.type]);
 
   // Slideshow
   const navigatePhotoRef = useRef<(dir: number) => void>(() => {});
-  const { togglePlay, stop: stopSlideshow } = useSlideshow(
+  const { stop: stopSlideshow } = useSlideshow(
     () => navigatePhotoRef.current(1), 
-    3000
+    Number(import.meta.env.VITE_SLIDESHOW_INTERVAL) || 3000
   );
 
   const navigatePhoto = useCallback((direction: number) => {
@@ -94,14 +177,30 @@ export default function ClientGalleryPage() {
     setSelectedPhoto(photos[newIndex]);
   }, [selectedPhoto, photos]);
 
+  // Toggle video play/pause (TikTok style)
+  const toggleVideoPlayback = useCallback(() => {
+    if (videoRef.current) {
+      if (isVideoPlaying) {
+        videoRef.current.pause();
+        setIsVideoPlaying(false);
+      } else {
+        videoRef.current.play()
+          .then(() => setIsVideoPlaying(true))
+          .catch(() => {}); // Silently handle autoplay prevention
+      }
+    }
+  }, [isVideoPlaying]);
+
   const handleWheel = useCallback((e: React.WheelEvent) => {
     const now = Date.now();
-    if (now - lastScrollTime < 300) return; // Debounce 300ms
+    const debounceDelay = Number(import.meta.env.VITE_SCROLL_DEBOUNCE_DELAY) || 300;
+    if (now - lastScrollTime < debounceDelay) return;
 
-    if (e.deltaY > 50) {
+    const scrollThreshold = Number(import.meta.env.VITE_SCROLL_THRESHOLD) || 50;
+    if (e.deltaY > scrollThreshold) {
         navigatePhoto(1);
         setLastScrollTime(now);
-    } else if (e.deltaY < -50) {
+    } else if (e.deltaY < -scrollThreshold) {
         navigatePhoto(-1);
         setLastScrollTime(now);
     }
@@ -119,6 +218,42 @@ export default function ClientGalleryPage() {
     navigatePhotoRef.current = navigatePhoto;
   }, [navigatePhoto]);
 
+  // Auto-play videos when modal opens or photo changes (TikTok style)
+  useEffect(() => {
+    if (selectedPhoto && selectedPhoto.type === 'video' && videoRef.current) {
+      setVideoProgress(0);
+      videoRef.current.currentTime = 0; // Reset to beginning
+      
+      const autoplayDelay = Number(import.meta.env.VITE_VIDEO_AUTOPLAY_DELAY) || 300;
+      const timer = setTimeout(() => {
+        if (videoRef.current && selectedPhoto.type === 'video') {
+          videoRef.current.play()
+            .then(() => setIsVideoPlaying(true))
+            .catch(() => setIsVideoPlaying(false)); // Handle autoplay prevention
+        }
+      }, autoplayDelay);
+      return () => clearTimeout(timer);
+    } else if (videoRef.current) {
+      videoRef.current.pause();
+      setIsVideoPlaying(false);
+      setVideoProgress(0);
+    }
+  }, [selectedPhoto?.id, selectedPhoto?.type]); // Stable dependencies to prevent re-runs
+
+  // Update progress bar smoothly
+  useEffect(() => {
+    if (isVideoPlaying && videoRef.current && videoRef.current.duration) {
+      const updateProgress = () => {
+        if (videoRef.current && videoRef.current.duration) {
+          setVideoProgress((videoRef.current.currentTime / videoRef.current.duration) * 100);
+        }
+      };
+      const progressInterval = Number(import.meta.env.VITE_VIDEO_PROGRESS_UPDATE_INTERVAL) || 100;
+      const interval = setInterval(updateProgress, progressInterval);
+      return () => clearInterval(interval);
+    }
+  }, [isVideoPlaying]);
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -130,27 +265,32 @@ export default function ClientGalleryPage() {
       }
 
       if (e.key === 'Escape') {
+        e.preventDefault();
         setSelectedPhoto(null);
         stopSlideshow();
       }
-      if (e.key === 'ArrowUp') {
+      if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+        e.preventDefault();
         navigatePhoto(-1);
         stopSlideshow();
       }
-      if (e.key === 'ArrowDown') {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+        e.preventDefault();
         navigatePhoto(1);
         stopSlideshow();
       }
-      if (e.key === ' ') {
+      if (e.key === ' ' || e.key === 'Spacebar') {
         e.preventDefault();
-        togglePlay();
+        // Space for video play/pause
+        if (selectedPhoto.type === 'video') {
+          toggleVideoPlayback();
       }
-      // Toggle controls with Enter or something? No, keep simple.
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedPhoto, navigatePhoto, stopSlideshow, togglePlay]);
+  }, [selectedPhoto, navigatePhoto, stopSlideshow, toggleVideoPlayback]);
 
   // Image preloading
   useEffect(() => {
@@ -258,6 +398,18 @@ export default function ClientGalleryPage() {
     const targetGalleryId = galleryId || gallery?.id;
     if (!targetGalleryId) return;
 
+    // Get share token from URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const shareToken = urlParams.get('token') || undefined;
+
+    console.log('DEBUG: handleToggleFavorite called', { 
+      photoId, 
+      targetGalleryId, 
+      shareToken: shareToken ? '***' : 'none',
+      isAuthenticated,
+      userEmail: user?.email
+    });
+
     // Optimistic update
     const photoToUpdate = photos.find(p => p.id === photoId);
     if (!photoToUpdate) return;
@@ -280,19 +432,41 @@ export default function ClientGalleryPage() {
       setSelectedPhoto(updatePhotoState(selectedPhoto));
     }
 
+    // Track engagement
+    if (targetGalleryId && newIsFavorite) {
+      const photo = photos.find(p => p.id === photoId);
+      // Calculate duration: if we have a start time for this photo, use it; otherwise default to 0
+      const startTime = viewStartTime.current[photoId] || Date.now();
+      const duration = (Date.now() - startTime) / 1000;
+      
+      if (photo?.type === 'video') {
+        analyticsService.trackVideoEngagement(targetGalleryId, photoId, 'complete', videoRef.current?.currentTime || 0, (Date.now() - sessionStartTime.current) / 1000);
+      } else {
+        analyticsService.trackPhotoEngagement(targetGalleryId, photoId, 'favorite', duration);
+      }
+    }
+
     try {
       // Use logged-in user's email if available, otherwise check guest email
       let emailToUse = user?.email || localStorage.getItem('guest_email') || undefined;
+      let nameToUse = user?.name || localStorage.getItem('guest_name') || undefined;
+      
+      console.log('DEBUG: Email check', { emailToUse, nameToUse, isAuthenticated });
       
       // If we don't have auth AND don't have a guest email, we MUST prompt
       if (!isAuthenticated && !emailToUse) {
-          const email = await showPrompt(
-            'Enter Your Email',
-            'Please enter your email to save favorites:',
-            'your@email.com'
+          console.log('DEBUG: Prompting for name...');
+          // First ask for name
+          const name = await showPrompt(
+            'Welcome!',
+            'Please enter your name:',
+            'John Doe'
           );
           
-          if (!email) {
+          console.log('DEBUG: Name received:', name);
+          
+          if (!name) {
+              console.log('DEBUG: User cancelled name prompt');
               // User cancelled - revert UI
               const revertPhotoState = (p: Photo) => {
                 if (p.id !== photoId) return p;
@@ -308,44 +482,102 @@ export default function ClientGalleryPage() {
               }
               return;
           }
+          
+          console.log('DEBUG: Prompting for email...');
+          // Then ask for email
+          const email = await showPrompt(
+            'Enter Your Email',
+            'Please enter your email to save favorites and receive updates:',
+            'your@email.com'
+          );
+          
+          console.log('DEBUG: Email received:', email);
+          
+          if (!email) {
+              console.log('DEBUG: User cancelled email prompt');
+              // User cancelled - revert UI
+              const revertPhotoState = (p: Photo) => {
+                if (p.id !== photoId) return p;
+                return {
+                  ...p,
+                  is_favorite: wasFavorite, 
+                  favorites_count: (p.favorites_count || 0)
+                };
+              };
+              setPhotos(photos.map(revertPhotoState));
+              if (selectedPhoto?.id === photoId) {
+                setSelectedPhoto(revertPhotoState(selectedPhoto));
+              }
+              return;
+          }
+          
+          console.log('DEBUG: Saving guest info to localStorage');
+          localStorage.setItem('guest_name', name);
           localStorage.setItem('guest_email', email);
           emailToUse = email;
+          nameToUse = name;
       }
 
+      console.log('DEBUG: Proceeding with favorite toggle', { emailToUse, nameToUse });
+
       if (wasFavorite) {
+        console.log('DEBUG: Calling removeFavorite', { photoId, emailToUse });
         await clientService.removeFavorite(photoId, emailToUse);
       } else {
-        await clientService.addFavorite(photoId, targetGalleryId, emailToUse);
+        console.log('DEBUG: Calling addFavorite', { photoId, targetGalleryId, emailToUse, nameToUse, shareToken: shareToken ? '***' : 'none' });
+        await clientService.addFavorite(photoId, targetGalleryId, emailToUse, nameToUse, shareToken);
       }
+      console.log('DEBUG: Favorite toggle successful');
     } catch (error: unknown) {
-      // If error suggests missing email/auth (400 or 401), and we haven't prompted yet (e.g. expired session case)
-      // We should prompt and retry. 
-      // Implementing retry here is complex, so we'll just alert and clear "auth" assumptions for next time?
-      // Or just prompt now and tell them to try again.
-      
       console.error("Error toggling favorite:", error);
       
       const errorMessage = error instanceof Error ? error.message : String(error);
       const isAuthError = errorMessage.includes('401') || errorMessage.includes('Unauthorized') || 
                           errorMessage.includes('User email not found') || errorMessage.includes('400');
+      const isAccessDenied = errorMessage.includes('403') || errorMessage.includes('Access denied');
 
+      // Handle access denied (403) - likely plan issue or invalid token
+      if (isAccessDenied) {
+          await showAlert(
+            'Access Denied', 
+            'Unable to favorite this photo. This may be due to the gallery owner\'s plan restrictions or an invalid share link. Please contact the photographer.',
+            'error'
+          );
+          // Revert UI
+          const revertPhotoState = (p: Photo) => {
+            if (p.id !== photoId) return p;
+            return {
+              ...p,
+              is_favorite: wasFavorite,
+              favorites_count: Math.max(0, (p.favorites_count || 0))
+            };
+          };
+          setPhotos(photos.map(revertPhotoState));
+          if (selectedPhoto?.id === photoId) {
+            setSelectedPhoto(revertPhotoState(selectedPhoto));
+          }
+          return;
+      }
+
+      // Handle auth errors (401/400) - retry with email prompt
       if (isAuthError) {
-          // It's an auth/email issue. 
           const email = await showPrompt(
-            'Session Expired',
-            'Session expired or email required.\n\nPlease enter your email to save favorites:',
+            'Email Required',
+            'Please enter your email to save favorites:',
             'your@email.com'
           );
           
           if (email) {
               localStorage.setItem('guest_email', email);
-              // Retry immediately?
+              // Retry immediately
               try {
                   if (wasFavorite) {
                     await clientService.removeFavorite(photoId, email);
                   } else {
-                    await clientService.addFavorite(photoId, targetGalleryId, email);
+                    const nameToUse = localStorage.getItem('guest_name') || undefined;
+                    await clientService.addFavorite(photoId, targetGalleryId, email, nameToUse, shareToken);
                   }
+                  console.log('DEBUG: Retry successful');
                   // Success on retry! Don't revert.
                   return; 
               } catch (retryError) {
@@ -353,6 +585,9 @@ export default function ClientGalleryPage() {
                   await showAlert('Error', 'Failed to save favorite. Please try refreshing the page.', 'error');
               }
           }
+      } else {
+          // Generic error
+          await showAlert('Error', 'An unexpected error occurred. Please try again.', 'error');
       }
 
       // Revert on error (if not recovered)
@@ -390,10 +625,18 @@ export default function ClientGalleryPage() {
 
   const handleDownload = async (photoId: string) => {
     const photo = photos.find(p => p.id === photoId);
-    if (!photo || !galleryId) return;
+    const targetGalleryId = galleryId || gallery?.id;
+    if (!photo || !targetGalleryId) return;
     
-    // Track download
-    analyticsService.trackPhotoDownload(photoId, galleryId).catch(console.error);
+    // Track download engagement
+    const startTime = viewStartTime.current[photoId] || Date.now();
+    const duration = (Date.now() - startTime) / 1000;
+    
+    if (photo.type === 'video') {
+      analyticsService.trackVideoEngagement(targetGalleryId, photoId, 'download', videoRef.current?.duration || 0, (Date.now() - sessionStartTime.current) / 1000);
+    } else {
+      analyticsService.trackPhotoEngagement(targetGalleryId, photoId, 'download', duration);
+    }
     
     // Download - prefer original_download_url if available to get the original file (HEIC/RAW/Original JPEG)
     // Fallback to url (which might be a converted JPEG rendition)
@@ -432,10 +675,6 @@ export default function ClientGalleryPage() {
       }
 
       if (response.success && response.data?.download_url) {
-        // Track bulk download
-        const photoCount = response.data.photo_count || photos.length || 0;
-        analyticsService.trackBulkDownload(galleryId, photoCount).catch(console.error);
-
         window.location.href = response.data.download_url;
       } else {
         await showAlert('Error', 'Download not available or failed to start.', 'error');
@@ -604,6 +843,23 @@ export default function ClientGalleryPage() {
                 alt=""
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
               />
+              
+              {/* Video Play Button Overlay */}
+              {photo.type === 'video' && (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <div className="bg-black/50 rounded-full p-4 backdrop-blur-sm">
+                    <PlayCircle className="w-12 h-12 text-white" strokeWidth={1.5} />
+                  </div>
+                </div>
+              )}
+              
+              {/* Video Duration Badge */}
+              {photo.type === 'video' && photo.duration_seconds && (
+                <div className="absolute bottom-3 right-3 bg-black/75 text-white text-xs px-2 py-1 rounded backdrop-blur-sm font-medium">
+                  {Math.floor(photo.duration_seconds / 60)}:{String(Math.floor(photo.duration_seconds % 60)).padStart(2, '0')}
+                </div>
+              )}
+              
               {/* Actions - Top Right */}
               <div className="absolute top-3 right-3 z-30 flex items-center gap-3">
                 {/* Edit Request Indicator */}
@@ -643,11 +899,10 @@ export default function ClientGalleryPage() {
 
                    {/* Right: Stats */}
                    <div className="flex items-center gap-4">
-                      {/* Favorites count */}
+                      {/* Favorites count - showing count only, heart icon is in top-right */}
                       {settings.favorites_enabled && (photo.favorites_count || 0) > 0 && (
                         <div className="flex items-center gap-1.5">
-                          <Heart className="w-4 h-4 text-white drop-shadow-md" />
-                          <span className="text-white text-xs font-medium drop-shadow-md">{photo.favorites_count}</span>
+                          <span className="text-white text-xs font-medium drop-shadow-md">{photo.favorites_count} likes</span>
                     </div>
                   )}
                       {/* Comments count */}
@@ -684,8 +939,8 @@ export default function ClientGalleryPage() {
           </div>
         )}
 
-        {/* Branding Footer */}
-        {!gallery.hide_branding && !brandingSettings?.hide_galerly_branding && (
+        {/* Branding Footer - Show Galerly branding unless hidden by photographer's plan */}
+        {!gallery.hide_branding && (
           <div className="mt-16 pb-8 text-center">
             <a 
               href="https://galerly.com" 
@@ -695,24 +950,6 @@ export default function ClientGalleryPage() {
             >
               Powered by <span className="font-bold text-[#1D1D1F]">Galerly</span>
             </a>
-          </div>
-        )}
-
-        {/* Custom Branding Footer */}
-        {brandingSettings?.custom_branding?.enabled && brandingSettings?.hide_galerly_branding && (
-          <div className="mt-16 pb-8 text-center space-y-4">
-            {brandingSettings.custom_branding.logo_url && (
-              <img 
-                src={brandingSettings.custom_branding.logo_url} 
-                alt={brandingSettings.custom_branding.business_name}
-                className="h-8 w-auto mx-auto opacity-60"
-              />
-            )}
-            {brandingSettings.custom_branding.footer_text && (
-              <p className="text-xs text-[#1D1D1F]/40">
-                {brandingSettings.custom_branding.footer_text}
-              </p>
-            )}
           </div>
         )}
       </main>
@@ -756,9 +993,9 @@ export default function ClientGalleryPage() {
              style={{ overscrollBehavior: 'none' }}
              onClick={() => {
                 // Handle single tap for controls, but allow double tap for like
-                // We rely on standard click here, double click handled separately on image
                 const now = Date.now();
-                if (now - lastTap < 300) {
+                const doubleTapThreshold = Number(import.meta.env.VITE_DOUBLE_TAP_THRESHOLD) || 300;
+                if (now - lastTap < doubleTapThreshold) {
                     if (selectedPhoto) handleToggleFavorite(selectedPhoto.id);
                 } else {
                     setShowControls(prev => !prev);
@@ -769,6 +1006,10 @@ export default function ClientGalleryPage() {
              <style>{`
                 @keyframes slideUp { from { transform: translateY(100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
                 @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+                @keyframes fadeInScale { 
+                  from { transform: translate(-50%, -50%) scale(0.8); opacity: 0; } 
+                  to { transform: translate(-50%, -50%) scale(1); opacity: 1; } 
+                }
                 .animate-slide-up { animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
                 .animate-slide-down { animation: slideDown 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
              `}</style>
@@ -788,7 +1029,7 @@ export default function ClientGalleryPage() {
              {/* Image/Video Area */}
              <div 
                 ref={imageContainerRef}
-                className={`relative z-10 max-w-full max-h-full flex items-center justify-center ${isEditing ? 'cursor-crosshair touch-none' : 'cursor-pointer'} ${slideDirection === 'up' ? 'animate-slide-up' : slideDirection === 'down' ? 'animate-slide-down' : ''}`}
+                className={`relative z-10 max-w-full max-h-full flex items-center justify-center ${selectedPhoto.type === 'video' ? '' : isEditing ? 'cursor-crosshair touch-none' : 'cursor-pointer'} ${slideDirection === 'up' ? 'animate-slide-up' : slideDirection === 'down' ? 'animate-slide-down' : ''}`}
                 style={{ 
                     width: (selectedPhoto.width || imgDims?.width) ? 'auto' : '100%', 
                     height: (selectedPhoto.height || imgDims?.height) ? 'auto' : '100%',
@@ -798,7 +1039,8 @@ export default function ClientGalleryPage() {
                 }}
                 key={selectedPhoto.id}
                 onPointerDown={(e) => {
-                    if (!isEditing) return;
+                    // Only allow lasso for images, not videos
+                    if (!isEditing || selectedPhoto.type === 'video') return;
                     e.preventDefault();
                     e.stopPropagation();
                         const rect = e.currentTarget.getBoundingClientRect();
@@ -808,7 +1050,7 @@ export default function ClientGalleryPage() {
                     setIsDrawing(true);
                 }}
                 onPointerMove={(e) => {
-                    if (!isEditing || !isDrawing) return;
+                    if (!isEditing || !isDrawing || selectedPhoto.type === 'video') return;
                     e.preventDefault();
                     e.stopPropagation();
                     const rect = e.currentTarget.getBoundingClientRect();
@@ -817,7 +1059,7 @@ export default function ClientGalleryPage() {
                     setDrawingPoints(prev => [...prev, { x, y }]);
                 }}
                 onPointerUp={(e) => {
-                    if (!isEditing || !isDrawing) return;
+                    if (!isEditing || !isDrawing || selectedPhoto.type === 'video') return;
                     e.preventDefault();
                     e.stopPropagation();
                     setIsDrawing(false);
@@ -826,7 +1068,7 @@ export default function ClientGalleryPage() {
                     setIsEditing(false); // Exit edit mode
                 }}
                 onPointerLeave={() => {
-                    if (isDrawing) {
+                    if (isDrawing && selectedPhoto.type !== 'video') {
                         setIsDrawing(false);
                         setFeedbackModalOpen(true);
                         setIsEditing(false);
@@ -834,9 +1076,15 @@ export default function ClientGalleryPage() {
                 }}
                 onClick={(e) => {
                     if (isEditing) return; // Handled by pointer events
+                    // For videos, click handling is on video element directly
+                    if (selectedPhoto.type === 'video') {
+                      return;
+                    }
+                    
                     e.stopPropagation();
                     const now = Date.now();
-                    if (now - lastTap < 300) {
+                    const doubleTapThreshold = Number(import.meta.env.VITE_DOUBLE_TAP_THRESHOLD) || 300;
+                    if (now - lastTap < doubleTapThreshold) {
                         handleToggleFavorite(selectedPhoto.id);
                     } else {
                         setShowControls(prev => !prev);
@@ -845,19 +1093,197 @@ export default function ClientGalleryPage() {
                 }}
              >
               {selectedPhoto.type === 'video' ? (
-                  <VideoPlayer
-                    options={{
-                        autoplay: true,
-                        controls: true,
-                        responsive: true,
-                        fluid: true,
-                        sources: [{
-                            src: selectedPhoto.hls_url || selectedPhoto.url,
-                            type: selectedPhoto.hls_url ? 'application/x-mpegURL' : 'video/mp4'
-                        }]
+                /* TikTok-style Video Player - Click to play/pause, auto-play on scroll */
+                <div className="relative w-full h-full flex items-center justify-center">
+                  <video
+                    ref={videoRef}
+                    preload="auto"
+                    poster={getImageUrl(selectedPhoto.thumbnail_url || '')}
+                    className="w-full h-full object-contain shadow-2xl drop-shadow-2xl cursor-pointer"
+                    style={{ maxHeight: '100vh' }}
+                    loop
+                    playsInline
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleVideoPlayback();
                     }}
-                    className="w-full h-full max-h-[100vh] max-w-[100vw]"
-                  />
+                    onLoadedMetadata={(e) => {
+                      // Store video dimensions for aspect ratio
+                      const video = e.currentTarget;
+                      if (video.videoWidth && video.videoHeight) {
+                        setImgDims({ width: video.videoWidth, height: video.videoHeight });
+                      }
+                    }}
+                    onPlay={() => {
+                      setIsVideoPlaying(true);
+                      // Track play event
+                      const targetGalleryId = galleryId || gallery?.id;
+                      if (targetGalleryId && selectedPhoto) {
+                        analyticsService.trackVideoEngagement(
+                          targetGalleryId,
+                          selectedPhoto.id,
+                          'play',
+                          videoRef.current?.currentTime || 0,
+                          (Date.now() - sessionStartTime.current) / 1000
+                        );
+                      }
+                    }}
+                    onPause={() => {
+                      setIsVideoPlaying(false);
+                      // Track pause event
+                      const targetGalleryId = galleryId || gallery?.id;
+                      if (targetGalleryId && selectedPhoto && videoRef.current) {
+                        analyticsService.trackVideoEngagement(
+                          targetGalleryId,
+                          selectedPhoto.id,
+                          'pause',
+                          videoRef.current.currentTime,
+                          (Date.now() - sessionStartTime.current) / 1000
+                        );
+                      }
+                    }}
+                    onSeeked={() => {
+                      // Track seek event (user jumped to different time)
+                      const targetGalleryId = galleryId || gallery?.id;
+                      if (targetGalleryId && selectedPhoto && videoRef.current) {
+                        analyticsService.trackVideoEngagement(
+                          targetGalleryId,
+                          selectedPhoto.id,
+                          'seek',
+                          videoRef.current.currentTime,
+                          (Date.now() - sessionStartTime.current) / 1000
+                        );
+                      }
+                    }}
+                    onEnded={() => {
+                      // Track video completion
+                      const targetGalleryId = galleryId || gallery?.id;
+                      if (targetGalleryId && selectedPhoto && videoRef.current) {
+                        analyticsService.trackVideoEngagement(
+                          targetGalleryId,
+                          selectedPhoto.id,
+                          'complete',
+                          videoRef.current.duration,
+                          (Date.now() - sessionStartTime.current) / 1000
+                        );
+                      }
+                    }}
+                  >
+                    {/* Use original video URL (not medium_url which is JPEG thumbnail) */}
+                    <source src={getImageUrl(selectedPhoto.url)} type="video/mp4" />
+                    <source src={getImageUrl(selectedPhoto.url)} type="video/quicktime" />
+                    Your browser does not support the video tag.
+                  </video>
+
+                  {/* Play button overlay - Apple-style with smooth transitions */}
+                  {!isVideoPlaying && (
+                    <div 
+                      className="absolute inset-0 flex items-center justify-center pointer-events-none transition-opacity duration-300 ease-out"
+                    >
+                      <div className="relative">
+                        {/* Outer glow ring */}
+                        <div className="absolute inset-0 bg-white/20 rounded-full blur-2xl scale-150 animate-pulse" />
+                        {/* Main button */}
+                        <div className="relative bg-gradient-to-br from-white/30 to-white/10 rounded-full p-8 backdrop-blur-xl border border-white/20 shadow-2xl transform transition-transform duration-300 ease-out hover:scale-110">
+                          <PlayCircle className="w-16 h-16 text-white drop-shadow-2xl" strokeWidth={1.5} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Timestamp Capture Feedback - Apple-style elegant notification */}
+                  {showTimestampCapture && videoTimestamp !== null && (
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none z-50">
+                      <div className="bg-black/90 backdrop-blur-2xl px-6 py-4 rounded-2xl shadow-2xl border border-white/10 animate-[fadeInScale_0.4s_ease-out]">
+                        <div className="flex items-center gap-3">
+                          {/* Clock icon */}
+                          <div className="w-10 h-10 rounded-full bg-blue-500/20 flex items-center justify-center">
+                            <svg className="w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                          </div>
+                          {/* Timestamp text */}
+                          <div>
+                            <div className="text-white font-medium text-sm">Moment Captured</div>
+                            <div className="text-blue-400 font-mono text-xs">
+                              {Math.floor(videoTimestamp / 60)}:{String(Math.floor(videoTimestamp % 60)).padStart(2, '0')}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Progress bar - PIXIESET-style with Apple smoothness */}
+                  <div 
+                    className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-t from-black/40 to-transparent backdrop-blur-sm cursor-pointer hover:h-2 transition-all duration-300 ease-out group"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (videoRef.current && videoRef.current.duration) {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        const clickX = e.clientX - rect.left;
+                        const newTime = (clickX / rect.width) * videoRef.current.duration;
+                        videoRef.current.currentTime = newTime;
+                        setVideoProgress((newTime / videoRef.current.duration) * 100);
+                      }
+                    }}
+                  >
+                    {/* Background track */}
+                    <div className="absolute bottom-0 left-0 right-0 h-full bg-white/10 rounded-full" />
+                    
+                    {/* Progress fill with gradient */}
+                    <div 
+                      className="absolute bottom-0 left-0 h-full bg-gradient-to-r from-blue-500 to-blue-400 rounded-full transition-all duration-75 ease-out shadow-lg"
+                      style={{ width: `${videoProgress}%` }}
+                    >
+                      {/* Playhead indicator - appears on hover */}
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 ease-out transform group-hover:scale-110" />
+                    </div>
+                    
+                    {/* Timestamp markers for comments - Interactive */}
+                    {selectedPhoto.comments?.map((comment) => {
+                      if (comment.timestamp !== undefined && videoRef.current?.duration) {
+                        const markerPosition = (comment.timestamp / videoRef.current.duration) * 100;
+                        const formatTime = (seconds: number) => {
+                          const mins = Math.floor(seconds / 60);
+                          const secs = Math.floor(seconds % 60);
+                          return `${mins}:${String(secs).padStart(2, '0')}`;
+                        };
+                        
+                        return (
+                          <div
+                            key={`marker-${comment.id}`}
+                            className="absolute top-1/2 -translate-y-1/2 w-2 h-2 bg-blue-500 rounded-full shadow-lg hover:scale-150 hover:bg-blue-400 transition-all duration-200 ease-out cursor-pointer z-10 group/marker"
+                            style={{ left: `${markerPosition}%` }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (videoRef.current && comment.timestamp !== undefined) {
+                                videoRef.current.currentTime = comment.timestamp;
+                                setVideoProgress((comment.timestamp / videoRef.current.duration) * 100);
+                              }
+                            }}
+                          >
+                            {/* Tooltip on hover - Apple style */}
+                            <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-3 px-3 py-1.5 bg-black/90 text-white text-xs rounded-lg whitespace-nowrap opacity-0 group-hover/marker:opacity-100 transition-all duration-200 ease-out pointer-events-none backdrop-blur-xl shadow-2xl">
+                              <div className="font-medium">{formatTime(comment.timestamp)}</div>
+                              <div className="text-white/70 text-[10px] mt-0.5 max-w-[200px] truncate">
+                                {comment.text}
+                              </div>
+                              {/* Arrow */}
+                              <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px">
+                                <div className="w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-black/90" />
+                              </div>
+                            </div>
+                            
+                            {/* Pulse animation for new comments */}
+                            <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-75" />
+                          </div>
+                        );
+                      }
+                      return null;
+                    })}
+                  </div>
+                </div>
               ) : (
               <ProgressiveImage
                 src={getImageUrl(selectedPhoto.medium_url || selectedPhoto.url)}
@@ -924,8 +1350,8 @@ export default function ClientGalleryPage() {
             </div>
           </div>
 
-           {/* Edit Mode Overlay Instruction */}
-           {isEditing && (
+           {/* Edit Mode Overlay Instruction - Only for images */}
+           {isEditing && selectedPhoto.type !== 'video' && (
                 <div className="absolute top-20 left-0 right-0 z-[2000] flex justify-center pointer-events-none">
                     <div className="bg-black/70 backdrop-blur-md text-white px-6 py-3 rounded-full text-sm font-medium animate-pulse border border-white/20 text-center">
                         Draw a lasso around the area to modify<br/>
@@ -1023,6 +1449,20 @@ export default function ClientGalleryPage() {
                   <div className="flex flex-col items-center gap-1">
                     <button 
                         onClick={() => {
+                            if (selectedPhoto.type === 'video') {
+                              // For videos: Pause and capture timestamp with elegant feedback
+                              if (videoRef.current) {
+                                videoRef.current.pause();
+                                setIsVideoPlaying(false);
+                                setVideoTimestamp(videoRef.current.currentTime);
+                                
+                                // Show visual feedback
+                                setShowTimestampCapture(true);
+                                setTimeout(() => setShowTimestampCapture(false), 2000);
+                              }
+                              setFeedbackModalOpen(true);
+                            } else {
+                              // For images: Use lasso tool
                             if (drawingPoints.length > 0) {
                                 // If drawing exists, just open modal
                                 setFeedbackModalOpen(true);
@@ -1030,13 +1470,16 @@ export default function ClientGalleryPage() {
                                 // Start editing mode
                                 setIsEditing(true);
                                 setShowControls(false); // Hide controls to see photo clearly
+                              }
                             }
                         }}
-                        className={`p-3 backdrop-blur-md rounded-full text-white shadow-lg border border-white/10 active:scale-95 transition-transform ${isEditing ? 'bg-yellow-500' : 'bg-black/40'}`}
+                        className={`p-3 backdrop-blur-md rounded-full text-white shadow-lg border border-white/10 active:scale-95 transition-all duration-200 ${isEditing ? 'bg-yellow-500' : 'bg-black/40 hover:bg-black/60'}`}
                     >
                         <Pencil className="w-7 h-7" />
                     </button>
-                    <span className="text-white text-xs font-medium drop-shadow-md">{isEditing ? 'Cancel' : 'Edit'}</span>
+                    <span className="text-white text-xs font-medium drop-shadow-md">
+                      {selectedPhoto.type === 'video' ? 'Comment' : (isEditing ? 'Cancel' : 'Edit')}
+                    </span>
                   </div>
                   )}
 
@@ -1073,13 +1516,16 @@ export default function ClientGalleryPage() {
         onClose={() => {
             setFeedbackModalOpen(false);
             setDrawingPoints([]); // Clear drawing on close
+            setVideoTimestamp(null); // Clear timestamp on close
         }}
         galleryId={galleryId || ''}
-        photoId={drawingPoints.length > 0 ? selectedPhoto?.id : undefined}
+        photoId={drawingPoints.length > 0 || videoTimestamp !== null ? selectedPhoto?.id : undefined}
         annotation={drawingPoints.length > 0 ? JSON.stringify(drawingPoints) : undefined}
-        initialComment={drawingPoints.length > 0 ? '' : ''}
+        timestamp={videoTimestamp !== null ? videoTimestamp : undefined}
+        initialComment={drawingPoints.length > 0 || videoTimestamp !== null ? '' : ''}
         onCommentAdded={(newComment) => {
             handleCommentsChange([...(selectedPhoto?.comments || []), newComment]);
+            setVideoTimestamp(null); // Clear timestamp after adding comment
         }}
       />
 

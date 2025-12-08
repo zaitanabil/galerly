@@ -67,13 +67,15 @@ export async function getClientGalleryByToken(shareToken: string, params?: { pag
 }
 
 // Client favorites
-export async function addFavorite(photoId: string, galleryId: string, clientEmail?: string) {
+export async function addFavorite(photoId: string, galleryId: string, clientEmail?: string, clientName?: string, shareToken?: string) {
   const body: any = {
     photo_id: photoId,
     gallery_id: galleryId,
   };
   if (clientEmail) body.client_email = clientEmail;
-  
+  if (clientName) body.client_name = clientName;
+  if (shareToken) body.token = shareToken;
+
   return api.post<Favorite>('/client/favorites', body);
 }
 

@@ -1,13 +1,15 @@
 // New Gallery page - Create new photography gallery
 import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import * as galleryService from '../services/galleryService';
 import { Upload, ArrowLeft, AlertCircle, Check, X } from 'lucide-react';
 import { useBrandedModal } from '../components/BrandedModal';
 
 export default function NewGalleryPage() {
   const navigate = useNavigate();
-  const { showAlert, ModalComponent } = useBrandedModal();
+  const { user } = useAuth();
+  const { showAlert, showConfirm, ModalComponent } = useBrandedModal();
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -16,6 +18,7 @@ export default function NewGalleryPage() {
     downloadEnabled: true,
     commentsEnabled: true,
     favoritesEnabled: true,
+    editsEnabled: false,
   });
   const [newClientEmail, setNewClientEmail] = useState('');
   const [error, setError] = useState('');
@@ -64,6 +67,7 @@ export default function NewGalleryPage() {
         clientEmails: formData.clientEmails,
         allowDownload: formData.downloadEnabled,
         allowComments: formData.commentsEnabled,
+        allowEdits: formData.editsEnabled,
         privacy: 'private',
       });
 
@@ -255,6 +259,52 @@ export default function NewGalleryPage() {
                       checked={formData.commentsEnabled}
                       onChange={(e) => setFormData({ ...formData, commentsEnabled: e.target.checked })}
                       className="w-5 h-5 rounded border-gray-300 text-[#0066CC] focus:ring-[#0066CC]/20"
+                    />
+                  </label>
+
+                  <label 
+                    className="flex items-center justify-between p-4 bg-white/50 border border-gray-200 rounded-2xl cursor-pointer hover:border-gray-300 transition-all"
+                    onClick={async (e) => {
+                      // Check if user is on free plan and trying to enable
+                      if (user?.plan === 'free' && !formData.editsEnabled) {
+                        e.preventDefault();
+                        const confirmed = await showConfirm(
+                          'Upgrade Required',
+                          'Edit requests are available on paid plans.',
+                          'Upgrade',
+                          'Cancel'
+                        );
+                        if (confirmed) {
+                          navigate('/billing');
+                        }
+                        return;
+                      }
+                    }}
+                  >
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="font-medium text-[#1D1D1F]">Allow Edit Requests</p>
+                        {user?.plan === 'free' && (
+                          <span className="text-xs bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-2 py-0.5 rounded-full font-semibold">
+                            STARTER+
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-sm text-[#1D1D1F]/60 mt-1">
+                        Clients can request photo edits
+                      </p>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={formData.editsEnabled}
+                      onChange={(e) => {
+                        // Only allow toggle if not free plan
+                        if (user?.plan !== 'free') {
+                          setFormData({ ...formData, editsEnabled: e.target.checked });
+                        }
+                      }}
+                      disabled={user?.plan === 'free' && !formData.editsEnabled}
+                      className="w-5 h-5 rounded border-gray-300 text-[#0066CC] focus:ring-[#0066CC]/20 disabled:opacity-50"
                     />
                   </label>
                 </div>

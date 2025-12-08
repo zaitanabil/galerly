@@ -14,6 +14,9 @@ certifi>=2023.0.0
 # Stripe Payment Processing
 stripe>=7.0.0
 
+# Cryptography for secure URL generation
+cryptography>=41.0.0
+
 # Environment Variables
 python-dotenv>=1.0.0
 
@@ -33,3 +36,9 @@ rawpy>=0.18.0  # RAW format support (CR2, NEF, ARW, DNG, etc.)
 # boto3 is already included above for Lambda configuration script
 
 dnspython>=2.0.0
+
+# Real-time Features
+# WebSocket support for real-time viewer tracking
+python-socketio>=5.10.0
+# HTTP requests for IP geolocation
+requests>=2.31.0

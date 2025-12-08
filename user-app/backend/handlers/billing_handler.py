@@ -73,7 +73,7 @@ PLANS = {
         'max_galleries': -1,  # Unlimited
         'galleries_per_month': -1,  # Unlimited
         'storage_gb': 25,
-        'feature_ids': ['storage_25gb', 'video_60min_hd', 'unlimited_galleries', 'no_branding', 'client_proofing', 'analytics_basic'],
+        'feature_ids': ['storage_25gb', 'video_60min_hd', 'unlimited_galleries', 'no_branding', 'client_proofing', 'edit_requests', 'analytics_basic'],
         'features': [
             '25 GB Smart Storage',
             'Unlimited Galleries',
@@ -94,7 +94,7 @@ PLANS = {
         'max_galleries': -1,  # Unlimited
         'galleries_per_month': -1,  # Unlimited
         'storage_gb': 100,
-        'feature_ids': ['storage_100gb', 'video_4hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_advanced', 'watermarking', 'client_proofing'],
+        'feature_ids': ['storage_100gb', 'video_4hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_advanced', 'watermarking', 'client_proofing', 'edit_requests'],
         'features': [
             '100 GB Smart Storage',
             'Unlimited Galleries',
@@ -116,7 +116,7 @@ PLANS = {
         'max_galleries': -1,  # Unlimited
         'galleries_per_month': -1,  # Unlimited
         'storage_gb': 500,
-        'feature_ids': ['storage_500gb', 'video_10hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_pro', 'raw_support', 'email_templates', 'smart_invoicing', 'seo_tools', 'client_proofing', 'watermarking', 'lightroom_workflow'],
+        'feature_ids': ['storage_500gb', 'video_10hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_pro', 'raw_support', 'email_templates', 'smart_invoicing', 'seo_tools', 'client_proofing', 'watermarking', 'lightroom_workflow', 'edit_requests'],
         'features': [
             '500 GB Smart Storage',
             'Unlimited Galleries',
@@ -141,7 +141,7 @@ PLANS = {
         'max_galleries': -1,  # Unlimited
         'galleries_per_month': -1,  # Unlimited
         'storage_gb': 2000,  # 2 TB
-        'feature_ids': ['storage_2tb', 'video_10hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_pro', 'raw_support', 'email_templates', 'smart_invoicing', 'scheduler', 'e_signatures', 'seo_tools', 'client_proofing', 'watermarking', 'lightroom_workflow', 'raw_vault'],
+        'feature_ids': ['storage_2tb', 'video_10hr_4k', 'unlimited_galleries', 'custom_domain', 'no_branding', 'analytics_pro', 'raw_support', 'email_templates', 'smart_invoicing', 'scheduler', 'e_signatures', 'seo_tools', 'client_proofing', 'watermarking', 'lightroom_workflow', 'raw_vault', 'edit_requests'],
         'features': [
             '2 TB Smart Storage',
             'Unlimited Galleries',

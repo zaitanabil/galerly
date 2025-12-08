@@ -31,6 +31,7 @@ export interface CreateGalleryData {
   is_public?: boolean;
   allowDownload?: boolean;
   allowComments?: boolean;
+  allowEdits?: boolean; // Allow clients to request photo edits (plan-restricted)
   privacy?: 'private' | 'public';
 }
 

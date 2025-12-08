@@ -41,6 +41,21 @@ from handlers.photo_handler import (
     handle_delete_photos,
     handle_send_batch_notification
 )
+from handlers.engagement_analytics_handler import (
+    handle_track_visit,
+    handle_track_event,
+    handle_track_photo_engagement,
+    handle_track_video_engagement,
+    handle_get_gallery_engagement,
+    handle_get_client_preferences,
+    handle_get_overall_engagement,
+    handle_get_gallery_engagement_summary
+)
+from handlers.realtime_viewers_handler import (
+    handle_track_viewer_heartbeat,
+    handle_get_active_viewers,
+    handle_viewer_disconnect
+)
 from handlers.photo_upload_presigned import (
     handle_get_upload_url,
     handle_confirm_upload,
@@ -107,8 +122,8 @@ from handlers.client_feedback_handler import (
     handle_get_gallery_feedback
 )
 from handlers.visitor_tracking_handler import (
-    handle_track_visit,
-    handle_track_event,
+    handle_track_visit as handle_track_visitor_visit,
+    handle_track_event as handle_track_visitor_event,
     handle_track_session_end,
     handle_get_visitor_analytics
 )
@@ -190,6 +205,69 @@ from handlers.seo_handler import (
     handle_get_seo_settings,
     handle_update_seo_settings,
     handle_get_robots_txt
+)
+from handlers.leads_handler import (
+    handle_capture_lead,
+    handle_list_leads,
+    handle_get_lead,
+    handle_update_lead,
+    handle_cancel_followup_sequence
+)
+from handlers.testimonials_handler import (
+    handle_list_testimonials,
+    handle_create_testimonial,
+    handle_update_testimonial,
+    handle_delete_testimonial,
+    handle_request_testimonial
+)
+from handlers.services_handler import (
+    handle_list_services,
+    handle_create_service,
+    handle_update_service,
+    handle_delete_service,
+    handle_get_service
+)
+from handlers.sales_handler import (
+    handle_list_packages,
+    handle_create_package,
+    handle_create_payment_intent,
+    handle_confirm_sale,
+    handle_get_download,
+    handle_list_sales
+)
+from handlers.payment_reminders_handler import (
+    handle_create_reminder_schedule,
+    handle_cancel_reminder_schedule
+)
+from handlers.onboarding_handler import (
+    handle_create_onboarding_workflow,
+    handle_list_workflows,
+    handle_update_workflow,
+    handle_delete_workflow
+)
+from handlers.analytics_export_handler import (
+    handle_export_analytics_csv,
+    handle_export_analytics_pdf
+)
+from handlers.invoice_pdf_handler import (
+    handle_generate_invoice_pdf,
+    handle_download_invoice_pdf
+)
+from handlers.contract_pdf_handler import (
+    handle_generate_contract_pdf,
+    handle_download_contract_pdf
+)
+from handlers.calendar_ics_handler import (
+    handle_export_appointment_ics,
+    handle_export_calendar_feed,
+    handle_generate_calendar_token
+)
+from handlers.feature_requests_handler import (
+    handle_list_feature_requests,
+    handle_create_feature_request,
+    handle_vote_feature_request,
+    handle_unvote_feature_request,
+    handle_update_feature_request_status
 )
 
 def handler(event, context):
@@ -419,6 +497,26 @@ def handler(event, context):
             user = get_user_from_token(event)
             return handle_track_photo_share(photo_id, platform, user, metadata)
         
+        # New engagement analytics tracking endpoints (PUBLIC - for guest tracking)
+        if path == '/v1/analytics/visit' and method == 'POST':
+            return handle_track_visit(body)
+
+        if path == '/v1/analytics/event' and method == 'POST':
+            return handle_track_event(body)
+
+        if path == '/v1/analytics/photo-engagement' and method == 'POST':
+            return handle_track_photo_engagement(body)
+
+        if path == '/v1/analytics/video-engagement' and method == 'POST':
+            return handle_track_video_engagement(body)
+        
+        # Real-time viewer tracking endpoints (PUBLIC - for live globe)
+        if path == '/v1/viewers/heartbeat' and method == 'POST':
+            return handle_track_viewer_heartbeat(event)
+        
+        if path == '/v1/viewers/disconnect' and method == 'POST':
+            return handle_viewer_disconnect(event)
+        
         # Bulk download tracking endpoint (PUBLIC - tracks downloads from all users)
         if path.startswith('/v1/analytics/track/bulk-download/') and method == 'POST':
             gallery_id = path.split('/')[-1]
@@ -441,10 +539,42 @@ def handler(event, context):
             if len(parts) > parts.index('comments') + 1:
                 comment_id = parts[parts.index('comments') + 1]
                 
-                # Update/Delete still require auth or ownership proof (handled in handler or restricted)
-                # For now, we'll keep update/delete authenticated-only in the AUTH section below
-                # or we can move them here and check user inside handler
-                pass 
+                # Update/Delete - allow for authenticated users AND guests who own the comment
+                user = get_user_from_token(event)  # Get user if authenticated, otherwise None
+                
+                # For guest users, create a temporary user object from localStorage info sent in headers
+                if not user:
+                    # Check if guest user info is in request body or headers
+                    try:
+                        # Try to get guest info from headers (sent by frontend)
+                        headers = event.get('headers', {}) or {}
+                        guest_name = headers.get('x-guest-name') or headers.get('X-Guest-Name')
+                        guest_email = headers.get('x-guest-email') or headers.get('X-Guest-Email')
+                        
+                        if guest_name or guest_email:
+                            # Create temporary guest user object for permission check
+                            if guest_email:
+                                guest_user_id = f"guest-{guest_email}"
+                            else:
+                                # If no email, we can't match against stored comments
+                                guest_user_id = None
+                            
+                            if guest_user_id:
+                                user = {
+                                    'id': guest_user_id,
+                                    'username': guest_name,
+                                    'email': guest_email,
+                                    'is_guest': True
+                                }
+                    except Exception as e:
+                        print(f"Error creating guest user object: {str(e)}")
+                
+                if method == 'PUT':
+                    return handle_update_comment(photo_id, comment_id, user, body)
+                
+                if method == 'DELETE':
+                    return handle_delete_comment(photo_id, comment_id, user)
+                    
             elif method == 'POST':
                 # Add new comment - Publicly accessible (handler checks gallery settings)
                 user = get_user_from_token(event) # Optional user
@@ -495,6 +625,26 @@ def handler(event, context):
                 # Branding settings
                 if '/branding' in path and method == 'GET':
                     return handle_get_public_branding(photographer_id)
+                
+                # Lead capture (contact/inquiry)
+                if '/lead' in path and method == 'POST':
+                    return handle_capture_lead(photographer_id, body)
+                
+                # Testimonials (public)
+                if '/testimonials' in path:
+                    if method == 'GET':
+                        return handle_list_testimonials(photographer_id, query_params)
+                    elif method == 'POST':
+                        return handle_create_testimonial(photographer_id, body)
+                
+                # Services pricing (public)
+                if '/services' in path:
+                    if method == 'GET':
+                        return handle_list_services(photographer_id, is_public=True)
+                
+                # Packages (public)
+                if '/packages' in path and method == 'GET':
+                    return handle_list_packages(photographer_id, is_public=True)
                 
                 if '/availability/available-slots' in path and method == 'GET':
                     return handle_get_available_slots(photographer_id, query_params)
@@ -674,24 +824,10 @@ def handler(event, context):
             if method == 'DELETE':
                 return handle_delete_gallery(gallery_id, user)
         
-        # Photo comments (moved to PUBLIC section above for add)
-        if path.startswith('/v1/photos/') and '/comments' in path:
-            parts = path.split('/')
-            photo_id = parts[parts.index('photos') + 1]
-            
-            # Check if it's a specific comment (update/delete)
-            if len(parts) > parts.index('comments') + 1:
-                comment_id = parts[parts.index('comments') + 1]
-                
-                if method == 'PUT':
-                    return handle_update_comment(photo_id, comment_id, user, body)
-                
-                if method == 'DELETE':
-                    return handle_delete_comment(photo_id, comment_id, user)
-            
-            # Add new comment (moved to public section)
-            # if method == 'POST':
-            #    return handle_add_comment(photo_id, user, body)
+        # Photo comments - already handled in PUBLIC section above
+        # Kept here for backward compatibility if needed
+        # if path.startswith('/v1/photos/') and '/comments' in path:
+        #     ...
         
         # Photo search endpoint
         if path == '/v1/photos/search' and method == 'GET':
@@ -767,6 +903,17 @@ def handler(event, context):
         
         if path.startswith('/v1/invoices/'):
             parts = path.split('/')
+            invoice_id = parts[3] if len(parts) > 3 else None
+            
+            # PDF generation routes
+            if 'pdf' in parts and method == 'POST':
+                event['pathParameters'] = {'invoice_id': invoice_id}
+                return handle_generate_invoice_pdf(event)
+            
+            if 'pdf' in parts and 'download' in parts and method == 'GET':
+                event['pathParameters'] = {'invoice_id': invoice_id}
+                return handle_download_invoice_pdf(event)
+            
             # Check for specific actions like /v1/invoices/{id}/send
             if parts[-1] == 'send' and method == 'POST':
                 invoice_id = parts[-2]
@@ -795,11 +942,26 @@ def handler(event, context):
             return handle_create_appointment(user, body)
             
         if path.startswith('/v1/appointments/'):
+            parts = path.split('/')
+            appt_id = parts[3] if len(parts) > 3 else None
+            
+            # ICS export route
+            if 'ics' in parts and method == 'GET':
+                event['pathParameters'] = {'appointment_id': appt_id}
+                return handle_export_appointment_ics(event)
+            
             appt_id = path.split('/')[-1]
             if method == 'PUT':
                 return handle_update_appointment(appt_id, user, body)
             if method == 'DELETE':
                 return handle_delete_appointment(appt_id, user)
+        
+        # Calendar feed routes
+        if path == '/v1/calendar/feed.ics' and method == 'GET':
+            return handle_export_calendar_feed(event)
+        
+        if path == '/v1/calendar/token' and method == 'POST':
+            return handle_generate_calendar_token(event)
         
         # Availability settings
         if path == '/v1/availability/settings' and method == 'GET':
@@ -827,6 +989,17 @@ def handler(event, context):
             
         if path.startswith('/v1/contracts/'):
             parts = path.split('/')
+            contract_id = parts[3] if len(parts) > 3 else None
+            
+            # PDF generation routes
+            if 'pdf' in parts and method == 'POST':
+                event['pathParameters'] = {'contract_id': contract_id}
+                return handle_generate_contract_pdf(event)
+            
+            if 'pdf' in parts and 'download' in parts and method == 'GET':
+                event['pathParameters'] = {'contract_id': contract_id}
+                return handle_download_contract_pdf(event)
+            
             # Check for specific actions
             if parts[-1] == 'send' and method == 'POST':
                 contract_id = parts[-2]
@@ -871,15 +1044,52 @@ def handler(event, context):
             return handle_get_usage(user)
         
         # Analytics endpoints
-        if path == '/v1/analytics' and method == 'GET':
-            return handle_get_overall_analytics(user)
+        # Support both /v1/analytics and /v1/analytics/overall
+        if (path == '/v1/analytics' or path == '/v1/analytics/overall') and method == 'GET':
+            query_params = event.get('queryStringParameters') or {}
+            print(f"[API] Analytics request - path: {path}, query_params: {query_params}")
+            # Use engagement analytics for more accurate data
+            use_engagement = query_params.get('use_engagement', 'true').lower() == 'true'
+            print(f"[API] Using engagement analytics: {use_engagement}")
+            if use_engagement:
+                return handle_get_overall_engagement(user)
+            else:
+                return handle_get_overall_analytics(user, query_params)
+        
+        # Analytics export routes
+        if path == '/v1/analytics/export/csv' and method == 'GET':
+            return handle_export_analytics_csv(event)
+        
+        if path == '/v1/analytics/export/pdf' and method == 'POST':
+            return handle_export_analytics_pdf(event)
         
         if path == '/v1/analytics/bulk-downloads' and method == 'GET':
             return handle_get_bulk_downloads(user)
         
+        # Visitor analytics endpoint (support both paths for compatibility)
+        if (path == '/v1/analytics/visitors' or path == '/v1/visitor/analytics') and method == 'GET':
+            query_params = event.get('queryStringParameters') or {}
+            return handle_get_visitor_analytics(user, query_params)
+        
         if path.startswith('/v1/analytics/galleries/') and method == 'GET':
+            # Handle multiple analytics endpoints for galleries
+            if '/engagement' in path:
+                # GET /v1/analytics/galleries/{gallery_id}/engagement
+                gallery_id = path.split('/')[4]
+                return handle_get_gallery_engagement(user, gallery_id)
+            elif '/client-preferences' in path:
+                # GET /v1/analytics/galleries/{gallery_id}/client-preferences
+                gallery_id = path.split('/')[4]
+                return handle_get_client_preferences(user, gallery_id)
+            else:
+                # GET /v1/analytics/galleries/{gallery_id} - Use engagement analytics summary
             gallery_id = path.split('/')[-1]
-            return handle_get_gallery_analytics(user, gallery_id)
+                query_params = event.get('queryStringParameters') or {}
+                use_engagement = query_params.get('use_engagement', 'true').lower() == 'true'
+                if use_engagement:
+                    return handle_get_gallery_engagement_summary(user, gallery_id)
+                else:
+                    return handle_get_gallery_analytics(user, gallery_id, query_params)
         
         # Video analytics endpoints
         if path == '/v1/videos/track-view' and method == 'POST':
@@ -896,10 +1106,9 @@ def handler(event, context):
             gallery_id = path.split('/')[-1]
             return handle_get_gallery_feedback(gallery_id, user)
         
-        # Visitor analytics endpoint (AUTHENTICATED - photographers can view their site analytics)
-        if path == '/v1/visitor/analytics' and method == 'GET':
-            query_params = event.get('queryStringParameters') or {}
-            return handle_get_visitor_analytics(user, query_params)
+        # Real-time viewers endpoint (AUTHENTICATED - photographers view their active viewers)
+        if path == '/v1/viewers/active' and method == 'GET':
+            return handle_get_active_viewers(user)
         
         # ================================================================
         # NOTIFICATION PREFERENCES ENDPOINTS
@@ -987,6 +1196,159 @@ def handler(event, context):
             return handle_manual_expiry_check(user)
         
         # ================================================================
+        # CRM & LEADS (Pro/Ultimate Feature)
+        # ================================================================
+        
+        # List leads
+        if path == '/v1/crm/leads' and method == 'GET':
+            query_params = event.get('queryStringParameters') or {}
+            return handle_list_leads(user, query_params)
+        
+        # Get single lead
+        if path.startswith('/v1/crm/leads/') and method == 'GET':
+            lead_id = path.split('/')[-1]
+            return handle_get_lead(user, lead_id)
+        
+        # Update lead
+        if path.startswith('/v1/crm/leads/') and method == 'PUT':
+            lead_id = path.split('/')[-1]
+            return handle_update_lead(user, lead_id, body)
+        
+        # Cancel follow-up sequence for lead
+        if path.startswith('/v1/crm/leads/') and path.endswith('/cancel-followup') and method == 'POST':
+            lead_id = path.split('/')[-2]
+            return handle_cancel_followup_sequence(user, lead_id)
+        
+        # List testimonials (photographer view - includes unapproved)
+        if path == '/v1/crm/testimonials' and method == 'GET':
+            query_params = event.get('queryStringParameters') or {}
+            query_params['show_all'] = 'true'
+            return handle_list_testimonials(user['id'], query_params)
+        
+        # Update testimonial (approve/feature)
+        if path.startswith('/v1/crm/testimonials/') and method == 'PUT':
+            testimonial_id = path.split('/')[-1]
+            return handle_update_testimonial(user, testimonial_id, body)
+        
+        # Delete testimonial
+        if path.startswith('/v1/crm/testimonials/') and method == 'DELETE':
+            testimonial_id = path.split('/')[-1]
+            return handle_delete_testimonial(user, testimonial_id)
+        
+        # Request testimonial from client
+        if path == '/v1/crm/testimonials/request' and method == 'POST':
+            return handle_request_testimonial(user, body)
+        
+        # ================================================================
+        # SERVICES MANAGEMENT
+        # ================================================================
+        
+        # List photographer's services
+        if path == '/v1/services' and method == 'GET':
+            return handle_list_services(user['id'], is_public=False)
+        
+        # Create service
+        if path == '/v1/services' and method == 'POST':
+            return handle_create_service(user, body)
+        
+        # Get single service
+        if path.startswith('/v1/services/') and method == 'GET':
+            service_id = path.split('/')[-1]
+            return handle_get_service(service_id, user['id'])
+        
+        # Update service
+        if path.startswith('/v1/services/') and method == 'PUT':
+            service_id = path.split('/')[-1]
+            return handle_update_service(user, service_id, body)
+        
+        # Delete service
+        if path.startswith('/v1/services/') and method == 'DELETE':
+            service_id = path.split('/')[-1]
+            return handle_delete_service(user, service_id)
+        
+        # ================================================================
+        # PHOTO SALES & PACKAGES
+        # ================================================================
+        
+        # List sales with revenue stats
+        if path == '/v1/sales' and method == 'GET':
+            query_params = event.get('queryStringParameters') or {}
+            return handle_list_sales(user, query_params)
+        
+        # Create payment intent
+        if path == '/v1/sales/create-payment-intent' and method == 'POST':
+            return handle_create_payment_intent(body)
+        
+        # Confirm sale after payment
+        if path.startswith('/v1/sales/') and path.endswith('/confirm') and method == 'POST':
+            sale_id = path.split('/')[-2]
+            payment_intent_id = body.get('payment_intent_id')
+            return handle_confirm_sale(sale_id, payment_intent_id)
+        
+        # List packages
+        if path == '/v1/packages' and method == 'GET':
+            return handle_list_packages(user['id'], is_public=False)
+        
+        # Create package
+        if path == '/v1/packages' and method == 'POST':
+            return handle_create_package(user, body)
+        
+        # Update package
+        if path.startswith('/v1/packages/') and method == 'PUT':
+            package_id = path.split('/')[-1]
+            # Note: Need to implement handle_update_package in sales_handler.py
+            return create_response(501, {'error': 'Update package endpoint pending implementation'})
+        
+        # Delete package
+        if path.startswith('/v1/packages/') and method == 'DELETE':
+            package_id = path.split('/')[-1]
+            # Note: Need to implement handle_delete_package in sales_handler.py
+            return create_response(501, {'error': 'Delete package endpoint pending implementation'})
+        
+        # Get download link (requires customer email verification)
+        if path.startswith('/v1/downloads/') and method == 'GET':
+            download_id = path.split('/')[-1]
+            query_params = event.get('queryStringParameters') or {}
+            customer_email = query_params.get('email', '')
+            return handle_get_download(download_id, customer_email)
+        
+        # ================================================================
+        # PAYMENT REMINDERS
+        # ================================================================
+        
+        # Create reminder schedule for invoice
+        if path.startswith('/v1/invoices/') and path.endswith('/reminders') and method == 'POST':
+            invoice_id = path.split('/')[-2]
+            return handle_create_reminder_schedule(user, invoice_id, body)
+        
+        # Cancel reminder schedule
+        if path.startswith('/v1/invoices/') and path.endswith('/reminders') and method == 'DELETE':
+            invoice_id = path.split('/')[-2]
+            return handle_cancel_reminder_schedule(user, invoice_id)
+        
+        # ================================================================
+        # CLIENT ONBOARDING WORKFLOWS
+        # ================================================================
+        
+        # List onboarding workflows
+        if path == '/v1/onboarding/workflows' and method == 'GET':
+            return handle_list_workflows(user)
+        
+        # Create onboarding workflow
+        if path == '/v1/onboarding/workflows' and method == 'POST':
+            return handle_create_onboarding_workflow(user, body)
+        
+        # Update onboarding workflow
+        if path.startswith('/v1/onboarding/workflows/') and method == 'PUT':
+            workflow_id = path.split('/')[-1]
+            return handle_update_workflow(user, workflow_id, body)
+        
+        # Delete onboarding workflow
+        if path.startswith('/v1/onboarding/workflows/') and method == 'DELETE':
+            workflow_id = path.split('/')[-1]
+            return handle_delete_workflow(user, workflow_id)
+        
+        # ================================================================
         # SEO TOOLS (Pro/Ultimate Feature)
         # ================================================================
         
@@ -1019,6 +1381,36 @@ def handler(event, context):
         # ================================================================
         
         # Gallery cleanup endpoint removed - galleries never expire
+        
+        # ================================================================
+        # FEATURE REQUESTS & FEEDBACK
+        # ================================================================
+        
+        # List feature requests
+        if path == '/v1/feature-requests' and method == 'GET':
+            return handle_list_feature_requests(event)
+        
+        # Submit feature request
+        if path == '/v1/feature-requests' and method == 'POST':
+            return handle_create_feature_request(event)
+        
+        # Vote/unvote on feature request
+        if path.startswith('/v1/feature-requests/') and '/vote' in path:
+            request_id = path.split('/')[3]
+            event['pathParameters'] = {'request_id': request_id}
+            
+            if method == 'POST':
+                return handle_vote_feature_request(event)
+            elif method == 'DELETE':
+                return handle_unvote_feature_request(event)
+        
+        # Update feature request status (admin only)
+        if path.startswith('/v1/feature-requests/') and '/status' in path:
+            request_id = path.split('/')[3]
+            event['pathParameters'] = {'request_id': request_id}
+            
+            if method == 'PUT':
+                return handle_update_feature_request_status(event)
         
         # ================================================================
         # 404 - Endpoint not found
@@ -1078,7 +1470,7 @@ if __name__ == '__main__':
         r"/*": {
             "origins": allowed_origins,
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization", "Cookie"],
+            "allow_headers": ["Content-Type", "Authorization", "Cookie", "X-Guest-Name", "X-Guest-Email"],
             "supports_credentials": True,
             "expose_headers": ["Set-Cookie"]
         }

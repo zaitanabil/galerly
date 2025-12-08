@@ -3,6 +3,7 @@ Simple Image Processing for LocalStack
 Generates renditions since there's no Lambda processor in LocalStack
 This simulates steps 9-15 of the production pipeline
 Includes enhanced RAW photo support
+VIDEO FILES ARE NOT PROCESSED HERE - see video_processor.py
 """
 import os
 import io
@@ -21,6 +22,7 @@ except ImportError:
 
 from utils.config import s3_client, S3_BUCKET, S3_RENDITIONS_BUCKET
 from utils.raw_processor import is_raw_file, generate_raw_preview
+from utils.video_processor import is_video_file
 
 # Rendition sizes matching production
 RENDITION_SIZES = {
@@ -49,6 +51,16 @@ def generate_renditions(s3_key, bucket=None, image_data=None):
     try:
         print(f"Generating renditions for {s3_key}...")
         
+        # Check if this is a video file - videos are handled separately
+        filename_from_key = s3_key.split('/')[-1]
+        if is_video_file(filename_from_key):
+            print(f"⚠️ Video file detected: {filename_from_key} - skipping image rendition generation")
+            print(f"   Videos should be processed by video_processor.py instead")
+            return {
+                'success': False,
+                'error': 'Video files must be processed by video_processor, not image_processor'
+            }
+        
         # Step 10a: Get image data (use provided or download)
         if image_data is None:
             response = s3_client.get_object(Bucket=bucket, Key=s3_key)
@@ -58,7 +70,6 @@ def generate_renditions(s3_key, bucket=None, image_data=None):
         
         # Step 10b: Open image with PIL
         # Check if it's a RAW file first for optimized processing
-        filename_from_key = s3_key.split('/')[-1]
         is_raw = is_raw_file(filename_from_key)
         
         if is_raw and rawpy:

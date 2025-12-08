@@ -114,17 +114,20 @@ class TestGetUploadUrl:
         
         assert response['statusCode'] == 403
     
-    @patch('utils.config.galleries_table')
     @patch('handlers.photo_upload_presigned.enforce_storage_limit')
-    def test_get_upload_url_storage_limit_exceeded(self, mock_enforce, mock_table, mock_user, mock_gallery, mock_event):
+    @patch('utils.config.galleries_table')
+    def test_get_upload_url_storage_limit_exceeded(self, mock_table, mock_enforce, mock_user, mock_gallery, mock_event):
         """Test upload rejected when storage limit exceeded"""
         mock_table.get_item.return_value = {'Item': mock_gallery}
-        # enforce_storage_limit is called within handle_get_upload_url
-        # We need to patch it at the point where it's imported/used
+        # Mock enforce_storage_limit to return False (storage exceeded)
         mock_enforce.return_value = (False, 'Storage limit exceeded')
         
-        # This test requires proper context - skip for now as implementation detail
-        pytest.skip("Requires proper internal mock context")
+        response = handle_get_upload_url('gallery-123', mock_user, mock_event)
+        
+        # Should return 403 when storage limit is exceeded
+        assert response['statusCode'] == 403
+        body = json.loads(response['body'])
+        assert 'Storage limit exceeded' in body['error']
     
     @patch('utils.config.galleries_table')
     def test_get_upload_url_missing_filename(self, mock_table, mock_user, mock_gallery):

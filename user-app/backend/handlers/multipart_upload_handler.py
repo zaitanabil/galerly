@@ -181,11 +181,83 @@ def handle_complete_multipart_upload(gallery_id, user, event):
         # Get file hash if provided
         file_hash = body.get('file_hash', '')
         
-        # Create photo record in DynamoDB
+        # ==========================================
+        # METADATA EXTRACTION & VIDEO ENFORCEMENT
+        # ==========================================
+        # Download file for metadata extraction
+        s3_object = s3_client.get_object(Bucket=S3_BUCKET, Key=s3_key)
+        file_data = s3_object['Body'].read()
+        
+        # Extract metadata (works for both images and videos)
+        from utils.metadata_extractor import extract_image_metadata
+        metadata = extract_image_metadata(file_data, filename)
+        
+        print(f"📋 Extracted metadata: format={metadata.get('format')}, "
+              f"type={metadata.get('type')}, "
+              f"dimensions={metadata.get('dimensions')}")
+        
+        # VIDEO DURATION ENFORCEMENT
+        import os
+        file_extension = os.path.splitext(filename)[1].lower()
+        video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.m4v', '.webm']
+        is_video = file_extension in video_extensions
+        
+        if is_video:
+            duration_seconds = metadata.get('duration_seconds')
+            if duration_seconds:
+                duration_minutes = duration_seconds / 60.0
+                
+                # Enforce video duration limit
+                from handlers.subscription_handler import get_user_features
+                from utils.video_utils import enforce_video_duration_limit
+                
+                features, _, _ = get_user_features(user)
+                allowed, error_msg = enforce_video_duration_limit(user, duration_minutes, features)
+                
+                if not allowed:
+                    # DELETE the video from S3 - exceeds plan limit
+                    try:
+                        s3_client.delete_object(Bucket=S3_BUCKET, Key=s3_key)
+                        print(f"🚫 Deleted video {s3_key} - exceeds plan limit")
+                    except Exception as delete_error:
+                        print(f"Failed to delete video: {str(delete_error)}")
+                    
+                    return create_response(403, {
+                        'error': error_msg,
+                        'duration_minutes': round(duration_minutes, 2),
+                        'action': 'Video has been rejected and deleted'
+                    })
+                
+                print(f"✅ Video duration OK: {duration_minutes:.2f} minutes")
+        
+        # Import Decimal for DynamoDB compatibility
         from datetime import datetime
         from decimal import Decimal
         from utils.cdn_urls import get_photo_urls
         
+        # Convert any float values in metadata to Decimal for DynamoDB
+        def convert_floats_to_decimal(obj):
+            """Recursively convert float to Decimal for DynamoDB"""
+            if isinstance(obj, float):
+                return Decimal(str(round(obj, 6)))
+            # Handle PIL IFDRational (numerator/denominator)
+            elif hasattr(obj, 'numerator') and hasattr(obj, 'denominator'):
+                try:
+                    return Decimal(str(round(float(obj), 6)))
+                except:
+                    return str(obj)
+            elif isinstance(obj, dict):
+                return {k: convert_floats_to_decimal(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_floats_to_decimal(item) for item in obj]
+            elif isinstance(obj, tuple):
+                return [convert_floats_to_decimal(item) for item in obj]
+            return obj
+        
+        # Clean metadata to ensure DynamoDB compatibility
+        clean_metadata = convert_floats_to_decimal(metadata)
+        
+        # Create photo record in DynamoDB
         current_time = datetime.utcnow().isoformat() + 'Z'
         
         # Generate CDN URLs for all renditions
@@ -211,22 +283,43 @@ def handle_complete_multipart_upload(gallery_id, user, event):
             'thumbnail_url': photo_urls['thumbnail_url'],
             'small_url': photo_urls['small_url'],
             'medium_url': photo_urls['medium_url'],
-            'large_url': photo_urls['large_url']
+            'large_url': photo_urls['large_url'],
+            # Add metadata (cleaned for DynamoDB)
+            'format': clean_metadata.get('format'),
+            'type': clean_metadata.get('type', 'image'),
+            'dimensions': clean_metadata.get('dimensions'),
+            'camera': clean_metadata.get('camera', {}),
+            'exif': clean_metadata.get('exif', {}),
+            'codec': clean_metadata.get('codec', {}),
         }
+        
+        # Add video-specific fields
+        if is_video and clean_metadata.get('duration_seconds'):
+            photo['duration_seconds'] = Decimal(str(clean_metadata['duration_seconds']))
+            photo['duration_minutes'] = Decimal(str(clean_metadata['duration_minutes']))
+            photo['type'] = 'video'
         
         photos_table.put_item(Item=photo)
         print(f"Created photo record: {photo_id}")
         
-        # Trigger image processing for LocalStack
+        # Trigger processing for LocalStack
         # In production, Lambda is triggered by S3 event
         renditions_size_mb = 0
         if AWS_ENDPOINT_URL and 'localstack' in AWS_ENDPOINT_URL.lower():
             try:
-                from utils.image_processor import process_upload_async
-                print(f"🔄 Processing image for LocalStack: {s3_key}")
-                result = process_upload_async(s3_key, S3_BUCKET)
+                if is_video:
+                    # Use video processor for videos
+                    from utils.video_processor import process_video_upload_async
+                    print(f"🎬 Processing video for LocalStack: {s3_key}")
+                    result = process_video_upload_async(s3_key, S3_BUCKET, video_data=file_data)
+                else:
+                    # Use image processor for images
+                    from utils.image_processor import process_upload_async
+                    print(f"🔄 Processing image for LocalStack: {s3_key}")
+                    result = process_upload_async(s3_key, S3_BUCKET, image_data=file_data)
+                
                 if result.get('success'):
-                    print(f"Renditions generated successfully")
+                    print(f"✅ Processing completed successfully")
                     
                     # Calculate total storage: original + all renditions
                     renditions = result.get('renditions', {})
@@ -245,9 +338,11 @@ def handle_complete_multipart_upload(gallery_id, user, event):
                     photo['renditions_size_mb'] = Decimal(str(round(renditions_size_mb, 2)))
                     photos_table.put_item(Item=photo)
                 else:
-                    print(f"⚠️ Rendition generation failed: {result.get('error')}")
+                    print(f"⚠️ Processing failed: {result.get('error')}")
             except Exception as proc_error:
                 print(f"⚠️ LocalStack processing error: {str(proc_error)}")
+                import traceback
+                traceback.print_exc()
         
         # Update gallery photo count, storage, and thumbnail (for first photo)
         # Use atomic update to avoid race conditions

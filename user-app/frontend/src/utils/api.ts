@@ -153,12 +153,17 @@ export const api = {
       body: body ? JSON.stringify(body) : undefined,
     }),
     
-  delete: <T = any>(endpoint: string, body?: unknown, options?: RequestInit) =>
-    apiRequest<T>(endpoint, {
+  delete: <T = any>(endpoint: string, body?: unknown, options?: RequestInit) => {
+    const config: RequestInit = {
       ...options,
       method: 'DELETE',
-      body: body ? JSON.stringify(body) : undefined,
-    }),
+    };
+    // Only add body if it's provided and not undefined
+    if (body !== undefined) {
+      config.body = JSON.stringify(body);
+    }
+    return apiRequest<T>(endpoint, config);
+  },
 };
 
 // Export for backward compatibility (but cookies handle auth now)
