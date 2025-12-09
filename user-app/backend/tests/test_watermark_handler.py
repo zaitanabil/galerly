@@ -1,11 +1,16 @@
 """
-Tests for watermark logo upload handler
+Tests for watermark logo upload and configuration handler
 """
 import pytest
-import json  # FIX: Add json import
+import json
 from unittest.mock import MagicMock, patch
 import base64
-from handlers.watermark_handler import handle_upload_watermark_logo
+from handlers.watermark_handler import (
+    handle_upload_watermark_logo,
+    handle_get_watermark_settings,
+    handle_update_watermark_settings,
+    handle_batch_apply_watermark
+)
 
 
 @pytest.fixture
@@ -214,4 +219,113 @@ def test_upload_logo_different_formats(mock_s3, mock_get_features, mock_user):
             # Verify S3 was called with correct content type
             call_kwargs = mock_s3.put_object.call_args[1]
             assert call_kwargs['ContentType'] == expected_content_type
+
+
+# Tests for watermark settings endpoints
+
+@patch('handlers.watermark_handler.get_user_features')
+@patch('handlers.watermark_handler.users_table')
+def test_get_watermark_settings(mock_users_table, mock_get_features, mock_user):
+    """Test getting watermark settings"""
+    mock_get_features.return_value = ({'watermarking': True}, 'plus', {})
+    mock_users_table.get_item.return_value = {
+        'Item': {
+            'email': 'test@example.com',
+            'watermark_s3_key': 'watermarks/user_123/logo.png',
+            'watermark_enabled': True,
+            'watermark_position': 'bottom-right',
+            'watermark_opacity': 0.7,
+            'watermark_size_percent': 15
+        }
+    }
+    
+    response = handle_get_watermark_settings(mock_user)
+    
+    assert response['statusCode'] == 200
+    body_data = json.loads(response['body'])
+    assert body_data['watermark_enabled'] is True
+    assert body_data['watermark_position'] == 'bottom-right'
+    assert body_data['watermark_opacity'] == 0.7
+    assert body_data['watermark_size_percent'] == 15
+
+
+@patch('handlers.watermark_handler.get_user_features')
+@patch('handlers.watermark_handler.users_table')
+def test_update_watermark_settings(mock_users_table, mock_get_features, mock_user):
+    """Test updating watermark settings"""
+    mock_get_features.return_value = ({'watermarking': True}, 'plus', {})
+    mock_users_table.update_item = MagicMock()
+    
+    body = {
+        'watermark_enabled': True,
+        'watermark_position': 'top-left',
+        'watermark_opacity': 0.5,
+        'watermark_size_percent': 20
+    }
+    
+    response = handle_update_watermark_settings(mock_user, body)
+    
+    assert response['statusCode'] == 200
+    body_data = json.loads(response['body'])
+    assert 'successfully' in body_data['message']
+    mock_users_table.update_item.assert_called_once()
+
+
+@patch('handlers.watermark_handler.get_user_features')
+def test_update_watermark_settings_invalid_position(mock_get_features, mock_user):
+    """Test updating with invalid position"""
+    mock_get_features.return_value = ({'watermarking': True}, 'plus', {})
+    
+    body = {
+        'watermark_position': 'invalid-position'
+    }
+    
+    response = handle_update_watermark_settings(mock_user, body)
+    
+    assert response['statusCode'] == 400
+    body_data = json.loads(response['body'])
+    assert 'Invalid position' in body_data['error']
+
+
+@patch('handlers.watermark_handler.get_user_features')
+def test_update_watermark_settings_invalid_opacity(mock_get_features, mock_user):
+    """Test updating with invalid opacity"""
+    mock_get_features.return_value = ({'watermarking': True}, 'plus', {})
+    
+    body = {
+        'watermark_opacity': 1.5  # Out of range
+    }
+    
+    response = handle_update_watermark_settings(mock_user, body)
+    
+    assert response['statusCode'] == 400
+    body_data = json.loads(response['body'])
+    assert 'Opacity must be between' in body_data['error']
+
+
+@patch('handlers.watermark_handler.get_user_features')
+@patch('handlers.watermark_handler.users_table')
+def test_batch_apply_watermark(mock_users_table, mock_get_features, mock_user):
+    """Test batch applying watermark to existing photos"""
+    mock_get_features.return_value = ({'watermarking': True}, 'plus', {})
+    mock_users_table.get_item.return_value = {
+        'Item': {
+            'email': 'test@example.com',
+            'watermark_s3_key': 'watermarks/user_123/logo.png',
+            'watermark_enabled': True
+        }
+    }
+    
+    body = {
+        'gallery_id': 'gallery_123',
+        'photo_ids': ['photo1', 'photo2', 'photo3']
+    }
+    
+    response = handle_batch_apply_watermark(mock_user, body)
+    
+    assert response['statusCode'] == 200
+    body_data = json.loads(response['body'])
+    assert 'job_id' in body_data
+    assert body_data['gallery_id'] == 'gallery_123'
+
 

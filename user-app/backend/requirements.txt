@@ -42,3 +42,10 @@ dnspython>=2.0.0
 python-socketio>=5.10.0
 # HTTP requests for IP geolocation
 requests>=2.31.0
+
+# PDF Generation
+reportlab>=4.0.0  # Binary PDF generation for invoices, contracts, and reports
+
+# Excel Export
+openpyxl>=3.1.0  # Excel file generation with charts for analytics export
+

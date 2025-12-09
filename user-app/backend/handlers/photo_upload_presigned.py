@@ -496,10 +496,29 @@ def handle_confirm_upload(gallery_id, user, event):
                     print(f"🎬 Processing video for LocalStack: {s3_key}")
                     result = process_video_upload_async(s3_key, S3_BUCKET, image_data=image_data)
                 else:
-                    # Use image processor for images
+                    # Use image processor for images with watermark if enabled
                     from utils.image_processor import process_upload_async
+                    from utils.config import users_table
+                    
+                    # Check if user has watermarking enabled
+                    watermark_config = None
+                    try:
+                        user_response = users_table.get_item(Key={'email': user['email']})
+                        if 'Item' in user_response:
+                            user_data = user_response['Item']
+                            if user_data.get('watermark_enabled', False) and user_data.get('watermark_s3_key'):
+                                watermark_config = {
+                                    'watermark_s3_key': user_data['watermark_s3_key'],
+                                    'position': user_data.get('watermark_position', 'bottom-right'),
+                                    'opacity': user_data.get('watermark_opacity', 0.7),
+                                    'size_percent': user_data.get('watermark_size_percent', 15)
+                                }
+                                print(f"🎨 Watermarking enabled: {watermark_config['position']}, opacity: {watermark_config['opacity']}")
+                    except Exception as wm_error:
+                        print(f"⚠️ Could not load watermark config: {str(wm_error)}")
+                    
                     print(f"🔄 Processing image for LocalStack: {s3_key}")
-                    result = process_upload_async(s3_key, S3_BUCKET, image_data=image_data)
+                    result = process_upload_async(s3_key, S3_BUCKET, image_data=image_data, watermark_config=watermark_config)
                 
                 if result.get('success'):
                     print(f"✅ Processing completed successfully")

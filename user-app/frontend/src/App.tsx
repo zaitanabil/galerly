@@ -42,6 +42,7 @@ const RAWVaultPage = lazy(() => import('./pages/RAWVaultPage'));
 const EmailAutomationPage = lazy(() => import('./pages/EmailAutomationPage'));
 const CRMPage = lazy(() => import('./pages/CRMPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const SEOPage = lazy(() => import('./pages/SEOPage'));
 const NotificationPreferencesPage = lazy(() => import('./pages/NotificationPreferencesPage'));
 const CustomDomainHelpPage = lazy(() => import('./pages/CustomDomainHelpPage'));
 const GalleryLayoutPreview = lazy(() => import('./pages/GalleryLayoutPreview'));
@@ -236,6 +237,14 @@ function App() {
               element={
                 <ProtectedRoute requireRole="photographer">
                   <CRMPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seo"
+              element={
+                <ProtectedRoute requireRole="photographer">
+                  <SEOPage />
                 </ProtectedRoute>
               }
             />

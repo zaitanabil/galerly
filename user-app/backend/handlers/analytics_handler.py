@@ -115,6 +115,23 @@ def handle_get_gallery_analytics(user, gallery_id, query_params=None):
         # Get top photos
         top_photo_ids = sorted(photo_stats.keys(), key=lambda x: photo_stats[x], reverse=True)[:10]
         
+        # Calculate average time per photo from engagement analytics
+        photo_avg_times = {}
+        if top_photo_ids:
+            try:
+                for pid in top_photo_ids:
+                    # Get engagement events for this photo
+                    photo_events = [e for e in all_events if e.get('metadata', {}).get('photo_id') == pid]
+                    
+                    # Calculate average time from events with duration
+                    durations = [float(e.get('duration', 0)) for e in photo_events if e.get('duration')]
+                    if durations:
+                        photo_avg_times[pid] = round(sum(durations) / len(durations), 1)
+                    else:
+                        photo_avg_times[pid] = 0
+            except Exception as e:
+                print(f"Error calculating average times: {e}")
+        
         # Fetch photo details
         top_photos = []
         if top_photo_ids:
@@ -129,7 +146,7 @@ def handle_get_gallery_analytics(user, gallery_id, query_params=None):
                                 'thumbnail_url': p_item.get('thumbnail_url') or p_item.get('url'),
                                 'name': p_item.get('filename', 'Untitled'),
                                 'views': photo_stats[pid],
-                                'avg_time_seconds': 0  # Placeholder
+                                'avg_time_seconds': photo_avg_times.get(pid, 0)
                             })
                     except:
                         continue
@@ -259,6 +276,23 @@ def handle_get_overall_analytics(user, query_params=None):
         # Get top photos across all galleries
         top_photo_ids = sorted(photo_stats.keys(), key=lambda x: photo_stats[x], reverse=True)[:10]
         
+        # Calculate average time per photo from engagement analytics
+        photo_avg_times = {}
+        if top_photo_ids:
+            try:
+                for pid in top_photo_ids:
+                    # Get engagement events for this photo
+                    photo_events = [e for e in all_events if e.get('metadata', {}).get('photo_id') == pid]
+                    
+                    # Calculate average time from events with duration
+                    durations = [float(e.get('duration', 0)) for e in photo_events if e.get('duration')]
+                    if durations:
+                        photo_avg_times[pid] = round(sum(durations) / len(durations), 1)
+                    else:
+                        photo_avg_times[pid] = 0
+            except Exception as e:
+                print(f"Error calculating average times: {e}")
+        
         # Fetch photo details
         top_photos = []
         if top_photo_ids:
@@ -273,7 +307,7 @@ def handle_get_overall_analytics(user, query_params=None):
                                 'thumbnail_url': p_item.get('thumbnail_url') or p_item.get('url'),
                                 'name': p_item.get('filename', 'Untitled'),
                                 'views': photo_stats[pid],
-                                'avg_time_seconds': 0  # Placeholder
+                                'avg_time_seconds': photo_avg_times.get(pid, 0)
                             })
                     except:
                         continue

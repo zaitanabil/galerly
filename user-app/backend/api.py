@@ -193,7 +193,11 @@ from handlers.email_automation_handler import (
     handle_setup_gallery_automation,
     handle_cancel_scheduled_email,
     handle_list_scheduled_emails,
-    handle_process_email_queue
+    handle_process_email_queue,
+    handle_create_automation_rule,
+    handle_list_automation_rules,
+    handle_update_automation_rule,
+    handle_delete_automation_rule
 )
 from handlers.raw_vault_handler import (
     handle_archive_to_vault,
@@ -209,7 +213,10 @@ from handlers.seo_handler import (
     handle_validate_og_tags,
     handle_get_seo_settings,
     handle_update_seo_settings,
-    handle_get_robots_txt
+    handle_get_robots_txt,
+    handle_get_seo_score,
+    handle_get_seo_issues,
+    handle_fix_seo_issue
 )
 from handlers.leads_handler import (
     handle_capture_lead,
@@ -693,6 +700,21 @@ def handler(event, context):
         if path == '/v1/profile/watermark-logo' and method == 'POST':
             from handlers.watermark_handler import handle_upload_watermark_logo
             return handle_upload_watermark_logo(user, body)
+        
+        # Get watermark settings
+        if path == '/v1/profile/watermark-settings' and method == 'GET':
+            from handlers.watermark_handler import handle_get_watermark_settings
+            return handle_get_watermark_settings(user)
+        
+        # Update watermark settings
+        if path == '/v1/profile/watermark-settings' and method == 'PUT':
+            from handlers.watermark_handler import handle_update_watermark_settings
+            return handle_update_watermark_settings(user, body)
+        
+        # Batch apply watermark to existing photos
+        if path == '/v1/profile/watermark-batch-apply' and method == 'POST':
+            from handlers.watermark_handler import handle_batch_apply_watermark
+            return handle_batch_apply_watermark(user, body)
         
         # Branding settings
         if path == '/v1/profile/branding-settings' and method == 'GET':
@@ -1218,6 +1240,24 @@ def handler(event, context):
             email_id = path.split('/')[-1]
             return handle_cancel_scheduled_email(user, email_id)
         
+        # Create automation rule
+        if path == '/v1/email-automation/create-rule' and method == 'POST':
+            return handle_create_automation_rule(user, body)
+        
+        # List automation rules
+        if path == '/v1/email-automation/rules' and method == 'GET':
+            return handle_list_automation_rules(user)
+        
+        # Update automation rule
+        if path.startswith('/v1/email-automation/rule/') and method == 'PUT':
+            rule_id = path.split('/')[-1]
+            return handle_update_automation_rule(user, rule_id, body)
+        
+        # Delete automation rule
+        if path.startswith('/v1/email-automation/rule/') and method == 'DELETE':
+            rule_id = path.split('/')[-1]
+            return handle_delete_automation_rule(user, rule_id)
+        
         # Manual expiry check (photographer can test expiry notifications)
         if path == '/v1/galleries/check-expiring' and method == 'POST':
             return handle_manual_expiry_check(user)
@@ -1378,30 +1418,60 @@ def handler(event, context):
         # ================================================================
         # SEO TOOLS (Pro/Ultimate Feature)
         # ================================================================
-        
+
         # Generate sitemap.xml
         if path == '/v1/seo/sitemap' and method == 'GET':
             return handle_generate_sitemap(user)
-        
+
         # Generate Schema.org markup
         if path == '/v1/seo/schema' and method == 'GET':
             return handle_generate_schema_markup(user)
         
+        # Schema markup endpoint (alternative path)
+        if path == '/v1/seo/schema-markup' and method == 'GET':
+            return handle_generate_schema_markup(user)
+
         # Validate OG tags
         if path == '/v1/seo/validate-og' and method == 'POST':
             return handle_validate_og_tags(user, body)
         
+        # Validate OG tags (alternative path)
+        if path == '/v1/seo/validate-og-tags' and method == 'POST':
+            return handle_validate_og_tags(user, body)
+
         # Get SEO settings
         if path == '/v1/seo/settings' and method == 'GET':
             return handle_get_seo_settings(user)
-        
+
         # Update SEO settings
         if path == '/v1/seo/settings' and method == 'PUT':
             return handle_update_seo_settings(user, body)
-        
+
         # Get robots.txt
         if path == '/v1/seo/robots.txt' and method == 'GET':
             return handle_get_robots_txt(user)
+        
+        # SEO Score
+        if path == '/v1/seo/score' and method == 'GET':
+            return handle_get_seo_score(user)
+        
+        # SEO Issues
+        if path == '/v1/seo/issues' and method == 'GET':
+            return handle_get_seo_issues(user)
+        
+        # Fix SEO Issue
+        if path == '/v1/seo/fix-issue' and method == 'POST':
+            return handle_fix_seo_issue(user, body)
+        
+        # One-click SEO optimization
+        if path == '/v1/seo/optimize' and method == 'POST':
+            from handlers.seo_handler import handle_one_click_optimize
+            return handle_one_click_optimize(user)
+        
+        # Optimize All (alias for /seo/optimize)
+        if path == '/v1/seo/optimize-all' and method == 'POST':
+            from handlers.seo_handler import handle_one_click_optimize
+            return handle_one_click_optimize(user)
         
         # ================================================================
         # ADMIN/SYSTEM ENDPOINTS

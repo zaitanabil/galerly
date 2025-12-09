@@ -2,12 +2,12 @@
 Simple Image Processing for LocalStack
 Generates renditions since there's no Lambda processor in LocalStack
 This simulates steps 9-15 of the production pipeline
-Includes enhanced RAW photo support
+Includes enhanced RAW photo support and watermarking
 VIDEO FILES ARE NOT PROCESSED HERE - see video_processor.py
 """
 import os
 import io
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 try:
     import pillow_heif
     pillow_heif.register_heif_opener()
@@ -197,11 +197,227 @@ def generate_renditions(s3_key, bucket=None, image_data=None):
         }
 
 
-def process_upload_async(s3_key, bucket=None, image_data=None):
+def apply_watermark(image, watermark_config):
+    """
+    Apply watermark to an image based on configuration
+    
+    Args:
+        image: PIL Image object
+        watermark_config: dict with watermark settings
+            {
+                'watermark_s3_key': str,  # S3 key of watermark logo
+                'position': str,  # 'top-left', 'top-right', 'bottom-left', 'bottom-right', 'center'
+                'opacity': float,  # 0.0 to 1.0
+                'size_percent': int  # Watermark size as percentage of image width (5-50)
+            }
+    
+    Returns:
+        PIL Image with watermark applied
+    """
+    try:
+        if not watermark_config or not watermark_config.get('watermark_s3_key'):
+            return image
+        
+        # Download watermark from S3
+        watermark_key = watermark_config['watermark_s3_key']
+        try:
+            watermark_response = s3_client.get_object(Bucket=S3_BUCKET, Key=watermark_key)
+            watermark_data = watermark_response['Body'].read()
+            watermark = Image.open(io.BytesIO(watermark_data))
+        except Exception as e:
+            print(f"Failed to load watermark from S3: {str(e)}")
+            return image  # Return original if watermark fails
+        
+        # Convert watermark to RGBA if not already
+        if watermark.mode != 'RGBA':
+            watermark = watermark.convert('RGBA')
+        
+        # Get configuration with defaults
+        position = watermark_config.get('position', 'bottom-right')
+        opacity = watermark_config.get('opacity', 0.7)  # Default 70% opacity
+        size_percent = watermark_config.get('size_percent', 15)  # Default 15% of image width
+        
+        # Clamp values
+        opacity = max(0.0, min(1.0, opacity))
+        size_percent = max(5, min(50, size_percent))
+        
+        # Calculate watermark size
+        img_width, img_height = image.size
+        watermark_width = int(img_width * (size_percent / 100))
+        
+        # Maintain aspect ratio
+        wm_aspect = watermark.size[0] / watermark.size[1]
+        watermark_height = int(watermark_width / wm_aspect)
+        
+        # Resize watermark
+        watermark = watermark.resize((watermark_width, watermark_height), Image.Resampling.LANCZOS)
+        
+        # Apply opacity
+        if opacity < 1.0:
+            # Create alpha channel with opacity
+            alpha = watermark.split()[3]
+            alpha = alpha.point(lambda p: int(p * opacity))
+            watermark.putalpha(alpha)
+        
+        # Calculate position
+        margin = int(min(img_width, img_height) * 0.02)  # 2% margin
+        
+        positions = {
+            'top-left': (margin, margin),
+            'top-right': (img_width - watermark_width - margin, margin),
+            'bottom-left': (margin, img_height - watermark_height - margin),
+            'bottom-right': (img_width - watermark_width - margin, img_height - watermark_height - margin),
+            'center': ((img_width - watermark_width) // 2, (img_height - watermark_height) // 2)
+        }
+        
+        position_coords = positions.get(position, positions['bottom-right'])
+        
+        # Create a copy of the image and paste watermark
+        watermarked = image.copy()
+        if watermarked.mode != 'RGBA':
+            watermarked = watermarked.convert('RGBA')
+        
+        watermarked.paste(watermark, position_coords, watermark)
+        
+        # Convert back to RGB
+        if watermarked.mode == 'RGBA':
+            rgb_image = Image.new('RGB', watermarked.size, (255, 255, 255))
+            rgb_image.paste(watermarked, mask=watermarked.split()[3])
+            watermarked = rgb_image
+        
+        print(f"✓ Watermark applied: {position}, opacity: {opacity}, size: {size_percent}%")
+        
+        return watermarked
+        
+    except Exception as e:
+        print(f"Error applying watermark: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return image  # Return original image if watermarking fails
+
+
+def generate_renditions_with_watermark(s3_key, bucket=None, image_data=None, watermark_config=None):
+    """
+    Generate renditions with optional watermark
+    Wrapper around generate_renditions that applies watermark before generating sizes
+    
+    Args:
+        s3_key: S3 key of original image
+        bucket: Source bucket
+        image_data: Optional raw bytes
+        watermark_config: Optional watermark configuration dict
+    
+    Returns:
+        dict with rendition URLs and metadata
+    """
+    # First get the original image processed normally
+    result = generate_renditions(s3_key, bucket, image_data)
+    
+    # If watermark config provided and renditions successful, apply watermark
+    if watermark_config and result.get('success'):
+        try:
+            print(f"Applying watermark to renditions for {s3_key}...")
+            
+            # Get original image
+            if image_data is None:
+                response = s3_client.get_object(Bucket=bucket or S3_BUCKET, Key=s3_key)
+                original_data = response['Body'].read()
+            else:
+                original_data = image_data
+            
+            # Open and process original image
+            filename_from_key = s3_key.split('/')[-1]
+            is_raw = is_raw_file(filename_from_key)
+            
+            if is_raw and rawpy:
+                raw_preview = generate_raw_preview(original_data, size='large', quality=90)
+                if raw_preview['success']:
+                    original_image = Image.open(io.BytesIO(raw_preview['preview_data']))
+                else:
+                    raise Exception(f"RAW processing failed: {raw_preview.get('error')}")
+            else:
+                original_image = Image.open(io.BytesIO(original_data))
+                original_image.load()
+            
+            # Convert RGBA to RGB if needed
+            if original_image.mode == 'RGBA':
+                rgb_image = Image.new('RGB', original_image.size, (255, 255, 255))
+                rgb_image.paste(original_image, mask=original_image.split()[3])
+                original_image = rgb_image
+            elif original_image.mode not in ('RGB', 'L'):
+                original_image = original_image.convert('RGB')
+            
+            # Apply watermark to original
+            watermarked_image = apply_watermark(original_image, watermark_config)
+            
+            # Extract gallery_id and photo_id
+            parts = s3_key.split('/')
+            gallery_id = parts[0]
+            photo_filename = parts[1]
+            photo_id = photo_filename.rsplit('.', 1)[0]
+            
+            # Regenerate renditions from watermarked image
+            renditions = {}
+            for size_name, (max_width, max_height) in RENDITION_SIZES.items():
+                img_copy = watermarked_image.copy()
+                img_copy.thumbnail((max_width, max_height), Image.Resampling.LANCZOS)
+                
+                output = io.BytesIO()
+                img_copy.save(output, format='JPEG', quality=85, optimize=True)
+                output.seek(0)
+                
+                rendition_key = f"renditions/{gallery_id}/{photo_id}_{size_name}.jpg"
+                s3_client.put_object(
+                    Bucket=S3_RENDITIONS_BUCKET,
+                    Key=rendition_key,
+                    Body=output.getvalue(),
+                    ContentType='image/jpeg'
+                )
+                
+                renditions[size_name] = {
+                    'key': rendition_key,
+                    'size': len(output.getvalue()),
+                    'dimensions': img_copy.size
+                }
+                
+                print(f"  {size_name} (watermarked): {img_copy.size[0]}x{img_copy.size[1]} ({len(output.getvalue()) / 1024:.1f} KB)")
+            
+            print(f"✓ Generated {len(renditions)} watermarked renditions for {s3_key}")
+            
+            return {
+                'success': True,
+                'renditions': renditions,
+                'original_dimensions': watermarked_image.size,
+                'watermarked': True
+            }
+            
+        except Exception as e:
+            print(f"Error applying watermark to renditions: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            # Return original non-watermarked result
+            return result
+    
+    return result
+
+
+def process_upload_async(s3_key, bucket=None, image_data=None, watermark_config=None):
     """
     Simulate async processing queue (Step 9)
     In production, this would be triggered by S3 event → SQS → Lambda
     For LocalStack, we call it synchronously after upload
+    
+    Args:
+        s3_key: S3 key of uploaded image
+        bucket: Source bucket
+        image_data: Optional raw image bytes
+        watermark_config: Optional watermark configuration
+    
+    Returns:
+        dict with processing results
     """
-    return generate_renditions(s3_key, bucket, image_data)
+    if watermark_config:
+        return generate_renditions_with_watermark(s3_key, bucket, image_data, watermark_config)
+    else:
+        return generate_renditions(s3_key, bucket, image_data)
 

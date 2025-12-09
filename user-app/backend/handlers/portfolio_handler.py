@@ -74,6 +74,16 @@ def handle_get_portfolio_settings(user):
 def handle_update_portfolio_settings(user, body):
     """Update portfolio customization settings"""
     try:
+        # Check plan permission for portfolio customization
+        features, _, _ = get_user_features(user)
+        
+        if not features.get('portfolio_customization'):
+            return create_response(403, {
+                'error': 'Portfolio customization is available on Pro and Ultimate plans.',
+                'upgrade_required': True,
+                'required_feature': 'portfolio_customization'
+            })
+        
         # Build update expression
         update_expressions = []
         expression_values = {}

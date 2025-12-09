@@ -102,9 +102,9 @@ class TestUpdatePortfolioSettings:
         
         response = handle_update_portfolio_settings(user, body)
         
-        # TODO: Handler should check portfolio_customization feature flag and return 403
-        # For now, handler allows updates without plan enforcement
-        assert response['statusCode'] in [200, 403]
+        # Handler now checks portfolio_customization feature flag and returns 403 for Plus plan
+        assert response['statusCode'] == 403
+        assert 'upgrade_required' in json.loads(response['body']) if isinstance(response['body'], str) else response['body']
     
     @patch('handlers.portfolio_handler.users_table')
     @patch('handlers.portfolio_handler.get_user_features')

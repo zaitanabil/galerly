@@ -92,13 +92,97 @@ export default function GalleryLayoutPreview() {
   };
 
   const handleFavoriteToggle = async (photoId: string) => {
-    console.log('Toggle favorite:', photoId);
-    // Implement favorite toggle
+    if (!gallery) return;
+    
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const token = localStorage.getItem('token');
+      
+      // Check if photo is already favorited
+      const photo = gallery.photos.find(p => p.id === photoId);
+      const isFavorited = photo?.is_favorite;
+      
+      // Call favorite API
+      const response = await fetch(
+        `${apiUrl}/v1/galleries/${gallery.id}/photos/${photoId}/favorite`,
+        {
+          method: isFavorited ? 'DELETE' : 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to toggle favorite');
+      }
+      
+      // Update local state
+      setGallery(prev => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          photos: prev.photos.map(p => 
+            p.id === photoId 
+              ? { 
+                  ...p, 
+                  is_favorite: !isFavorited,
+                  favorites_count: (p.favorites_count || 0) + (isFavorited ? -1 : 1)
+                }
+              : p
+          )
+        };
+      });
+      
+    } catch (err) {
+      console.error('Error toggling favorite:', err);
+    }
   };
 
   const handleDownload = async (photoId: string) => {
-    console.log('Download photo:', photoId);
-    // Implement download
+    if (!gallery) return;
+    
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+      const token = localStorage.getItem('token');
+      
+      // Get download URL from API
+      const response = await fetch(
+        `${apiUrl}/v1/galleries/${gallery.id}/photos/${photoId}/download`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+      
+      if (!response.ok) {
+        throw new Error('Failed to get download URL');
+      }
+      
+      const data = await response.json();
+      
+      // Trigger download
+      if (data.download_url) {
+        const photo = gallery.photos.find(p => p.id === photoId);
+        const filename = photo?.title || `photo_${photoId}.jpg`;
+        
+        // Create hidden link and trigger download
+        const link = document.createElement('a');
+        link.href = data.download_url;
+        link.download = filename;
+        link.style.display = 'none';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+      
+    } catch (err) {
+      console.error('Error downloading photo:', err);
+    }
   };
 
   if (loading) {

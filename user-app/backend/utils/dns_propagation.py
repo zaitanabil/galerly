@@ -1,361 +1,383 @@
 """
 DNS Propagation Checker
-Checks DNS propagation status across multiple DNS servers worldwide
+Checks DNS propagation status across multiple nameservers worldwide
 """
 import dns.resolver
 import socket
-import time
-from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 
-# Major DNS servers to check propagation
-DNS_SERVERS = [
-    {'name': 'Google Primary', 'ip': '8.8.8.8', 'location': 'Global'},
-    {'name': 'Google Secondary', 'ip': '8.8.4.4', 'location': 'Global'},
-    {'name': 'Cloudflare Primary', 'ip': '1.1.1.1', 'location': 'Global'},
-    {'name': 'Cloudflare Secondary', 'ip': '1.0.0.1', 'location': 'Global'},
-    {'name': 'OpenDNS Primary', 'ip': '208.67.222.222', 'location': 'Global'},
-    {'name': 'OpenDNS Secondary', 'ip': '208.67.220.220', 'location': 'Global'},
-    {'name': 'Quad9', 'ip': '9.9.9.9', 'location': 'Global'},
+# Global DNS servers to check propagation
+GLOBAL_DNS_SERVERS = [
+    '8.8.8.8',        # Google Primary
+    '8.8.4.4',        # Google Secondary
+    '1.1.1.1',        # Cloudflare Primary
+    '1.0.0.1',        # Cloudflare Secondary
+    '208.67.222.222', # OpenDNS Primary
+    '208.67.220.220', # OpenDNS Secondary
+    '9.9.9.9',        # Quad9
+    '149.112.112.112',# Quad9 Secondary
 ]
 
 
-def check_dns_propagation(domain, expected_value=None, record_type='CNAME', timeout=5):
+def check_dns_record(domain, record_type='A', nameserver='8.8.8.8', timeout=5):
     """
-    Check DNS propagation across multiple DNS servers
+    Check a specific DNS record from a specific nameserver
     
     Args:
-        domain: Domain name to check
-        expected_value: Expected DNS value (optional, for verification)
-        record_type: DNS record type (CNAME, A, TXT, etc.)
-        timeout: Timeout for each DNS query in seconds
+        domain: Domain to check
+        record_type: DNS record type (A, AAAA, CNAME, TXT, MX, etc.)
+        nameserver: Nameserver IP to query
+        timeout: Query timeout in seconds
     
     Returns:
         dict: {
             'success': bool,
-            'propagated': bool,  # True if all servers return expected value
-            'propagation_percentage': float,  # 0-100
-            'servers_checked': int,
-            'servers_propagated': int,
-            'results': list of {
-                'server': str,
-                'location': str,
-                'value': str,
-                'matches': bool,
-                'response_time': float,
-                'error': str
-            },
-            'estimated_completion': str  # If not fully propagated
+            'records': list,
+            'nameserver': str,
+            'error': str (if failed)
         }
     """
     try:
-        results = []
-        propagated_count = 0
+        # Create resolver with specific nameserver
+        resolver = dns.resolver.Resolver()
+        resolver.nameservers = [nameserver]
+        resolver.timeout = timeout
+        resolver.lifetime = timeout
         
-        # Check each DNS server
-        for server_info in DNS_SERVERS:
-            server_result = _query_dns_server(
-                domain=domain,
-                dns_server=server_info['ip'],
-                record_type=record_type,
-                timeout=timeout
-            )
-            
-            server_result['server'] = server_info['name']
-            server_result['location'] = server_info['location']
-            
-            # Check if value matches expected
-            if expected_value and server_result.get('value'):
-                # Normalize values for comparison
-                value_normalized = server_result['value'].lower().rstrip('.')
-                expected_normalized = expected_value.lower().rstrip('.')
-                
-                matches = expected_normalized in value_normalized
-                server_result['matches'] = matches
-                
-                if matches:
-                    propagated_count += 1
-            elif server_result.get('value'):
-                # If no expected value, any non-error response counts
-                server_result['matches'] = True
-                propagated_count += 1
+        # Query DNS
+        answers = resolver.resolve(domain, record_type)
+        
+        records = []
+        for rdata in answers:
+            if record_type == 'CNAME':
+                records.append(str(rdata.target).rstrip('.'))
+            elif record_type == 'A' or record_type == 'AAAA':
+                records.append(str(rdata))
+            elif record_type == 'TXT':
+                records.append(str(rdata))
+            elif record_type == 'MX':
+                records.append(f"{rdata.preference} {str(rdata.exchange).rstrip('.')}")
             else:
-                server_result['matches'] = False
-            
-            results.append(server_result)
-        
-        total_servers = len(DNS_SERVERS)
-        propagation_percentage = (propagated_count / total_servers) * 100
-        fully_propagated = propagated_count == total_servers
-        
-        # Estimate completion time if not fully propagated
-        estimated_completion = None
-        if not fully_propagated:
-            # DNS typically propagates within 1-48 hours
-            # If 0% propagated: 24-48 hours
-            # If 50% propagated: 2-6 hours
-            # If 75% propagated: 1-2 hours
-            if propagation_percentage == 0:
-                estimated_completion = '24-48 hours'
-            elif propagation_percentage < 50:
-                estimated_completion = '6-24 hours'
-            elif propagation_percentage < 75:
-                estimated_completion = '2-6 hours'
-            else:
-                estimated_completion = '1-2 hours'
+                records.append(str(rdata))
         
         return {
             'success': True,
-            'propagated': fully_propagated,
-            'propagation_percentage': round(propagation_percentage, 1),
-            'servers_checked': total_servers,
-            'servers_propagated': propagated_count,
-            'results': results,
-            'estimated_completion': estimated_completion,
-            'checked_at': datetime.utcnow().isoformat() + 'Z'
+            'records': records,
+            'nameserver': nameserver,
+            'record_type': record_type
+        }
+        
+    except dns.resolver.NXDOMAIN:
+        return {
+            'success': False,
+            'error': 'Domain does not exist',
+            'nameserver': nameserver
+        }
+    except dns.resolver.NoAnswer:
+        return {
+            'success': False,
+            'error': f'No {record_type} record found',
+            'nameserver': nameserver
+        }
+    except dns.resolver.Timeout:
+        return {
+            'success': False,
+            'error': 'DNS query timeout',
+            'nameserver': nameserver
+        }
+    except Exception as e:
+        return {
+            'success': False,
+            'error': str(e),
+            'nameserver': nameserver
+        }
+
+
+def check_dns_propagation(domain, record_type='A', expected_value=None, nameservers=None):
+    """
+    Check DNS propagation across multiple global nameservers
+    
+    Args:
+        domain: Domain to check
+        record_type: DNS record type
+        expected_value: Optional expected value to match against
+        nameservers: Optional list of nameserver IPs (uses global list if not provided)
+    
+    Returns:
+        dict: {
+            'propagated': bool,  # True if all servers have the record
+            'percentage': float,  # Percentage of servers with the record
+            'servers_propagated': int,
+            'servers_checked': int,
+            'results': list,  # Individual server results
+            'ready': bool  # True if >= 80% propagated
+        }
+    """
+    if nameservers is None:
+        nameservers = GLOBAL_DNS_SERVERS
+    
+    results = []
+    propagated_count = 0
+    
+    # Check all nameservers in parallel
+    with ThreadPoolExecutor(max_workers=len(nameservers)) as executor:
+        future_to_ns = {
+            executor.submit(check_dns_record, domain, record_type, ns): ns
+            for ns in nameservers
+        }
+        
+        for future in as_completed(future_to_ns):
+            ns = future_to_ns[future]
+            try:
+                result = future.result()
+                results.append(result)
+                
+                # Check if propagated
+                if result['success']:
+                    # If expected value provided, check for match
+                    if expected_value:
+                        if any(expected_value in record for record in result['records']):
+                            propagated_count += 1
+                    else:
+                        # Just check if record exists
+                        propagated_count += 1
+                        
+            except Exception as e:
+                print(f"Error checking {ns}: {str(e)}")
+                results.append({
+                    'success': False,
+                    'error': str(e),
+                    'nameserver': ns
+                })
+    
+    total_servers = len(nameservers)
+    percentage = (propagated_count / total_servers * 100) if total_servers > 0 else 0
+    
+    return {
+        'propagated': propagated_count == total_servers,
+        'percentage': round(percentage, 1),
+        'servers_propagated': propagated_count,
+        'servers_checked': total_servers,
+        'ready': percentage >= 80.0,  # Consider ready if 80%+ propagated
+        'results': results,
+        'domain': domain,
+        'record_type': record_type
+    }
+
+
+def check_cname_propagation(domain, expected_cname):
+    """
+    Check CNAME record propagation
+    
+    Args:
+        domain: Domain to check
+        expected_cname: Expected CNAME target (e.g., 'cdn.galerly.com')
+    
+    Returns:
+        dict: Same format as check_dns_propagation
+    """
+    return check_dns_propagation(
+        domain=domain,
+        record_type='CNAME',
+        expected_value=expected_cname
+    )
+
+
+def check_a_record_propagation(domain, expected_ip=None):
+    """
+    Check A record propagation
+    
+    Args:
+        domain: Domain to check
+        expected_ip: Optional expected IP address
+    
+    Returns:
+        dict: Same format as check_dns_propagation
+    """
+    return check_dns_propagation(
+        domain=domain,
+        record_type='A',
+        expected_value=expected_ip
+    )
+
+
+def check_txt_record(domain, expected_text=None):
+    """
+    Check TXT record (useful for domain verification)
+    
+    Args:
+        domain: Domain to check
+        expected_text: Optional expected TXT record content
+    
+    Returns:
+        dict: Same format as check_dns_propagation
+    """
+    return check_dns_propagation(
+        domain=domain,
+        record_type='TXT',
+        expected_value=expected_text
+    )
+
+
+def get_nameservers(domain):
+    """
+    Get authoritative nameservers for a domain
+    
+    Args:
+        domain: Domain to check
+    
+    Returns:
+        dict: {
+            'success': bool,
+            'nameservers': list,
+            'error': str (if failed)
+        }
+    """
+    try:
+        # Get root domain (remove subdomain)
+        parts = domain.split('.')
+        if len(parts) > 2:
+            root_domain = '.'.join(parts[-2:])
+        else:
+            root_domain = domain
+        
+        answers = dns.resolver.resolve(root_domain, 'NS')
+        
+        nameservers = []
+        for rdata in answers:
+            ns = str(rdata.target).rstrip('.')
+            nameservers.append(ns)
+        
+        return {
+            'success': True,
+            'nameservers': nameservers,
+            'domain': root_domain
         }
         
     except Exception as e:
-        print(f"Error checking DNS propagation: {str(e)}")
-        import traceback
-        traceback.print_exc()
         return {
             'success': False,
             'error': str(e)
         }
 
 
-def _query_dns_server(domain, dns_server, record_type='CNAME', timeout=5):
+def validate_domain_format(domain):
     """
-    Query a specific DNS server for a domain record
+    Validate domain name format
     
     Args:
-        domain: Domain name to query
-        dns_server: DNS server IP address
-        record_type: DNS record type
-        timeout: Query timeout in seconds
+        domain: Domain to validate
     
     Returns:
         dict: {
-            'value': str,  # DNS record value
-            'response_time': float,  # Query time in ms
-            'error': str  # If query failed
+            'valid': bool,
+            'error': str (if invalid)
         }
     """
-    result = {
-        'value': None,
-        'response_time': None,
-        'error': None
-    }
+    # Remove protocol if present
+    domain = domain.replace('http://', '').replace('https://', '').split('/')[0]
     
-    try:
-        # Create custom resolver with specific DNS server
-        resolver = dns.resolver.Resolver()
-        resolver.nameservers = [dns_server]
-        resolver.timeout = timeout
-        resolver.lifetime = timeout
-        
-        # Time the query
-        start_time = time.time()
-        
-        try:
-            answers = resolver.resolve(domain, record_type)
-            
-            # Get response time
-            response_time = (time.time() - start_time) * 1000  # Convert to ms
-            result['response_time'] = round(response_time, 2)
-            
-            # Get record values
-            values = []
-            for rdata in answers:
-                if record_type == 'CNAME':
-                    values.append(str(rdata.target))
-                elif record_type == 'A':
-                    values.append(str(rdata))
-                elif record_type == 'TXT':
-                    values.append(str(rdata))
-                else:
-                    values.append(str(rdata))
-            
-            result['value'] = ', '.join(values) if values else None
-            
-        except dns.resolver.NXDOMAIN:
-            result['error'] = 'NXDOMAIN: Domain does not exist'
-        except dns.resolver.NoAnswer:
-            result['error'] = 'NoAnswer: No DNS records found'
-        except dns.resolver.NoNameservers:
-            result['error'] = 'NoNameservers: All nameservers failed'
-        except dns.resolver.Timeout:
-            result['error'] = 'Timeout: DNS query timed out'
-        except Exception as e:
-            result['error'] = f'Query error: {str(e)}'
-    
-    except Exception as e:
-        result['error'] = f'Setup error: {str(e)}'
-    
-    return result
-
-
-def check_cname_propagation(domain, expected_cname, min_propagation=80):
-    """
-    Simplified CNAME propagation check
-    
-    Args:
-        domain: Domain to check
-        expected_cname: Expected CNAME value
-        min_propagation: Minimum propagation percentage to consider successful (default: 80%)
-    
-    Returns:
-        dict: {
-            'success': bool,
-            'propagated': bool,
-            'percentage': float,
-            'ready': bool  # True if meets minimum propagation threshold
+    # Check length
+    if len(domain) > 253:
+        return {
+            'valid': False,
+            'error': 'Domain name too long (max 253 characters)'
         }
-    """
-    result = check_dns_propagation(
-        domain=domain,
-        expected_value=expected_cname,
-        record_type='CNAME'
-    )
     
-    if not result['success']:
-        return result
+    if len(domain) == 0:
+        return {
+            'valid': False,
+            'error': 'Domain name is empty'
+        }
+    
+    # Check for at least one dot
+    if '.' not in domain:
+        return {
+            'valid': False,
+            'error': 'Invalid domain format (must have TLD)'
+        }
+    
+    # Check each label
+    labels = domain.split('.')
+    for label in labels:
+        if len(label) == 0:
+            return {
+                'valid': False,
+                'error': 'Empty label in domain'
+            }
+        
+        if len(label) > 63:
+            return {
+                'valid': False,
+                'error': f'Label too long: {label} (max 63 characters)'
+            }
+        
+        # Check for invalid characters
+        if not all(c.isalnum() or c == '-' for c in label):
+            return {
+                'valid': False,
+                'error': f'Invalid characters in label: {label}'
+            }
+        
+        # Cannot start or end with hyphen
+        if label.startswith('-') or label.endswith('-'):
+            return {
+                'valid': False,
+                'error': f'Label cannot start or end with hyphen: {label}'
+            }
     
     return {
-        'success': True,
-        'propagated': result['propagated'],
-        'percentage': result['propagation_percentage'],
-        'ready': result['propagation_percentage'] >= min_propagation,
-        'servers_propagated': result['servers_propagated'],
-        'servers_checked': result['servers_checked'],
-        'estimated_completion': result.get('estimated_completion')
+        'valid': True
     }
 
 
-def wait_for_propagation(domain, expected_value, record_type='CNAME', 
-                         min_propagation=80, max_wait=3600, check_interval=60):
+def resolve_domain_to_ip(domain):
     """
-    Wait for DNS propagation to reach minimum threshold
+    Resolve domain to IP address
     
     Args:
-        domain: Domain to check
-        expected_value: Expected DNS value
-        record_type: DNS record type
-        min_propagation: Minimum propagation percentage (default: 80%)
-        max_wait: Maximum wait time in seconds (default: 3600 = 1 hour)
-        check_interval: Seconds between checks (default: 60)
+        domain: Domain to resolve
     
     Returns:
         dict: {
             'success': bool,
-            'propagated': bool,
-            'percentage': float,
-            'elapsed_time': float,  # Seconds waited
-            'checks_performed': int
-        }
-    """
-    start_time = time.time()
-    checks = 0
-    
-    while True:
-        checks += 1
-        elapsed = time.time() - start_time
-        
-        # Check propagation
-        result = check_dns_propagation(domain, expected_value, record_type)
-        
-        if not result['success']:
-            return {
-                'success': False,
-                'error': result.get('error'),
-                'elapsed_time': elapsed,
-                'checks_performed': checks
-            }
-        
-        percentage = result['propagation_percentage']
-        
-        # Check if threshold met
-        if percentage >= min_propagation:
-            return {
-                'success': True,
-                'propagated': True,
-                'percentage': percentage,
-                'elapsed_time': elapsed,
-                'checks_performed': checks
-            }
-        
-        # Check if max wait time exceeded
-        if elapsed >= max_wait:
-            return {
-                'success': False,
-                'propagated': False,
-                'percentage': percentage,
-                'elapsed_time': elapsed,
-                'checks_performed': checks,
-                'error': f'Propagation timeout: only {percentage}% after {max_wait}s'
-            }
-        
-        # Wait before next check
-        time.sleep(check_interval)
-
-
-def verify_domain_ownership(domain, verification_token, verification_record='_galerly-verify'):
-    """
-    Verify domain ownership via TXT record
-    
-    Args:
-        domain: Domain to verify
-        verification_token: Token to look for in TXT record
-        verification_record: Subdomain for verification (default: _galerly-verify)
-    
-    Returns:
-        dict: {
-            'success': bool,
-            'verified': bool,
-            'token_found': str,
-            'error': str
+            'ip_addresses': list,
+            'error': str (if failed)
         }
     """
     try:
-        # Construct verification domain
-        verify_domain = f"{verification_record}.{domain}"
+        ip_addresses = []
         
-        # Query TXT record
-        resolver = dns.resolver.Resolver()
-        resolver.timeout = 5
-        resolver.lifetime = 5
-        
+        # Try IPv4
         try:
-            answers = resolver.resolve(verify_domain, 'TXT')
-            
+            answers = dns.resolver.resolve(domain, 'A')
             for rdata in answers:
-                txt_value = str(rdata).strip('"')
-                
-                if verification_token in txt_value:
-                    return {
-                        'success': True,
-                        'verified': True,
-                        'token_found': txt_value
-                    }
-            
+                ip_addresses.append(str(rdata))
+        except:
+            pass
+        
+        # Try IPv6
+        try:
+            answers = dns.resolver.resolve(domain, 'AAAA')
+            for rdata in answers:
+                ip_addresses.append(str(rdata))
+        except:
+            pass
+        
+        if not ip_addresses:
             return {
-                'success': True,
-                'verified': False,
-                'error': 'Verification token not found in TXT records'
+                'success': False,
+                'error': 'No IP addresses found'
             }
-            
-        except (dns.resolver.NXDOMAIN, dns.resolver.NoAnswer):
-            return {
-                'success': True,
-                'verified': False,
-                'error': f'No TXT record found at {verify_domain}'
-            }
-    
+        
+        return {
+            'success': True,
+            'ip_addresses': ip_addresses
+        }
+        
     except Exception as e:
-        print(f"Error verifying domain ownership: {str(e)}")
         return {
             'success': False,
-            'verified': False,
             'error': str(e)
         }

@@ -102,14 +102,14 @@ def handle_download_invoice_pdf(event):
         else:
             pdf_url = invoice['pdf_url']
         
-        # Generate presigned download URL
+        # Generate presigned download URL for PDF
         if pdf_url.startswith('s3://'):
             url_generator = SecureURLGenerator()
             # Extract S3 key from URL
             pdf_key = '/'.join(pdf_url.split('/')[3:])
             download_url = url_generator.generate_download_url(
                 s3_key=pdf_key,
-                filename=f"invoice_{invoice_id}.pdf",
+                filename=f"invoice_{invoice_id}.pdf",  # Binary PDF format
                 expiry_minutes=60
             )
         else:
@@ -127,35 +127,157 @@ def handle_download_invoice_pdf(event):
 
 def generate_invoice_pdf(invoice):
     """
-    Generate PDF invoice using HTML template
+    Generate binary PDF invoice using reportlab
     Returns S3 URL of generated PDF
     """
     import os
-    
-    # Generate HTML for invoice
-    html = generate_invoice_html(invoice)
-    
-    # In production, use weasyprint or reportlab to convert HTML to PDF
-    # For now, save HTML and return URL
+    from io import BytesIO
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.enums import TA_RIGHT, TA_CENTER
+    from datetime import datetime
     
     invoice_id = invoice['id']
     photographer_id = invoice['photographer_id']
     filename = f"invoices/{photographer_id}/{invoice_id}.pdf"
-    
     bucket_name = os.environ.get('S3_BUCKET_NAME', 'galerly-files')
     
-    # Placeholder: In production, convert HTML to actual PDF
-    # pdf_content = weasyprint.HTML(string=html).write_pdf()
+    # Create PDF in memory
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72,
+                           topMargin=72, bottomMargin=18)
     
-    # For now, save HTML (in production, save PDF)
+    # Container for PDF elements
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=24,
+        textColor=colors.HexColor('#0066CC'),
+        spaceAfter=30,
+    )
+    
+    right_align = ParagraphStyle(
+        'RightAlign',
+        parent=styles['Normal'],
+        alignment=TA_RIGHT,
+    )
+    
+    # Header - Invoice Title
+    elements.append(Paragraph("INVOICE", title_style))
+    elements.append(Spacer(1, 12))
+    
+    # Invoice details in two columns
+    invoice_info = [
+        [Paragraph(f"<b>Invoice #{invoice.get('invoice_number', invoice_id)}</b>", styles['Normal']), 
+         Paragraph(f"<b>Date:</b> {datetime.fromisoformat(invoice.get('created_at', datetime.now().isoformat())).strftime('%B %d, %Y')}", right_align)],
+        [Paragraph(f"<b>Status:</b> {invoice.get('status', 'pending').upper()}", styles['Normal']),
+         Paragraph(f"<b>Due Date:</b> {datetime.fromisoformat(invoice.get('due_date', datetime.now().isoformat())).strftime('%B %d, %Y')}", right_align)]
+    ]
+    
+    info_table = Table(invoice_info, colWidths=[3.25*inch, 3.25*inch])
+    info_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    elements.append(info_table)
+    elements.append(Spacer(1, 24))
+    
+    # From/To section
+    from_to_data = [
+        [Paragraph("<b>From:</b>", styles['Normal']), Paragraph("<b>To:</b>", styles['Normal'])],
+        [Paragraph(invoice.get('photographer_name', 'Photographer'), styles['Normal']),
+         Paragraph(invoice.get('client_name', 'Client'), styles['Normal'])],
+        [Paragraph(invoice.get('photographer_email', ''), styles['Normal']),
+         Paragraph(invoice.get('client_email', ''), styles['Normal'])],
+    ]
+    
+    from_to_table = Table(from_to_data, colWidths=[3.25*inch, 3.25*inch])
+    from_to_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    elements.append(from_to_table)
+    elements.append(Spacer(1, 24))
+    
+    # Line items table
+    items_data = [['Description', 'Quantity', 'Price', 'Amount']]
+    
+    for item in invoice.get('items', []):
+        qty = item.get('quantity', 1)
+        price = float(item.get('price', 0))
+        amount = qty * price
+        items_data.append([
+            item.get('description', ''),
+            str(qty),
+            f"${price:.2f}",
+            f"${amount:.2f}"
+        ])
+    
+    items_table = Table(items_data, colWidths=[3*inch, 1*inch, 1*inch, 1.5*inch])
+    items_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0066CC')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('ALIGN', (0, 1), (0, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
+    elements.append(items_table)
+    elements.append(Spacer(1, 24))
+    
+    # Totals
+    subtotal = sum(item.get('quantity', 1) * float(item.get('price', 0)) for item in invoice.get('items', []))
+    tax = float(invoice.get('tax', 0))
+    total = float(invoice.get('total', subtotal + tax))
+    
+    totals_data = [
+        ['', '', 'Subtotal:', f"${subtotal:.2f}"],
+        ['', '', 'Tax:', f"${tax:.2f}"],
+        ['', '', 'Total:', f"${total:.2f}"],
+    ]
+    
+    totals_table = Table(totals_data, colWidths=[3*inch, 1*inch, 1*inch, 1.5*inch])
+    totals_table.setStyle(TableStyle([
+        ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (2, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (2, -1), (-1, -1), 14),
+        ('LINEABOVE', (2, -1), (-1, -1), 2, colors.black),
+    ]))
+    elements.append(totals_table)
+    
+    # Notes section
+    if invoice.get('notes'):
+        elements.append(Spacer(1, 24))
+        elements.append(Paragraph("<b>Notes:</b>", styles['Normal']))
+        elements.append(Spacer(1, 6))
+        elements.append(Paragraph(invoice.get('notes', ''), styles['Normal']))
+    
+    # Build PDF
+    doc.build(elements)
+    
+    # Upload to S3
+    pdf_content = buffer.getvalue()
+    buffer.close()
+    
     s3.put_object(
         Bucket=bucket_name,
         Key=filename,
-        Body=html.encode('utf-8'),
-        ContentType='text/html',  # In production: 'application/pdf'
+        Body=pdf_content,
+        ContentType='application/pdf',
+        ContentDisposition=f'inline; filename="invoice-{invoice_id}.pdf"',
         Metadata={
             'invoice_id': invoice_id,
-            'photographer_id': photographer_id
+            'photographer_id': photographer_id,
+            'content_type': 'invoice',
+            'generated_at': datetime.now().isoformat()
         }
     )
     

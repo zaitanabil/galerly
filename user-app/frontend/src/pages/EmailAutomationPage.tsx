@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Mail, Clock, CheckCircle, XCircle, Calendar, AlertCircle, Trash2 } from 'lucide-react';
+import { ArrowLeft, Mail, Clock, CheckCircle, XCircle, Calendar, AlertCircle, Trash2, Workflow } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'react-hot-toast';
 import { useAuth } from '../contexts/AuthContext';
 import { useBrandedModal } from '../components/BrandedModal';
+import EmailAutomationBuilder from '../components/EmailAutomationBuilder';
 
 interface ScheduledEmail {
   id: string;
@@ -25,6 +26,7 @@ export default function EmailAutomationPage() {
   const [scheduledEmails, setScheduledEmails] = useState<ScheduledEmail[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [activeTab, setActiveTab] = useState<'scheduled' | 'workflows'>('workflows');
 
   // Check if user has access to email automation
   const hasAccess = user?.plan === 'pro' || user?.plan === 'ultimate';
@@ -184,37 +186,74 @@ export default function EmailAutomationPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-6 py-12">
-        {/* Info Banner */}
-        <div className="glass-panel p-6 mb-8 border border-blue-100 bg-blue-50/30">
-          <div className="flex items-start gap-4">
-            <div className="p-2 bg-blue-100 rounded-lg flex-shrink-0">
-              <Mail className="w-6 h-6 text-[#0066CC]" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-medium text-[#1D1D1F] mb-2">
-                Automated Email System
-              </h3>
-              <p className="text-sm text-[#1D1D1F]/70 mb-4">
-                Emails are automatically sent to clients based on gallery settings and deadlines.
-                Set up automation when creating or editing galleries.
-              </p>
-              <div className="flex gap-4">
-                <Link
-                  to="/email-templates"
-                  className="text-sm font-medium text-[#0066CC] hover:underline"
-                >
-                  Customize Email Templates →
-                </Link>
-                <Link
-                  to="/galleries"
-                  className="text-sm font-medium text-[#0066CC] hover:underline"
-                >
-                  Manage Galleries →
-                </Link>
+        {/* Tab Navigation */}
+        <div className="flex gap-2 mb-8">
+          <button
+            onClick={() => setActiveTab('workflows')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-medium transition-all ${
+              activeTab === 'workflows'
+                ? 'bg-[#0066CC] text-white shadow-lg shadow-blue-500/20'
+                : 'bg-white text-[#1D1D1F] hover:bg-gray-50'
+            }`}
+          >
+            <Workflow className="w-5 h-5" />
+            Workflow Builder
+          </button>
+          <button
+            onClick={() => setActiveTab('scheduled')}
+            className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-sm font-medium transition-all ${
+              activeTab === 'scheduled'
+                ? 'bg-[#0066CC] text-white shadow-lg shadow-blue-500/20'
+                : 'bg-white text-[#1D1D1F] hover:bg-gray-50'
+            }`}
+          >
+            <Calendar className="w-5 h-5" />
+            Scheduled Emails
+            {scheduledEmails.filter(e => e.status === 'scheduled').length > 0 && (
+              <span className="px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                {scheduledEmails.filter(e => e.status === 'scheduled').length}
+              </span>
+            )}
+          </button>
+        </div>
+
+        {/* Workflow Builder Tab */}
+        {activeTab === 'workflows' && <EmailAutomationBuilder />}
+
+        {/* Scheduled Emails Tab */}
+        {activeTab === 'scheduled' && (
+          <>
+            {/* Info Banner */}
+            <div className="glass-panel p-6 mb-8 border border-blue-100 bg-blue-50/30">
+              <div className="flex items-start gap-4">
+                <div className="p-2 bg-blue-100 rounded-lg flex-shrink-0">
+                  <Mail className="w-6 h-6 text-[#0066CC]" />
+                </div>
+                <div className="flex-1">
+                  <h3 className="text-lg font-medium text-[#1D1D1F] mb-2">
+                    Automated Email System
+                  </h3>
+                  <p className="text-sm text-[#1D1D1F]/70 mb-4">
+                    Emails are automatically sent to clients based on gallery settings and deadlines.
+                    Set up automation when creating or editing galleries.
+                  </p>
+                  <div className="flex gap-4">
+                    <Link
+                      to="/email-templates"
+                      className="text-sm font-medium text-[#0066CC] hover:underline"
+                    >
+                      Customize Email Templates →
+                    </Link>
+                    <Link
+                      to="/galleries"
+                      className="text-sm font-medium text-[#0066CC] hover:underline"
+                    >
+                      Manage Galleries →
+                    </Link>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
 
         {/* Filter Tabs */}
         <div className="flex gap-2 mb-6">
@@ -325,6 +364,8 @@ export default function EmailAutomationPage() {
               </div>
             ))}
           </div>
+        )}
+          </>
         )}
       </main>
 

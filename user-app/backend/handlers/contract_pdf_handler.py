@@ -102,23 +102,23 @@ def handle_download_contract_pdf(event):
         else:
             pdf_url = contract['pdf_url']
         
-        # Generate presigned download URL
+        # Generate presigned download URL for PDF
         if pdf_url.startswith('s3://'):
             url_generator = SecureURLGenerator()
             # Extract S3 key from URL
             pdf_key = '/'.join(pdf_url.split('/')[3:])
             download_url = url_generator.generate_download_url(
                 s3_key=pdf_key,
-                filename=f"contract_{contract_id}.pdf",
+                filename=f"contract_{contract_id}.pdf",  # Binary PDF format
                 expiry_minutes=60
             )
         else:
             download_url = pdf_url
-        
+
         return create_response(200, {
             'download_url': download_url,
             'expires_in': 3600,
-            'filename': f"contract_{contract_id}.pdf"
+            'filename': f"contract_{contract_id}.pdf"  # Binary PDF format
         })
         
     except Exception as e:
@@ -128,33 +128,169 @@ def handle_download_contract_pdf(event):
 
 def generate_contract_pdf(contract):
     """
-    Generate PDF contract with signatures
+    Generate binary PDF contract with signatures using reportlab
     Returns S3 URL of generated PDF
     """
     import os
-    
-    # Generate HTML for contract
-    html = generate_contract_html(contract)
+    from io import BytesIO
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import inch
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+    from reportlab.lib.enums import TA_CENTER
+    from datetime import datetime
     
     contract_id = contract['id']
     photographer_id = contract['photographer_id']
     filename = f"contracts/{photographer_id}/{contract_id}.pdf"
-    
     bucket_name = os.environ.get('S3_BUCKET_NAME', 'galerly-files')
     
-    # Placeholder: In production, convert HTML to actual PDF using weasyprint
-    # pdf_content = weasyprint.HTML(string=html).write_pdf()
+    # Get photographer details
+    users_table = dynamodb.Table('galerly-users')
+    photographer = users_table.get_item(Key={'id': photographer_id}).get('Item', {})
     
-    # For now, save HTML (in production, save PDF)
+    # Create PDF in memory
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=72, leftMargin=72,
+                           topMargin=72, bottomMargin=72)
+    
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # Custom styles
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=20,
+        textColor=colors.HexColor('#0066CC'),
+        spaceAfter=20,
+        alignment=TA_CENTER,
+    )
+    
+    heading_style = ParagraphStyle(
+        'CustomHeading',
+        parent=styles['Heading2'],
+        fontSize=14,
+        textColor=colors.HexColor('#1D1D1F'),
+        spaceBefore=12,
+        spaceAfter=8,
+    )
+    
+    # Title
+    elements.append(Paragraph(f"<b>{contract.get('title', 'Photography Contract')}</b>", title_style))
+    elements.append(Spacer(1, 12))
+    
+    # Parties section
+    elements.append(Paragraph("<b>Contract Between:</b>", heading_style))
+    
+    parties_data = [
+        ['Photographer:', photographer.get('business_name', photographer.get('name', ''))],
+        ['Email:', photographer.get('email', '')],
+        ['', ''],
+        ['Client:', contract.get('client_name', '')],
+        ['Email:', contract.get('client_email', '')],
+    ]
+    
+    parties_table = Table(parties_data, colWidths=[1.5*inch, 5*inch])
+    parties_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    elements.append(parties_table)
+    elements.append(Spacer(1, 20))
+    
+    # Contract details
+    elements.append(Paragraph("<b>Contract Details:</b>", heading_style))
+    
+    details_data = [
+        ['Contract Date:', datetime.fromisoformat(contract.get('created_at', datetime.now().isoformat())).strftime('%B %d, %Y')],
+        ['Event Date:', contract.get('event_date', 'TBD')],
+        ['Type:', contract.get('type', 'Photography Services')],
+        ['Amount:', f"${float(contract.get('amount', 0)):.2f}"],
+    ]
+    
+    details_table = Table(details_data, colWidths=[1.5*inch, 5*inch])
+    details_table.setStyle(TableStyle([
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    elements.append(details_table)
+    elements.append(Spacer(1, 20))
+    
+    # Contract content/terms
+    elements.append(Paragraph("<b>Terms and Conditions:</b>", heading_style))
+    content = contract.get('content', 'Standard photography contract terms apply.')
+    
+    # Replace template variables
+    content = content.replace('{photographer_name}', photographer.get('business_name', photographer.get('name', '')))
+    content = content.replace('{client_name}', contract.get('client_name', ''))
+    content = content.replace('{date}', datetime.fromisoformat(contract.get('created_at', datetime.now().isoformat())).strftime('%B %d, %Y'))
+    content = content.replace('{amount}', f"${float(contract.get('amount', 0)):.2f}")
+    
+    # Split content into paragraphs
+    paragraphs = content.split('\n\n')
+    for para in paragraphs:
+        if para.strip():
+            elements.append(Paragraph(para, styles['Normal']))
+            elements.append(Spacer(1, 6))
+    
+    elements.append(Spacer(1, 30))
+    
+    # Signatures section
+    elements.append(Paragraph("<b>Signatures:</b>", heading_style))
+    elements.append(Spacer(1, 12))
+    
+    signed_at = contract.get('signed_at')
+    client_signature = contract.get('client_signature', '')
+    
+    signature_data = [
+        ['Photographer:', 'Client:'],
+        ['', ''],
+        ['_' * 40, '_' * 40],
+        [photographer.get('name', ''), contract.get('client_name', '')],
+        [f"Date: {datetime.now().strftime('%B %d, %Y')}", 
+         f"Date: {datetime.fromisoformat(signed_at).strftime('%B %d, %Y') if signed_at else '_______________'}"],
+    ]
+    
+    if signed_at and client_signature:
+        signature_data.insert(1, ['', f"Signed: {client_signature[:30]}..."])
+    
+    sig_table = Table(signature_data, colWidths=[3.25*inch, 3.25*inch])
+    sig_table.setStyle(TableStyle([
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+    ]))
+    elements.append(sig_table)
+    
+    # Status indicator
+    if signed_at:
+        elements.append(Spacer(1, 20))
+        status_para = Paragraph(
+            f"<para align='center' color='green'><b>✓ SIGNED ON {datetime.fromisoformat(signed_at).strftime('%B %d, %Y at %I:%M %p')}</b></para>",
+            styles['Normal']
+        )
+        elements.append(status_para)
+    
+    # Build PDF
+    doc.build(elements)
+    
+    # Upload to S3
+    pdf_content = buffer.getvalue()
+    buffer.close()
+    
     s3.put_object(
         Bucket=bucket_name,
         Key=filename,
-        Body=html.encode('utf-8'),
-        ContentType='text/html',  # In production: 'application/pdf'
+        Body=pdf_content,
+        ContentType='application/pdf',
+        ContentDisposition=f'inline; filename="contract-{contract_id}.pdf"',
         Metadata={
             'contract_id': contract_id,
             'photographer_id': photographer_id,
-            'signed': 'true' if contract.get('signed_at') else 'false'
+            'signed': 'true' if signed_at else 'false',
+            'content_type': 'contract',
+            'generated_at': datetime.now().isoformat()
         }
     )
     

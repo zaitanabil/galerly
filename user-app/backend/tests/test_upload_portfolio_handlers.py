@@ -392,7 +392,10 @@ class TestPortfolioHandler:
         """Update portfolio settings."""
         from handlers.portfolio_handler import handle_update_portfolio_settings
         
-        with patch('handlers.portfolio_handler.users_table') as mock_users:
+        with patch('handlers.portfolio_handler.users_table') as mock_users, \
+             patch('handlers.portfolio_handler.get_user_features') as mock_features:
+            
+            mock_features.return_value = ({'portfolio_customization': True}, 'pro', 'pro')
             mock_users.get_item.return_value = {'Item': sample_user}
             
             body = {

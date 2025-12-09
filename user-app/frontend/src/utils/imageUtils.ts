@@ -201,29 +201,34 @@ export function createThumbnail(
   });
 }
 
-// Convert HEIC to JPEG (placeholder - requires heic2any library)
+// Convert HEIC to JPEG using heic2any library
 export async function convertHeicToJpeg(file: File): Promise<File> {
-  // Check if file is HEIC
+  // Check if file is HEIC format
   if (!file.type.includes('heic') && !file.name.toLowerCase().endsWith('.heic')) {
     return file;
   }
   
   try {
-    // Import heic2any dynamically if needed
+    // Dynamically import heic2any for on-demand HEIC conversion
     const heic2anyModule = await import('heic2any');
     const heic2any = heic2anyModule.default;
+    
+    // Convert HEIC blob to JPEG with 90% quality
     const convertedBlob = await heic2any({
       blob: file,
       toType: 'image/jpeg',
       quality: 0.9,
     });
     
+    // Handle array or single blob response
     const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+    
+    // Create new File object with .jpg extension
     return new File([blob], file.name.replace(/\.heic$/i, '.jpg'), {
       type: 'image/jpeg',
     });
   } catch (error) {
-    console.warn('HEIC conversion not available or failed, using original file:', error);
+    console.warn('HEIC conversion failed, using original file:', error);
     return file;
   }
 }
