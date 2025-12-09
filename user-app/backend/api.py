@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 # Import utilities
 from utils.response import create_response
 from utils.auth import get_user_from_token
+from utils.rate_limiter import check_rate_limit
 
 # Import handlers
 from handlers.auth_handler import (
@@ -17,6 +18,7 @@ from handlers.auth_handler import (
     handle_delete_account, handle_restore_account,
     handle_generate_api_key, handle_get_api_key
 )
+from utils.key_rotation import handle_rotation_status
 
 from handlers.city_handler import handle_city_search
 from handlers.profile_handler import handle_update_profile
@@ -338,17 +340,35 @@ def handler(event, context):
                 'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             })
         
-        # Authentication endpoints
+        # Authentication endpoints (with rate limiting)
         if path == '/v1/auth/request-verification' and method == 'POST':
+            is_allowed, remaining, reset_at = check_rate_limit(event, 'auth_verification')
+            if not is_allowed:
+                return create_response(429, {
+                    'error': 'Too many verification requests',
+                    'retry_after': reset_at
+                })
             return handle_request_verification_code(body)
         
         if path == '/v1/auth/verify-email' and method == 'POST':
             return handle_verify_code(body)
         
         if path == '/v1/auth/register' and method == 'POST':
+            is_allowed, remaining, reset_at = check_rate_limit(event, 'auth_register')
+            if not is_allowed:
+                return create_response(429, {
+                    'error': 'Too many registration attempts',
+                    'retry_after': reset_at
+                })
             return handle_register(body)
         
         if path == '/v1/auth/login' and method == 'POST':
+            is_allowed, remaining, reset_at = check_rate_limit(event, 'auth_login')
+            if not is_allowed:
+                return create_response(429, {
+                    'error': 'Too many login attempts',
+                    'retry_after': reset_at
+                })
             return handle_login(body)
         
         if path == '/v1/auth/logout' and method == 'POST':
@@ -380,10 +400,22 @@ def handler(event, context):
             return handle_get_api_key(user)
         
         if path == '/v1/auth/forgot-password' and method == 'POST':
+            is_allowed, remaining, reset_at = check_rate_limit(event, 'auth_password_reset')
+            if not is_allowed:
+                return create_response(429, {
+                    'error': 'Too many password reset requests',
+                    'retry_after': reset_at
+                })
             return handle_request_password_reset(body)
         
         if path == '/v1/auth/reset-password' and method == 'POST':
             return handle_reset_password(body)
+        
+        # Security endpoints
+        if path == '/v1/security/rotation-status' and method == 'GET':
+            user = get_user_from_token(event)
+            if not user: return create_response(401, {'error': 'Authentication required'})
+            return handle_rotation_status(user)
         
         # City search endpoint (PUBLIC)
         if path == '/v1/cities/search' and method == 'GET':

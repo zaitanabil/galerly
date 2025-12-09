@@ -9,7 +9,7 @@ import os
 from datetime import datetime, timezone
 from utils.config import users_table, sessions_table
 from utils.response import create_response
-from utils.auth import hash_password
+from utils.auth import hash_password, verify_password
 from utils.email import send_welcome_email, send_password_reset_email, send_verification_code_email
 
 def validate_email_format(email):
@@ -376,7 +376,9 @@ def handle_login(body):
             return create_response(401, {'error': 'Invalid credentials'})
         
         user = response['Item']
-        if user['password_hash'] != hash_password(password):
+        
+        # Use bcrypt to verify password
+        if not verify_password(password, user['password_hash']):
             return create_response(401, {'error': 'Invalid credentials'})
         
         # Check if account is marked for deletion
@@ -788,7 +790,7 @@ def handle_restore_account(body):
         user = response['Item']
         
         # Verify password
-        if user['password_hash'] != hash_password(password):
+        if not verify_password(password, user['password_hash']):
             return create_response(401, {'error': 'Invalid credentials'})
         
         # Check if account is pending deletion

@@ -119,7 +119,7 @@ export default function CookieConsent() {
               <p className="mb-2">
                 <strong>We value your privacy</strong>
               </p>
-              <p>
+          <p>
                 We use essential cookies to make our site work. With your consent, we may also use non-essential cookies 
                 to improve user experience and analyze website traffic. By clicking "Accept All," you agree to our use of cookies.
                 {' '}
@@ -129,9 +129,9 @@ export default function CookieConsent() {
                 {' • '}
                 <Link to="/legal" className="text-[#0066CC] hover:underline">
                   Legal Notice
-                </Link>
-              </p>
-            </div>
+            </Link>
+          </p>
+        </div>
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={() => setShowDetails(true)}
@@ -236,19 +236,19 @@ export default function CookieConsent() {
             </div>
 
             <div className="flex justify-end gap-3">
-              <button
+          <button
                 onClick={handleRejectNonEssential}
                 className="px-4 py-2 text-sm font-medium text-[#1D1D1F]/60 hover:text-[#1D1D1F] border border-gray-300 rounded-full transition-colors"
-              >
+          >
                 Reject Non-Essential
-              </button>
-              <button
+          </button>
+          <button
                 onClick={handleSavePreferences}
-                className="px-6 py-2 bg-[#0066CC] text-white text-sm font-medium rounded-full hover:bg-[#0052A3] transition-all shadow-md shadow-blue-500/20"
-              >
+            className="px-6 py-2 bg-[#0066CC] text-white text-sm font-medium rounded-full hover:bg-[#0052A3] transition-all shadow-md shadow-blue-500/20"
+          >
                 Save Preferences
-              </button>
-            </div>
+          </button>
+        </div>
           </div>
         )}
       </div>

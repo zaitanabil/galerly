@@ -29,28 +29,32 @@ def handle_stripe_webhook(event, context):
     try:
         # Get the webhook payload
         payload = event.get('body', '')
-        sig_header = event.get('headers', {}).get('stripe-signature', '')
+        sig_header = event.get('headers', {}).get('stripe-signature', '') or event.get('headers', {}).get('Stripe-Signature', '')
         
         print(f"📥 Stripe webhook received")
         print(f"   Signature: {sig_header[:20]}..." if sig_header else "   No signature")
         
-        # Verify webhook signature (production)
-        if STRIPE_WEBHOOK_SECRET and sig_header:
-            try:
-                stripe_event = stripe.Webhook.construct_event(
-                    payload, sig_header, STRIPE_WEBHOOK_SECRET
-                )
-                print(f"Webhook signature verified")
-            except ValueError as e:
-                print(f"Invalid payload: {e}")
-                return create_response(400, {'error': 'Invalid payload'})
-            except stripe.error.SignatureVerificationError as e:
-                print(f"Invalid signature: {e}")
-                return create_response(400, {'error': 'Invalid signature'})
-        else:
-            # Local development - no signature verification
-            print(f" Skipping signature verification (local dev)")
-            stripe_event = json.loads(payload) if isinstance(payload, str) else payload
+        # ENFORCE webhook signature verification (required for security)
+        if not STRIPE_WEBHOOK_SECRET:
+            print(f"❌ STRIPE_WEBHOOK_SECRET not configured")
+            return create_response(500, {'error': 'Webhook secret not configured'})
+        
+        if not sig_header:
+            print(f"❌ No Stripe signature in request")
+            return create_response(400, {'error': 'Missing Stripe signature'})
+        
+        # Verify webhook signature
+        try:
+            stripe_event = stripe.Webhook.construct_event(
+                payload, sig_header, STRIPE_WEBHOOK_SECRET
+            )
+            print(f"✅ Webhook signature verified")
+        except ValueError as e:
+            print(f"❌ Invalid payload: {e}")
+            return create_response(400, {'error': 'Invalid payload'})
+        except stripe.error.SignatureVerificationError as e:
+            print(f"❌ Invalid signature: {e}")
+            return create_response(401, {'error': 'Invalid signature'})
         
         # Get event type and data
         event_type = stripe_event.get('type')

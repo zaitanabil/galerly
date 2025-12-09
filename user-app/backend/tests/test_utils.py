@@ -17,13 +17,15 @@ class TestAuthUtils:
         
         result = hash_password('password123')
         
-        # SHA-256 produces a 64-character hex string
+        # bcrypt produces a 60-character string starting with $2b$
         assert result is not None
-        assert len(result) == 64
+        assert len(result) == 60
+        assert result.startswith('$2b$')
         assert isinstance(result, str)
         
-        # Same password should produce same hash
-        assert hash_password('password123') == result
+        # bcrypt uses random salts, so same password produces different hashes
+        hash2 = hash_password('password123')
+        assert hash2 != result  # Different due to different salts
     
     def test_hash_password_different_inputs(self):
         """Test that different passwords produce different hashes"""

@@ -1,0 +1,193 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Security Monitoring and Alerting Infrastructure'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - production
+  
+  AlertEmail:
+    Type: String
+    Description: Email address for security alerts
+    Default: security@galerly.com
+
+Resources:
+  # SNS Topic for Security Alerts
+  SecurityAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'galerly-security-alerts-${Environment}'
+      DisplayName: Galerly Security Alerts
+      Subscription:
+        - Endpoint: !Ref AlertEmail
+          Protocol: email
+
+  # CloudWatch Alarms for Security Events
+  
+  # High Failed Login Rate
+  FailedLoginAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'galerly-failed-logins-${Environment}'
+      AlarmDescription: 'Alert on high rate of failed login attempts'
+      MetricName: failed_login_attempt
+      Namespace: Galerly/Security
+      Statistic: Sum
+      Period: 300  # 5 minutes
+      EvaluationPeriods: 1
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+      TreatMissingData: notBreaching
+
+  # Rate Limit Exceeded
+  RateLimitExceededAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'galerly-rate-limit-exceeded-${Environment}'
+      AlarmDescription: 'Alert on rate limit exceeded'
+      MetricName: rate_limit_exceeded
+      Namespace: Galerly/Security
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 20
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+
+  # CSRF Token Failures
+  CSRFFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'galerly-csrf-failures-${Environment}'
+      AlarmDescription: 'Alert on CSRF token validation failures'
+      MetricName: invalid_csrf_token
+      Namespace: Galerly/Security
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 5
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+
+  # Webhook Signature Failures
+  WebhookSignatureFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'galerly-webhook-signature-failures-${Environment}'
+      AlarmDescription: 'Alert on webhook signature verification failures'
+      MetricName: webhook_signature_failure
+      Namespace: Galerly/Security
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 3
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+
+  # SQL Injection Attempts
+  SQLInjectionAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'galerly-sql-injection-attempts-${Environment}'
+      AlarmDescription: 'CRITICAL: SQL injection attempt detected'
+      MetricName: sql_injection_attempt
+      Namespace: Galerly/Security
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+
+  # XSS Attempts
+  XSSAttemptAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'galerly-xss-attempts-${Environment}'
+      AlarmDescription: 'CRITICAL: XSS attempt detected'
+      MetricName: xss_attempt
+      Namespace: Galerly/Security
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+
+  # Lambda Error Rate
+  LambdaErrorRateAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'galerly-lambda-errors-${Environment}'
+      AlarmDescription: 'Alert on high Lambda error rate'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 2
+      Threshold: 10
+      ComparisonOperator: GreaterThanThreshold
+      AlarmActions:
+        - !Ref SecurityAlertTopic
+
+  # CloudWatch Dashboard
+  SecurityMonitoringDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'galerly-security-${Environment}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["Galerly/Security", "failed_login_attempt"],
+                  [".", "rate_limit_exceeded"],
+                  [".", "invalid_csrf_token"],
+                  [".", "webhook_signature_failure"]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Security Events (5min)"
+              }
+            },
+            {
+              "type": "metric",
+              "properties": {
+                "metrics": [
+                  ["Galerly/Security", "sql_injection_attempt"],
+                  [".", "xss_attempt"]
+                ],
+                "period": 60,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "CRITICAL: Injection Attempts"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  SecurityAlertTopicArn:
+    Description: 'ARN of the Security Alert SNS Topic'
+    Value: !Ref SecurityAlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityAlertTopicArn'
+
+  DashboardURL:
+    Description: 'URL to Security Monitoring Dashboard'
+    Value: !Sub 'https://console.aws.amazon.com/cloudwatch/home?region=${AWS::Region}#dashboards:name=galerly-security-${Environment}'
+

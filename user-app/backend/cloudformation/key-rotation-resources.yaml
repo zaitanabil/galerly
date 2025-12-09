@@ -1,0 +1,190 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Key Rotation Infrastructure - Weekly automated key rotation for security'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: dev
+    AllowedValues:
+      - dev
+      - staging
+      - production
+    Description: Environment name
+
+Resources:
+  # DynamoDB Table for Key Rotation Tracking
+  KeyRotationTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'galerly-key-rotation-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: key_id
+          AttributeType: S
+        - AttributeName: key_type
+          AttributeType: S
+        - AttributeName: created_at
+          AttributeType: S
+      KeySchema:
+        - AttributeName: key_id
+          KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: KeyTypeIndex
+          KeySchema:
+            - AttributeName: key_type
+              KeyType: HASH
+            - AttributeName: created_at
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Service
+          Value: galerly
+        - Key: Component
+          Value: security
+
+  # Lambda Function for Key Rotation
+  KeyRotationLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'galerly-key-rotation-${Environment}'
+      Runtime: python3.9
+      Handler: key_rotation.lambda_handler
+      Role: !GetAtt KeyRotationLambdaRole.Arn
+      Timeout: 300
+      MemorySize: 512
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          DYNAMODB_TABLE_KEY_ROTATION: !Ref KeyRotationTable
+          DYNAMODB_TABLE_USERS: !Sub 'galerly-users-${Environment}'
+      Code:
+        ZipFile: |
+          # Placeholder - deploy actual code from utils/key_rotation.py
+          def lambda_handler(event, context):
+              return {'statusCode': 200}
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+
+  # IAM Role for Key Rotation Lambda
+  KeyRotationLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'galerly-key-rotation-lambda-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: KeyRotationPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              # Access to Key Rotation Table
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
+                Resource:
+                  - !GetAtt KeyRotationTable.Arn
+                  - !Sub '${KeyRotationTable.Arn}/index/*'
+              # Access to Users Table for password rotation
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                  - dynamodb:Scan
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/galerly-users-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/galerly-users-${Environment}/index/*'
+              # SES for email notifications
+              - Effect: Allow
+                Action:
+                  - ses:SendEmail
+                  - ses:SendRawEmail
+                Resource: '*'
+
+  # CloudWatch Events Rule - Weekly Trigger (Sunday 2 AM UTC)
+  KeyRotationSchedule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'galerly-key-rotation-schedule-${Environment}'
+      Description: 'Trigger weekly key rotation (Sunday 2 AM UTC)'
+      ScheduleExpression: 'cron(0 2 ? * SUN *)'
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt KeyRotationLambda.Arn
+          Id: KeyRotationLambdaTarget
+
+  # Permission for CloudWatch Events to invoke Lambda
+  KeyRotationSchedulePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref KeyRotationLambda
+      Action: lambda:InvokeFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt KeyRotationSchedule.Arn
+
+  # CloudWatch Alarms for monitoring
+  KeyRotationFailureAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'galerly-key-rotation-failure-${Environment}'
+      AlarmDescription: 'Alert when key rotation fails'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref KeyRotationLambda
+      TreatMissingData: notBreaching
+
+  # Log Group for Lambda
+  KeyRotationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/galerly-key-rotation-${Environment}'
+      RetentionInDays: 30
+
+Outputs:
+  KeyRotationTableName:
+    Description: 'Key Rotation DynamoDB Table Name'
+    Value: !Ref KeyRotationTable
+    Export:
+      Name: !Sub '${AWS::StackName}-KeyRotationTable'
+
+  KeyRotationLambdaArn:
+    Description: 'Key Rotation Lambda Function ARN'
+    Value: !GetAtt KeyRotationLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KeyRotationLambda'
+
+  KeyRotationScheduleArn:
+    Description: 'Key Rotation Schedule ARN'
+    Value: !GetAtt KeyRotationSchedule.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KeyRotationSchedule'
+

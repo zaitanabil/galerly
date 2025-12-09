@@ -404,7 +404,12 @@ class TestStripeWebhookCheckoutCompleted:
             # Mock Stripe cancel
             mock_billing_dependencies['stripe'].Subscription.delete.return_value = Mock()
             
-            result = handle_stripe_webhook({'body': 'webhook_payload', 'headers': {}})
+            # Provide signature and raw body to pass verification
+            result = handle_stripe_webhook(
+                mock_event,
+                stripe_signature='valid_signature',
+                raw_body='{"type": "checkout.session.completed"}'
+            )
             
             # The webhook creates a new subscription - old one cancellation is handled differently
             # May or may not call delete depending on implementation

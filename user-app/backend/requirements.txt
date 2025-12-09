@@ -4,6 +4,11 @@
 # Web Framework (Flask for local development)
 Flask>=3.0.0
 Flask-CORS>=4.0.0
+Flask-Limiter>=3.5.0  # Rate limiting for security
+
+# Security & Cryptography
+bcrypt>=4.1.0  # Secure password hashing
+cryptography>=41.0.0  # Secure URL generation and encryption
 
 # AWS SDK
 boto3>=1.28.0
@@ -13,9 +18,6 @@ certifi>=2023.0.0
 
 # Stripe Payment Processing
 stripe>=7.0.0
-
-# Cryptography for secure URL generation
-cryptography>=41.0.0
 
 # Environment Variables
 python-dotenv>=1.0.0

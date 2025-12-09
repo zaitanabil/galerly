@@ -149,7 +149,7 @@ class TestAccountRestoration:
         }
         
         with patch('handlers.auth_handler.users_table.get_item', return_value={'Item': mock_user}):
-            with patch('handlers.auth_handler.hash_password', return_value='correct_hash'):
+            with patch('handlers.auth_handler.verify_password', return_value=True):  # Mock bcrypt verification
                 response = handle_restore_account({
                     'email': 'test@example.com',
                     'password': 'correct_password'
@@ -177,7 +177,7 @@ class TestAccountRestoration:
         }
         
         with patch('handlers.auth_handler.users_table.get_item', return_value={'Item': mock_user}):
-            with patch('handlers.auth_handler.hash_password', return_value='wrong_hash'):
+            with patch('handlers.auth_handler.verify_password', return_value=False):
                 response = handle_restore_account({
                     'email': 'test@example.com',
                     'password': 'wrong_password'
@@ -197,7 +197,7 @@ class TestAccountRestoration:
         }
         
         with patch('handlers.auth_handler.users_table.get_item', return_value={'Item': mock_user}):
-            with patch('handlers.auth_handler.hash_password', return_value='correct_hash'):
+            with patch('handlers.auth_handler.verify_password', return_value=True):
                 response = handle_restore_account({
                     'email': 'test@example.com',
                     'password': 'correct_password'
@@ -216,7 +216,7 @@ class TestAccountRestoration:
         }
         
         with patch('handlers.auth_handler.users_table.get_item', return_value={'Item': mock_user}):
-            with patch('handlers.auth_handler.hash_password', return_value='correct_hash'):
+            with patch('handlers.auth_handler.verify_password', return_value=True):
                 response = handle_restore_account({
                     'email': 'test@example.com',
                     'password': 'correct_password'
@@ -238,7 +238,7 @@ class TestAccountRestoration:
         }
         
         with patch('handlers.auth_handler.users_table.get_item', return_value={'Item': mock_user}):
-            with patch('handlers.auth_handler.hash_password', return_value='correct_hash'):
+            with patch('handlers.auth_handler.verify_password', return_value=True):
                 with patch('utils.email.send_account_restored_email') as mock_email:
                     response = handle_restore_account({
                         'email': 'test@example.com',

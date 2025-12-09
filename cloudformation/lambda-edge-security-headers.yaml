@@ -1,0 +1,117 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Lambda@Edge function for security headers'
+
+Resources:
+  # IAM Role for Lambda@Edge
+  SecurityHeadersLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+                - edgelambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      
+  # Lambda@Edge Function for Security Headers
+  SecurityHeadersFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: galerly-security-headers
+      Runtime: python3.9
+      Handler: index.handler
+      Role: !GetAtt SecurityHeadersLambdaRole.Arn
+      Timeout: 5
+      Code:
+        ZipFile: |
+          def handler(event, context):
+              """
+              Lambda@Edge function to add security headers to all responses
+              Triggered on: origin-response
+              """
+              response = event['Records'][0]['cf']['response']
+              headers = response['headers']
+              
+              # Security headers
+              security_headers = {
+                  'strict-transport-security': [{
+                      'key': 'Strict-Transport-Security',
+                      'value': 'max-age=31536000; includeSubDomains; preload'
+                  }],
+                  'x-content-type-options': [{
+                      'key': 'X-Content-Type-Options',
+                      'value': 'nosniff'
+                  }],
+                  'x-frame-options': [{
+                      'key': 'X-Frame-Options',
+                      'value': 'DENY'
+                  }],
+                  'x-xss-protection': [{
+                      'key': 'X-XSS-Protection',
+                      'value': '1; mode=block'
+                  }],
+                  'referrer-policy': [{
+                      'key': 'Referrer-Policy',
+                      'value': 'strict-origin-when-cross-origin'
+                  }],
+                  'permissions-policy': [{
+                      'key': 'Permissions-Policy',
+                      'value': 'geolocation=(), microphone=(), camera=()'
+                  }],
+                  'content-security-policy': [{
+                      'key': 'Content-Security-Policy',
+                      'value': (
+                          "default-src 'self'; "
+                          "script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://js.stripe.com; "
+                          "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+                          "font-src 'self' https://fonts.gstatic.com data:; "
+                          "img-src 'self' data: blob: https:; "
+                          "connect-src 'self' https://api.stripe.com; "
+                          "frame-src https://js.stripe.com; "
+                          "object-src 'none'; "
+                          "base-uri 'self'; "
+                          "form-action 'self'; "
+                          "frame-ancestors 'none'; "
+                          "upgrade-insecure-requests"
+                      )
+                  }]
+              }
+              
+              # Add all security headers
+              headers.update(security_headers)
+              
+              return response
+
+  # Version for Lambda@Edge (required)
+  SecurityHeadersFunctionVersion:
+    Type: AWS::Lambda::Version
+    Properties:
+      FunctionName: !Ref SecurityHeadersFunction
+      Description: Security headers Lambda@Edge function
+
+Outputs:
+  SecurityHeadersFunctionArn:
+    Description: 'ARN of the Lambda@Edge function'
+    Value: !Ref SecurityHeadersFunction
+    Export:
+      Name: SecurityHeadersFunctionArn
+  
+  SecurityHeadersFunctionVersionArn:
+    Description: 'Versioned ARN of the Lambda@Edge function'
+    Value: !Ref SecurityHeadersFunctionVersion
+    Export:
+      Name: SecurityHeadersFunctionVersionArn
+
+  DeploymentInstructions:
+    Description: 'Next steps for deployment'
+    Value: |
+      1. Deploy this stack in us-east-1 region (required for Lambda@Edge)
+      2. Associate the SecurityHeadersFunctionVersionArn with your CloudFront distribution
+      3. Set the trigger to 'origin-response'
+      4. Test headers using: curl -I https://your-domain.com
+

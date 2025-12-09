@@ -153,5 +153,6 @@ def handle_update_profile(user, body):
         print(f"Error updating profile: {str(e)}")
         import traceback
         traceback.print_exc()
+        # Sanitize error - don't expose internal details
         return create_response(500, {'error': 'Failed to update profile'})
 

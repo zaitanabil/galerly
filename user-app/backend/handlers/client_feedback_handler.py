@@ -155,9 +155,9 @@ def handle_submit_client_feedback(gallery_id, body):
         print(f"Client feedback error: {str(e)}")
         import traceback
         traceback.print_exc()
+        # Sanitize error - don't expose internal details
         return create_response(500, {
-            'error': 'Failed to submit feedback',
-            'message': str(e)
+            'error': 'Failed to submit feedback'
         })
 
 

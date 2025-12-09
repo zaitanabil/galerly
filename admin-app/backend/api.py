@@ -17,7 +17,16 @@ load_dotenv('.env.local')
 load_dotenv()
 
 app = Flask(__name__)
-CORS(app, origins=['http://localhost:3001'], supports_credentials=True)
+
+# Secure CORS configuration from environment
+allowed_origins = os.environ.get('ADMIN_CORS_ORIGINS', 'http://localhost:3001').split(',')
+CORS(app, 
+     origins=allowed_origins,
+     supports_credentials=True,
+     allow_headers=['Content-Type', 'Authorization'],
+     methods=['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+     max_age=3600  # Cache preflight requests for 1 hour
+)
 
 # DynamoDB setup with LocalStack support
 endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
@@ -910,7 +919,13 @@ def create_user():
         
         # Create user
         import uuid as uuid_lib
-        from utils import hash_password
+        import bcrypt
+        
+        def hash_password(password):
+            """Hash password using bcrypt"""
+            salt = bcrypt.gensalt(rounds=12)
+            hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+            return hashed.decode('utf-8')
         
         user_id = str(uuid_lib.uuid4())
         current_time = datetime.utcnow().isoformat() + 'Z'

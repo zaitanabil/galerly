@@ -1,14 +1,37 @@
 """
 Authentication utilities
 """
-import hashlib
+import bcrypt
+import secrets
+import os
 from datetime import datetime, timedelta, timezone
 from boto3.dynamodb.conditions import Key
 from .config import sessions_table, users_table
 
 def hash_password(password):
-    """Hash password using SHA-256"""
-    return hashlib.sha256(password.encode()).hexdigest()
+    """
+    Hash password using bcrypt with salt
+    bcrypt automatically generates and stores salt with the hash
+    """
+    # Generate salt and hash password
+    salt = bcrypt.gensalt(rounds=12)  # 12 rounds is secure and performant
+    hashed = bcrypt.hashpw(password.encode('utf-8'), salt)
+    return hashed.decode('utf-8')  # Store as string in DynamoDB
+
+def verify_password(password, hashed_password):
+    """
+    Verify password against bcrypt hash
+    Returns True if password matches, False otherwise
+    """
+    try:
+        return bcrypt.checkpw(password.encode('utf-8'), hashed_password.encode('utf-8'))
+    except Exception as e:
+        print(f"Password verification error: {str(e)}")
+        return False
+
+def generate_secure_token(length=32):
+    """Generate a cryptographically secure random token"""
+    return secrets.token_urlsafe(length)
 
 def get_token_from_event(event):
     """Extract session token from Cookie header"""
