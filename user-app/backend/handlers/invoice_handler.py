@@ -51,8 +51,8 @@ def handle_create_invoice(user, body):
         total = Decimal('0.00')
         items = body.get('items', [])
         for item in items:
-            price = Decimal(str(item.get('price', 0)))
-            quantity = Decimal(str(item.get('quantity', 1)))
+            price = Decimal(str(item.get('price', os.environ.get('DEFAULT_ITEM_PRICE'))))
+            quantity = Decimal(str(item.get('quantity', os.environ.get('DEFAULT_ITEM_QUANTITY'))))
             total += price * quantity
             # Ensure decimals are stored as numbers or strings that DynamoDB likes, but Decimal is fine with boto3
             item['price'] = price
@@ -65,7 +65,7 @@ def handle_create_invoice(user, body):
             'client_email': body['client_email'],
             'status': 'draft',
             'due_date': body.get('due_date'),
-            'currency': body.get('currency', 'USD'),
+            'currency': body.get('currency', os.environ.get('DEFAULT_INVOICE_CURRENCY')),
             'items': items,
             'total_amount': total,
             'notes': body.get('notes', ''),
@@ -122,8 +122,8 @@ def handle_update_invoice(invoice_id, user, body):
             total = Decimal('0.00')
             new_items = []
             for item in body['items']:
-                price = Decimal(str(item.get('price', 0)))
-                quantity = Decimal(str(item.get('quantity', 1)))
+                price = Decimal(str(item.get('price', os.environ.get('DEFAULT_ITEM_PRICE'))))
+                quantity = Decimal(str(item.get('quantity', os.environ.get('DEFAULT_ITEM_QUANTITY'))))
                 total += price * quantity
                 item['price'] = price
                 item['quantity'] = quantity
@@ -173,7 +173,7 @@ def handle_mark_invoice_paid(invoice_id, user, body):
         # Update invoice status
         invoice['status'] = 'paid'
         invoice['paid_at'] = datetime.utcnow().isoformat() + 'Z'
-        invoice['payment_method'] = body.get('payment_method', 'manual')
+        invoice['payment_method'] = body.get('payment_method', os.environ.get('DEFAULT_INVOICE_PAYMENT_METHOD'))
         invoice['updated_at'] = datetime.utcnow().isoformat() + 'Z'
         
         # Store transaction ID if provided
@@ -206,28 +206,37 @@ def handle_send_invoice(invoice_id, user):
         try:
             import stripe
             stripe_secret = os.environ.get('STRIPE_SECRET_KEY')
-            if stripe_secret:
+            disable_integration = os.environ.get('DISABLE_STRIPE_INVOICE_INTEGRATION', 'false')
+            # Skip Stripe integration if no key or if explicitly disabled for testing
+            if stripe_secret and disable_integration.lower() != 'true':
                 stripe.api_key = stripe_secret
                 
-                # Create line items for Stripe
+                # Use Stripe Checkout Session instead of Payment Links
+                # This creates one-time prices that don't pollute the product catalog
                 line_items = []
                 for item in invoice.get('items', []):
-                    # Create price for each line item
-                    price = stripe.Price.create(
-                        unit_amount=int(float(item.get('price', 0)) * 100),  # Convert to cents
-                        currency=invoice.get('currency', 'usd').lower(),
-                        product_data={
-                            'name': item.get('description', 'Service'),
-                        },
-                    )
                     line_items.append({
-                        'price': price.id,
-                        'quantity': int(item.get('quantity', 1)),
+                        'price_data': {
+                            'currency': invoice.get('currency', os.environ.get('DEFAULT_INVOICE_CURRENCY')).lower(),
+                            'unit_amount': int(float(item.get('price', os.environ.get('DEFAULT_ITEM_PRICE'))) * 100),  # Convert to cents
+                            'product_data': {
+                                'name': item.get('description', os.environ.get('DEFAULT_SERVICE_NAME')),
+                            },
+                        },
+                        'quantity': int(item.get('quantity', os.environ.get('DEFAULT_ITEM_QUANTITY'))),
                     })
                 
-                # Create payment link
-                payment_link_obj = stripe.PaymentLink.create(
+                # Get URLs from environment variables
+                frontend_url = os.environ.get('FRONTEND_URL')
+                if not frontend_url:
+                    raise ValueError("FRONTEND_URL environment variable is required for Stripe integration")
+                
+                # Create Checkout Session (doesn't create persistent prices)
+                checkout_session = stripe.checkout.Session.create(
+                    mode='payment',
                     line_items=line_items,
+                    success_url=f"{frontend_url}/invoice/{invoice_id}/success",
+                    cancel_url=f"{frontend_url}/invoice/{invoice_id}",
                     metadata={
                         'invoice_id': invoice_id,
                         'photographer_id': user['id'],
@@ -236,14 +245,14 @@ def handle_send_invoice(invoice_id, user):
                     invoice_creation={
                         'enabled': True,
                         'invoice_data': {
-                            'description': f"Invoice from {user.get('name', 'Photographer')}",
+                            'description': f"Invoice from {user.get('name', os.environ.get('DEFAULT_PHOTOGRAPHER_NAME', 'Your Photographer').replace('_', ' '))}",
                             'metadata': {
                                 'invoice_id': invoice_id
                             }
                         }
                     }
                 )
-                payment_link = payment_link_obj.url
+                payment_link = checkout_session.url
                 
                 # Store payment link in invoice
                 invoice['stripe_payment_link'] = payment_link
@@ -260,7 +269,7 @@ def handle_send_invoice(invoice_id, user):
         
         # Send email with payment link
         try:
-            photographer_name = user.get('name', 'Your Photographer')
+            photographer_name = user.get('name', os.environ.get('DEFAULT_PHOTOGRAPHER_NAME', 'Your Photographer').replace('_', ' '))
             frontend_url = os.environ.get('FRONTEND_URL')
             
             subject = f"Invoice #{invoice_id[:8]} from {photographer_name}"
@@ -268,7 +277,7 @@ def handle_send_invoice(invoice_id, user):
             # Format items
             items_html = ""
             for item in invoice.get('items', []):
-                items_html += f"<li>{item.get('description', 'Item')}: {item.get('quantity',1)} x ${item.get('price',0)}</li>"
+                items_html += f"<li>{item.get('description', os.environ.get('DEFAULT_SERVICE_NAME'))}: {item.get('quantity', os.environ.get('DEFAULT_ITEM_QUANTITY'))} x ${item.get('price', os.environ.get('DEFAULT_ITEM_PRICE'))}</li>"
             
             # Add payment button if link exists
             payment_button = ""
@@ -285,13 +294,13 @@ def handle_send_invoice(invoice_id, user):
                 
             body_html = f"""
             <h2>Invoice from {photographer_name}</h2>
-            <p>Hi {invoice.get('client_name','')},</p>
+            <p>Hi {invoice.get('client_name', '')},</p>
             <p>Please find details for your invoice below:</p>
             <ul>
                 {items_html}
             </ul>
             <p><strong>Total: ${invoice['total_amount']} {invoice['currency']}</strong></p>
-            <p>Due Date: {invoice.get('due_date', 'Upon Receipt')}</p>
+            <p>Due Date: {invoice.get('due_date', os.environ.get('DEFAULT_INVOICE_DUE_DATE', 'Upon Receipt').replace('_', ' '))}</p>
             {payment_button}
             <p>Notes: {invoice.get('notes', '')}</p>
             """

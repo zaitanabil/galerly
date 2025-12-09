@@ -4,10 +4,28 @@ Portfolio customization handlers
 import os
 from datetime import datetime
 from boto3.dynamodb.conditions import Key
-from utils.config import users_table, galleries_table
+from utils.config import users_table, galleries_table, dynamodb
 from utils.response import create_response
 from handlers.subscription_handler import get_user_features
 import dns.resolver
+from utils.cloudfront_manager import (
+    create_custom_domain_distribution,
+    get_distribution_status,
+    update_distribution_certificate,
+    invalidate_distribution_cache
+)
+from utils.acm_manager import (
+    request_certificate,
+    get_certificate_status,
+    get_certificate_validation_records
+)
+from utils.dns_propagation import (
+    check_dns_propagation,
+    check_cname_propagation
+)
+
+# Custom domain configurations table
+custom_domains_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_CUSTOM_DOMAINS', 'galerly-custom-domains-local'))
 
 def handle_get_portfolio_settings(user):
     """Get portfolio customization settings for current user"""
@@ -378,3 +396,397 @@ def handle_verify_domain(user, body):
         import traceback
         traceback.print_exc()
         return create_response(500, {'error': 'Failed to verify domain'})
+
+
+def handle_setup_custom_domain(user, body):
+    """
+    Complete custom domain setup with CloudFront and ACM integration
+    This creates a CloudFront distribution and requests SSL certificate
+    
+    Request body:
+    {
+        "domain": "gallery.yourstudio.com",
+        "auto_provision": true  # Auto-create CloudFront and ACM resources
+    }
+    
+    Returns:
+        dict: {
+            'success': bool,
+            'domain': str,
+            'certificate_arn': str,
+            'distribution_id': str,
+            'validation_records': list,  # DNS records needed for SSL validation
+            'status': str,
+            'next_steps': list
+        }
+    """
+    try:
+        # Check plan permission
+        features, _, _ = get_user_features(user)
+        if not features.get('custom_domain', False):
+            return create_response(403, {
+                'error': 'Custom domains are available on Plus, Pro, and Ultimate plans.',
+                'upgrade_required': True
+            })
+        
+        domain = body.get('domain', '').strip().lower()
+        auto_provision = body.get('auto_provision', True)
+        
+        if not domain:
+            return create_response(400, {'error': 'Domain is required'})
+        
+        # Remove protocol if present
+        domain = domain.replace('http://', '').replace('https://', '').split('/')[0]
+        
+        # Check if domain already configured by another user
+        scan_response = users_table.scan(
+            FilterExpression='portfolio_custom_domain = :d',
+            ExpressionAttributeValues={':d': domain}
+        )
+        
+        existing_users = scan_response.get('Items', [])
+        if existing_users and existing_users[0]['id'] != user['id']:
+            return create_response(409, {
+                'error': 'This domain is already connected to another account.'
+            })
+        
+        # Check if domain configuration already exists
+        try:
+            existing_config = custom_domains_table.get_item(
+                Key={'user_id': user['id'], 'domain': domain}
+            )
+            
+            if 'Item' in existing_config:
+                config = existing_config['Item']
+                
+                # Return existing configuration
+                return create_response(200, {
+                    'success': True,
+                    'domain': domain,
+                    'certificate_arn': config.get('certificate_arn'),
+                    'distribution_id': config.get('distribution_id'),
+                    'distribution_domain': config.get('distribution_domain'),
+                    'status': config.get('status', 'pending'),
+                    'validation_records': config.get('validation_records', []),
+                    'existing': True,
+                    'message': 'Domain configuration already exists'
+                })
+        except:
+            pass  # Table might not exist in local env
+        
+        if not auto_provision:
+            return create_response(200, {
+                'success': True,
+                'domain': domain,
+                'message': 'Domain saved. Enable auto_provision to create CloudFront and SSL certificate.',
+                'next_steps': [
+                    'Set auto_provision=true to automatically create resources',
+                    'Or manually configure CloudFront and ACM'
+                ]
+            })
+        
+        # Step 1: Request ACM certificate
+        print(f"Requesting SSL certificate for {domain}...")
+        cert_result = request_certificate(domain, validation_method='DNS')
+        
+        if not cert_result['success']:
+            return create_response(500, {
+                'error': f'Failed to request SSL certificate: {cert_result.get("error")}'
+            })
+        
+        certificate_arn = cert_result['certificate_arn']
+        validation_records = cert_result['validation_records']
+        
+        print(f"✓ SSL certificate requested: {certificate_arn}")
+        
+        # Step 2: Create CloudFront distribution (without certificate initially)
+        print(f"Creating CloudFront distribution for {domain}...")
+        dist_result = create_custom_domain_distribution(
+            user_id=user['id'],
+            custom_domain=domain,
+            acm_certificate_arn=None  # Add certificate after it's validated
+        )
+        
+        if not dist_result['success']:
+            return create_response(500, {
+                'error': f'Failed to create CloudFront distribution: {dist_result.get("error")}'
+            })
+        
+        distribution_id = dist_result['distribution_id']
+        distribution_domain = dist_result['distribution_domain']
+        
+        print(f"✓ CloudFront distribution created: {distribution_id}")
+        
+        # Step 3: Save configuration to database
+        domain_config = {
+            'user_id': user['id'],
+            'domain': domain,
+            'certificate_arn': certificate_arn,
+            'distribution_id': distribution_id,
+            'distribution_domain': distribution_domain,
+            'status': 'pending_validation',
+            'validation_records': validation_records,
+            'created_at': datetime.utcnow().isoformat() + 'Z',
+            'updated_at': datetime.utcnow().isoformat() + 'Z'
+        }
+        
+        try:
+            custom_domains_table.put_item(Item=domain_config)
+        except Exception as table_error:
+            print(f"Warning: Could not save to custom_domains table: {str(table_error)}")
+        
+        # Step 4: Update user record
+        users_table.update_item(
+            Key={'email': user['email']},
+            UpdateExpression='SET portfolio_custom_domain = :d, custom_domain_distribution_id = :dist_id, custom_domain_certificate_arn = :cert_arn, updated_at = :now',
+            ExpressionAttributeValues={
+                ':d': domain,
+                ':dist_id': distribution_id,
+                ':cert_arn': certificate_arn,
+                ':now': datetime.utcnow().isoformat() + 'Z'
+            }
+        )
+        
+        # Prepare next steps for user
+        next_steps = [
+            f'Add DNS validation records to verify SSL certificate',
+            f'Add CNAME record pointing {domain} to {distribution_domain}',
+            'Wait for DNS propagation (1-48 hours)',
+            'SSL certificate will auto-validate once DNS records are added',
+            'CloudFront distribution will be updated with certificate once validated'
+        ]
+        
+        return create_response(200, {
+            'success': True,
+            'domain': domain,
+            'certificate_arn': certificate_arn,
+            'distribution_id': distribution_id,
+            'distribution_domain': distribution_domain,
+            'status': 'pending_validation',
+            'validation_records': validation_records,
+            'next_steps': next_steps,
+            'message': 'Custom domain setup initiated. Complete DNS configuration to activate.'
+        })
+        
+    except Exception as e:
+        print(f"Error setting up custom domain: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': 'Failed to setup custom domain'})
+
+
+def handle_check_custom_domain_status(user, domain):
+    """
+    Check complete status of custom domain including CloudFront, ACM, and DNS
+    
+    Returns:
+        dict: {
+            'domain': str,
+            'overall_status': str,  # pending, active, error
+            'dns_propagation': dict,
+            'certificate_status': dict,
+            'distribution_status': dict,
+            'ready': bool
+        }
+    """
+    try:
+        # Check plan permission
+        features, _, _ = get_user_features(user)
+        if not features.get('custom_domain', False):
+            return create_response(403, {
+                'error': 'Custom domain is a Plus plan feature.',
+                'upgrade_required': True
+            })
+        
+        if not domain:
+            return create_response(400, {'error': 'Domain parameter required'})
+        
+        # Get domain configuration
+        try:
+            config_response = custom_domains_table.get_item(
+                Key={'user_id': user['id'], 'domain': domain}
+            )
+            
+            if 'Item' not in config_response:
+                return create_response(404, {
+                    'error': 'Domain configuration not found. Please setup the domain first.'
+                })
+            
+            config = config_response['Item']
+        except:
+            # Fallback to user record if table doesn't exist
+            user_response = users_table.get_item(Key={'email': user['email']})
+            if 'Item' not in user_response:
+                return create_response(404, {'error': 'User not found'})
+            
+            user_data = user_response['Item']
+            config = {
+                'certificate_arn': user_data.get('custom_domain_certificate_arn'),
+                'distribution_id': user_data.get('custom_domain_distribution_id')
+            }
+        
+        certificate_arn = config.get('certificate_arn')
+        distribution_id = config.get('distribution_id')
+        distribution_domain = config.get('distribution_domain')
+        
+        # Check certificate status
+        cert_status = None
+        if certificate_arn:
+            cert_result = get_certificate_status(certificate_arn)
+            if cert_result['success']:
+                cert_status = {
+                    'arn': certificate_arn,
+                    'status': cert_result['status'],
+                    'issued': cert_result['status'] == 'ISSUED',
+                    'validation_records': cert_result.get('validation_records', [])
+                }
+        
+        # Check CloudFront distribution status
+        dist_status = None
+        if distribution_id:
+            dist_result = get_distribution_status(distribution_id)
+            if dist_result['success']:
+                dist_status = {
+                    'id': distribution_id,
+                    'domain': dist_result['domain_name'],
+                    'status': dist_result['status'],
+                    'deployed': dist_result['status'] == 'Deployed',
+                    'enabled': dist_result['enabled']
+                }
+        
+        # Check DNS propagation
+        dns_result = check_cname_propagation(
+            domain=domain,
+            expected_cname=distribution_domain or 'cdn.galerly.com'
+        )
+        
+        dns_status = {
+            'propagated': dns_result.get('propagated', False),
+            'percentage': dns_result.get('percentage', 0),
+            'ready': dns_result.get('ready', False),
+            'servers_propagated': dns_result.get('servers_propagated', 0),
+            'servers_checked': dns_result.get('servers_checked', 0)
+        }
+        
+        # Determine overall status
+        cert_ready = cert_status and cert_status['issued']
+        dist_ready = dist_status and dist_status['deployed']
+        dns_ready = dns_status['ready']
+        
+        if cert_ready and dist_ready and dns_ready:
+            overall_status = 'active'
+            ready = True
+        elif cert_status or dist_status:
+            overall_status = 'pending'
+            ready = False
+        else:
+            overall_status = 'not_configured'
+            ready = False
+        
+        return create_response(200, {
+            'domain': domain,
+            'overall_status': overall_status,
+            'ready': ready,
+            'certificate': cert_status,
+            'distribution': dist_status,
+            'dns_propagation': dns_status,
+            'checked_at': datetime.utcnow().isoformat() + 'Z'
+        })
+        
+    except Exception as e:
+        print(f"Error checking custom domain status: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': 'Failed to check domain status'})
+
+
+def handle_refresh_custom_domain_certificate(user, domain):
+    """
+    Check if certificate is validated and update CloudFront distribution
+    This should be called periodically or triggered by user after adding DNS records
+    """
+    try:
+        # Get domain configuration
+        try:
+            config_response = custom_domains_table.get_item(
+                Key={'user_id': user['id'], 'domain': domain}
+            )
+            
+            if 'Item' not in config_response:
+                return create_response(404, {'error': 'Domain configuration not found'})
+            
+            config = config_response['Item']
+        except:
+            return create_response(404, {'error': 'Domain configuration not found'})
+        
+        certificate_arn = config.get('certificate_arn')
+        distribution_id = config.get('distribution_id')
+        
+        if not certificate_arn or not distribution_id:
+            return create_response(400, {'error': 'Incomplete domain configuration'})
+        
+        # Check certificate status
+        cert_result = get_certificate_status(certificate_arn)
+        
+        if not cert_result['success']:
+            return create_response(500, {
+                'error': f'Failed to check certificate: {cert_result.get("error")}'
+            })
+        
+        cert_status = cert_result['status']
+        
+        if cert_status == 'ISSUED':
+            # Certificate is validated! Update CloudFront distribution
+            print(f"Certificate validated for {domain}, updating CloudFront...")
+            
+            update_result = update_distribution_certificate(distribution_id, certificate_arn)
+            
+            if not update_result['success']:
+                return create_response(500, {
+                    'error': f'Failed to update distribution: {update_result.get("error")}'
+                })
+            
+            # Update config status
+            try:
+                custom_domains_table.update_item(
+                    Key={'user_id': user['id'], 'domain': domain},
+                    UpdateExpression='SET #status = :active, certificate_validated_at = :now, updated_at = :now',
+                    ExpressionAttributeNames={'#status': 'status'},
+                    ExpressionAttributeValues={
+                        ':active': 'active',
+                        ':now': datetime.utcnow().isoformat() + 'Z'
+                    }
+                )
+            except:
+                pass
+            
+            print(f"✓ Custom domain {domain} is now active with SSL!")
+            
+            return create_response(200, {
+                'success': True,
+                'domain': domain,
+                'status': 'active',
+                'certificate_status': cert_status,
+                'message': 'Domain is now active with SSL certificate!'
+            })
+        
+        elif cert_status in ['PENDING_VALIDATION']:
+            return create_response(200, {
+                'success': True,
+                'domain': domain,
+                'status': 'pending_validation',
+                'certificate_status': cert_status,
+                'validation_records': cert_result.get('validation_records', []),
+                'message': 'Certificate is still pending validation. Add DNS validation records and try again.'
+            })
+        
+        else:
+            return create_response(400, {
+                'error': f'Certificate has unexpected status: {cert_status}'
+            })
+        
+    except Exception as e:
+        print(f"Error refreshing certificate: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': 'Failed to refresh certificate status'})

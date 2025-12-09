@@ -27,7 +27,9 @@ from handlers.gallery_handler import (
     handle_delete_gallery,
     handle_duplicate_gallery,
     handle_archive_gallery,
-    handle_archive_originals
+    handle_archive_originals,
+    handle_list_layouts,
+    handle_get_layout
 )
 from handlers.photo_handler import (
     handle_upload_photo,
@@ -111,7 +113,10 @@ from handlers.portfolio_handler import (
     handle_update_portfolio_settings,
     handle_get_public_portfolio,
     handle_verify_domain,
-    handle_check_domain_status
+    handle_check_domain_status,
+    handle_setup_custom_domain,
+    handle_check_custom_domain_status,
+    handle_refresh_custom_domain_certificate
 )
 from handlers.social_handler import (
     handle_get_gallery_share_info,
@@ -401,6 +406,15 @@ def handler(event, context):
         if path == '/v1/newsletter/unsubscribe' and method == 'POST':
             return handle_newsletter_unsubscribe(body)
         
+        # Gallery layouts (PUBLIC - no auth required)
+        if path == '/v1/gallery-layouts' and method == 'GET':
+            query_params = event.get('queryStringParameters') or {}
+            return handle_list_layouts(query_params)
+        
+        if path.startswith('/v1/gallery-layouts/') and method == 'GET':
+            layout_id = path.split('/')[-1]
+            return handle_get_layout(layout_id)
+        
         # Contact/Support endpoint (PUBLIC)
         if path == '/v1/contact/submit' and method == 'POST':
             return handle_contact_submit(body)
@@ -581,7 +595,8 @@ def handler(event, context):
                 return handle_add_comment(photo_id, user, body)
 
         # Photo details (PUBLIC - for polling comments etc)
-        if path.startswith('/v1/photos/') and '/comments' not in path and method == 'GET':
+        # Exclude /photos/search which is handled in authenticated section
+        if path.startswith('/v1/photos/') and '/comments' not in path and path != '/v1/photos/search' and method == 'GET':
              photo_id = path.split('/')[-1]
              return handle_get_photo(photo_id)
 
@@ -716,6 +731,18 @@ def handler(event, context):
             
         if path == '/v1/portfolio/verify-domain' and method == 'POST':
             return handle_verify_domain(user, body)
+        
+        # Custom domain setup (NEW - Full CloudFront/ACM integration)
+        if path == '/v1/portfolio/custom-domain/setup' and method == 'POST':
+            return handle_setup_custom_domain(user, body)
+        
+        if path == '/v1/portfolio/custom-domain/status' and method == 'GET':
+            domain = event.get('queryStringParameters', {}).get('domain', '')
+            return handle_check_custom_domain_status(user, domain)
+        
+        if path == '/v1/portfolio/custom-domain/refresh' and method == 'POST':
+            domain = body.get('domain', '')
+            return handle_refresh_custom_domain_certificate(user, domain)
         
         # Dashboard
         if path == '/v1/dashboard' and method == 'GET':

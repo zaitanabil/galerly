@@ -21,6 +21,8 @@ export interface Gallery {
   cover_photo?: string;
   cover_photo_url?: string;
   thumbnail_url?: string;
+  layout_id?: string; // Gallery layout template ID
+  layout_config?: Record<string, any>; // Custom layout configuration
 }
 
 export interface CreateGalleryData {
@@ -33,6 +35,8 @@ export interface CreateGalleryData {
   allowComments?: boolean;
   allowEdits?: boolean; // Allow clients to request photo edits (plan-restricted)
   privacy?: 'private' | 'public';
+  layout_id?: string; // Gallery layout template ID
+  layout_config?: Record<string, any>; // Custom layout configuration
 }
 
 export interface UpdateGalleryData {
@@ -41,6 +45,8 @@ export interface UpdateGalleryData {
   client_name?: string;
   client_email?: string;
   is_public?: boolean;
+  layout_id?: string; // Gallery layout template ID
+  layout_config?: Record<string, any>; // Custom layout configuration
 }
 
 // List all galleries for the current user

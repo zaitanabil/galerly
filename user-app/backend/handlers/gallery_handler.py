@@ -11,6 +11,8 @@ from utils.config import galleries_table, photos_table, s3_client, S3_BUCKET, cl
 from utils.response import create_response
 from handlers.subscription_handler import enforce_gallery_limit
 from utils.email import send_gallery_shared_email
+from utils.gallery_layouts import get_layout, get_all_layouts, get_layouts_by_category, get_layout_categories, validate_layout_photos
+from utils.gallery_layouts import get_all_layouts, get_layout, get_layouts_by_category, get_layout_categories
 
 def enrich_photos_with_any_favorites(photos, gallery, photographer_email=None):
     """Add is_favorite field and favorites_count to photos - TRUE if ANY client (or photographer) favorited it"""
@@ -207,6 +209,10 @@ def handle_create_gallery(user, body):
     # No expiration for galleries - they never expire
     # Only storage quota matters
     
+    # Layout configuration - photographers can choose a predefined layout
+    layout_id = body.get('layout_id', 'grid_classic')  # Default to classic grid
+    layout_config = body.get('layout_config', {})  # Custom layout configuration if needed
+    
     gallery = {
         'user_id': user['id'],  # PARTITION KEY - ensures isolation
         'id': gallery_id,        # SORT KEY
@@ -223,6 +229,8 @@ def handle_create_gallery(user, body):
         'allow_downloads': body.get('allowDownload', True),
         'allow_comments': body.get('allowComments', True),
         'allow_edits': allow_edits,  # Use plan-checked value
+        'layout_id': layout_id,  # Predefined layout template
+        'layout_config': layout_config,  # Custom layout settings
         'photo_count': 0,
         'view_count': 0,
         'storage_used': 0,
@@ -564,6 +572,18 @@ def handle_update_gallery(gallery_id, user, body):
                 tags = [t.strip() for t in tags.split(',') if t.strip()]
             gallery['tags'] = tags
         
+        # Layout configuration
+        if 'layout_id' in body:
+            from utils.gallery_layouts import get_layout
+            layout_id = body.get('layout_id')
+            layout = get_layout(layout_id)
+            if not layout:
+                return create_response(400, {'error': f'Invalid layout_id: {layout_id}'})
+            gallery['layout_id'] = layout_id
+        
+        if 'layout_config' in body:
+            gallery['layout_config'] = body.get('layout_config', {})
+        
         gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
         
         # Save back to DynamoDB
@@ -796,3 +816,58 @@ def handle_archive_originals(gallery_id, user):
     except Exception as e:
         print(f"Error archiving originals: {str(e)}")
         return create_response(500, {'error': 'Failed to archive files'})
+
+
+def handle_list_layouts(query_params=None):
+    """
+    List all available gallery layouts
+    Can be filtered by category
+    """
+    try:
+        category = query_params.get('category') if query_params else None
+        
+        if category:
+            layouts = get_layouts_by_category(category)
+        else:
+            layouts = get_all_layouts()
+        
+        # Convert to list format for API response
+        layouts_list = []
+        for layout_id, layout_data in layouts.items():
+            layouts_list.append({
+                'id': layout_id,
+                'name': layout_data['name'],
+                'description': layout_data['description'],
+                'category': layout_data['category'],
+                'total_slots': layout_data['total_slots'],
+                'slots': layout_data['slots'],  # Include slots for preview rendering
+                'preview_image': layout_data.get('preview_image'),
+                'scroll_mode': layout_data.get('scroll_mode'),
+                'positioning': layout_data.get('positioning', 'grid')
+            })
+        
+        return create_response(200, {
+            'layouts': layouts_list,
+            'categories': get_layout_categories(),
+            'total': len(layouts_list)
+        })
+    except Exception as e:
+        print(f"Error listing layouts: {str(e)}")
+        return create_response(500, {'error': 'Failed to list layouts'})
+
+
+def handle_get_layout(layout_id):
+    """Get detailed layout information including slot configuration"""
+    try:
+        layout = get_layout(layout_id)
+        
+        if not layout:
+            return create_response(404, {'error': f'Layout not found: {layout_id}'})
+        
+        return create_response(200, {
+            'id': layout_id,
+            **layout
+        })
+    except Exception as e:
+        print(f"Error getting layout: {str(e)}")
+        return create_response(500, {'error': 'Failed to get layout'})

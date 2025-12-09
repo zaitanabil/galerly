@@ -36,6 +36,8 @@ import CommentSection from '../components/CommentSection';
 import ClientInsights from '../components/ClientInsights';
 import GalleryInsightsDashboard from '../components/GalleryInsightsDashboard';
 import ProgressiveImage from '../components/ProgressiveImage';
+import GalleryLayoutRenderer from '../components/GalleryLayoutRenderer';
+import GalleryLayoutSelector from '../components/GalleryLayoutSelector';
 import { useSlideshow } from '../hooks/useSlideshow';
 import { useSwipe } from '../hooks/useSwipe';
 
@@ -61,6 +63,7 @@ interface Gallery {
   cover_photo?: string;
   cover_photo_url?: string;
   storage_used?: number;
+  layout_id?: string;  // Added for gallery layouts
   settings?: {
     download_enabled?: boolean;
     comments_enabled?: boolean;
@@ -85,6 +88,9 @@ export default function GalleryPage() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [pagination, setPagination] = useState<{ has_more: boolean; next_key?: any }>({ has_more: false });
+  
+  // Gallery layout state
+  const [galleryLayout, setGalleryLayout] = useState<any>(null);
   
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -114,6 +120,7 @@ export default function GalleryPage() {
     tags: [] as string[],
     privacy: 'private',
     password: '',
+    layout_id: '' as string | undefined,
     seo: {
       title: '',
       description: '',
@@ -248,6 +255,22 @@ export default function GalleryPage() {
           const data = galleryRes.data as unknown as Gallery & { seo_title?: string; seo_description?: string; slug?: string }; 
           setGallery(data);
           
+          // Fetch layout if gallery has a layout_id
+          if (data.layout_id) {
+            try {
+              const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+              const layoutResponse = await fetch(`${apiUrl}/v1/gallery-layouts/${data.layout_id}`);
+              if (layoutResponse.ok) {
+                const layoutData = await layoutResponse.json();
+                setGalleryLayout(layoutData);
+              }
+            } catch (err) {
+              console.error('Failed to fetch layout:', err);
+            }
+          } else {
+            setGalleryLayout(null);
+          }
+          
           // Ensure comments_count is accurate from the comments array
           const photosWithCounts = (data.photos || []).map(p => ({
             ...p,
@@ -278,6 +301,7 @@ export default function GalleryPage() {
             tags: data.tags || [],
             privacy: data.privacy || 'private',
             password: data.password || '',
+            layout_id: data.layout_id || undefined,
             seo: {
                 title: data.seo_title || '',
                 description: data.seo_description || '',
@@ -723,6 +747,7 @@ export default function GalleryPage() {
         tags: settingsForm.tags,
         privacy: settingsForm.privacy,
         password: settingsForm.password,
+        layout_id: settingsForm.layout_id || null,
         seo: settingsForm.seo
       });
 
@@ -1039,6 +1064,7 @@ export default function GalleryPage() {
                     tags: gallery.tags || [],
                     privacy: gallery.privacy || 'private',
                     password: gallery.password || '',
+                    layout_id: gallery.layout_id || undefined,
                     seo: {
                       title: gallery.seo_title || '',
                       description: gallery.seo_description || '',
@@ -1164,7 +1190,7 @@ export default function GalleryPage() {
           </div>
         )}
 
-        {/* Photos Grid */}
+        {/* Photos Grid or Layout */}
         {displayedPhotos.length === 0 ? (
           <div className="glass-panel p-12 text-center">
             <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
@@ -1176,10 +1202,47 @@ export default function GalleryPage() {
             <p className="text-[#1D1D1F]/60">
               {filterFavorites ? 'Photos favorited by clients will appear here' : 'Use the upload section above to add your first photo'}
             </p>
+            {galleryLayout && (
+              <p className="text-sm text-[#0066CC] mt-3">
+                This gallery uses the "{galleryLayout.name}" layout (minimum {galleryLayout.total_slots} photos recommended)
+              </p>
+            )}
           </div>
-        ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {displayedPhotos.map((photo, index) => (
+        ) : galleryLayout && displayedPhotos.length >= galleryLayout.total_slots ? (
+          // Use layout renderer if layout is set and enough photos
+          <div>
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-xl">
+              <p className="text-sm text-[#0066CC] font-medium">
+                ✓ Layout Applied: {galleryLayout.name} ({displayedPhotos.length} photos)
+              </p>
+              <p className="text-xs text-[#0066CC]/70 mt-1">
+                Pattern repeats every {galleryLayout.total_slots} photos
+              </p>
+            </div>
+            <GalleryLayoutRenderer
+              layout={galleryLayout}
+              photos={displayedPhotos}
+              onPhotoClick={(_photo, index) => {
+                setCurrentPhotoIndex(index);
+                setModalOpen(true);
+              }}
+              onFavoriteToggle={handleToggleFavorite}
+              onDownload={handleDownloadPhoto}
+              showActions={true}
+            />
+          </div>
+        ) : galleryLayout && displayedPhotos.length < galleryLayout.total_slots ? (
+          // Layout is set but not enough photos
+          <div>
+            <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <p className="text-sm text-amber-800 font-medium">
+                ⏳ Upload {galleryLayout.total_slots - displayedPhotos.length} more photo{galleryLayout.total_slots - displayedPhotos.length !== 1 ? 's' : ''} to activate the "{galleryLayout.name}" layout
+              </p>
+              <p className="text-xs text-amber-600 mt-1">
+                {displayedPhotos.length}/{galleryLayout.total_slots} photos uploaded (pattern will repeat with more photos)
+              </p>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">{displayedPhotos.map((photo, index) => (
               <div
                 key={photo.id}
                 className={`relative aspect-square bg-gray-100 rounded-2xl overflow-hidden group ${
@@ -1306,6 +1369,101 @@ export default function GalleryPage() {
                     </div>
                   </div>
                 </div>
+              </div>
+            ))}
+          </div>
+          </div>
+        ) : (
+          // Default grid view (no layout or enough photos for layout)
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {displayedPhotos.map((photo, index) => (
+              <div
+                key={photo.id}
+                className={`relative aspect-square bg-gray-100 rounded-2xl overflow-hidden group ${
+                  selectedPhotos.has(photo.id) ? 'ring-4 ring-[#0066CC]' : ''
+                }`}
+              >
+                {/* Selection checkbox */}
+                <div 
+                  className="absolute top-3 left-3 z-10"
+                  onClick={(e) => { e.stopPropagation(); handleSelectPhoto(photo.id); }}
+                >
+                  <div className={`w-6 h-6 rounded-full border-2 ${
+                    selectedPhotos.has(photo.id) 
+                      ? 'bg-[#0066CC] border-[#0066CC]' 
+                      : 'bg-white border-white/60'
+                  } flex items-center justify-center cursor-pointer`}>
+                    {selectedPhotos.has(photo.id) && (
+                      <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                      </svg>
+                    )}
+                  </div>
+                </div>
+
+                {/* Play icon for videos */}
+                {photo.type === 'video' && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <div className="w-16 h-16 bg-black/40 backdrop-blur-sm rounded-full flex items-center justify-center">
+                      <PlayCircle className="w-10 h-10 text-white" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Favorite Heart - Top Right */}
+                <div className="absolute top-3 right-3 z-10">
+                  <button
+                    onClick={() => handleToggleFavorite(photo.id)}
+                    className={`p-2 rounded-full transition-all ${
+                      photo.is_favorite
+                        ? 'bg-red-500 text-white'
+                        : 'bg-white/20 backdrop-blur-sm text-white hover:bg-white/30'
+                    }`}
+                    aria-label={photo.is_favorite ? 'Remove from favorites' : 'Add to favorites'}
+                  >
+                    <Heart className={`w-4 h-4 ${photo.is_favorite ? 'fill-current' : ''}`} />
+                  </button>
+                </div>
+
+                {/* Hover Overlay */}
+                <div 
+                  className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/0 to-black/0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 cursor-pointer pointer-events-none"
+                  onClick={() => openPhotoModal(index)}
+                >
+                  <div className="absolute bottom-0 left-0 right-0 p-4 flex items-end justify-between">
+                    {/* Left: Status */}
+                    <p className="text-white/90 text-xs font-medium drop-shadow-md">
+                      {photo.status === 'approved' ? '✓ Approved' :
+                       photo.status === 'active' ? 'Ready' : ''}
+                    </p>
+
+                    {/* Right: Stats */}
+                    <div className="flex items-center gap-4">
+                      {/* Favorites count - showing count only, heart icon is in top-right */}
+                      {(gallery?.settings?.favorites_enabled ?? true) && (photo.favorites_count || 0) > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-white text-xs font-medium drop-shadow-md">{photo.favorites_count} likes</span>
+                        </div>
+                      )}
+                      {/* Comments count */}
+                      {(gallery?.allow_comments ?? true) && (photo.comments_count || 0) > 0 && (
+                        <div className="flex items-center gap-1.5">
+                          <MessageCircle className="w-4 h-4 text-white drop-shadow-md" />
+                          <span className="text-white text-xs font-medium drop-shadow-md">{photo.comments_count}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                
+                {/* Image */}
+                <ProgressiveImage
+                  src={photo.medium_url || photo.url}
+                  placeholderSrc={photo.thumbnail_url}
+                  alt={photo.filename || `Photo ${index + 1}`}
+                  onClick={() => openPhotoModal(index)}
+                  className="cursor-pointer"
+                />
               </div>
             ))}
           </div>
@@ -1807,6 +1965,20 @@ export default function GalleryPage() {
                             placeholder="Share details about this gallery..."
                           />
                         </div>
+                      </div>
+                    </section>
+
+                    {/* Gallery Layout */}
+                    <section>
+                      <h2 className="text-2xl font-semibold text-[#1D1D1F] mb-6">Gallery Layout</h2>
+                      <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-200/50">
+                        <GalleryLayoutSelector
+                          selectedLayoutId={settingsForm.layout_id}
+                          onSelectLayout={(layoutId: string) => {
+                            setSettingsForm({ ...settingsForm, layout_id: layoutId });
+                          }}
+                          inline={true}
+                        />
                       </div>
                     </section>
 

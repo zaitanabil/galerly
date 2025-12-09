@@ -3,13 +3,24 @@ import { useState, FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import * as galleryService from '../services/galleryService';
-import { Upload, ArrowLeft, AlertCircle, Check, X } from 'lucide-react';
+import { Upload, ArrowLeft, AlertCircle, Check, X, Layers } from 'lucide-react';
 import { useBrandedModal } from '../components/BrandedModal';
+import GalleryLayoutSelector from '../components/GalleryLayoutSelector';
+
+interface GalleryLayout {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  total_slots: number;
+  slots: any[];
+}
 
 export default function NewGalleryPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { showAlert, showConfirm, ModalComponent } = useBrandedModal();
+  const [step, setStep] = useState<'details' | 'layout'>('details');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -19,7 +30,9 @@ export default function NewGalleryPage() {
     commentsEnabled: true,
     favoritesEnabled: true,
     editsEnabled: false,
+    layout_id: 'grid_classic', // Default layout
   });
+  const [selectedLayout, setSelectedLayout] = useState<GalleryLayout | null>(null);
   const [newClientEmail, setNewClientEmail] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -54,8 +67,23 @@ export default function NewGalleryPage() {
     });
   };
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleDetailsNext = (e: FormEvent) => {
     e.preventDefault();
+    // Validate required fields
+    if (!formData.name.trim()) {
+      setError('Gallery name is required');
+      return;
+    }
+    setError('');
+    setStep('layout');
+  };
+
+  const handleLayoutSelect = (layoutId: string, layout: GalleryLayout) => {
+    setSelectedLayout(layout);
+    setFormData({ ...formData, layout_id: layoutId });
+  };
+
+  const handleSubmit = async () => {
     setError('');
     setLoading(true);
 
@@ -69,6 +97,7 @@ export default function NewGalleryPage() {
         allowComments: formData.commentsEnabled,
         allowEdits: formData.editsEnabled,
         privacy: 'private',
+        layout_id: formData.layout_id,
       });
 
       if (response.success && response.data) {
@@ -110,7 +139,7 @@ export default function NewGalleryPage() {
         </div>
       </header>
 
-      <main className="max-w-3xl mx-auto px-6 py-12">
+      <main className="max-w-5xl mx-auto px-6 py-12">
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-100 rounded-2xl flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
@@ -118,8 +147,34 @@ export default function NewGalleryPage() {
           </div>
         )}
 
+        {/* Progress Steps */}
+        <div className="mb-8 flex items-center justify-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium transition-colors ${
+              step === 'details' ? 'bg-[#0066CC] text-white' : 'bg-white text-[#0066CC] border-2 border-[#0066CC]'
+            }`}>
+              1
+            </div>
+            <span className={`text-sm font-medium ${step === 'details' ? 'text-[#1D1D1F]' : 'text-[#1D1D1F]/60'}`}>
+              Details
+            </span>
+          </div>
+          <div className="w-16 h-0.5 bg-gray-200"></div>
+          <div className="flex items-center gap-3">
+            <div className={`w-8 h-8 rounded-full flex items-center justify-center font-medium transition-colors ${
+              step === 'layout' ? 'bg-[#0066CC] text-white' : 'bg-gray-100 text-[#1D1D1F]/40'
+            }`}>
+              2
+            </div>
+            <span className={`text-sm font-medium ${step === 'layout' ? 'text-[#1D1D1F]' : 'text-[#1D1D1F]/60'}`}>
+              Layout
+            </span>
+          </div>
+        </div>
+
         <div className="glass-panel p-8">
-          <form onSubmit={handleSubmit} className="space-y-8">
+          {step === 'details' ? (
+            <form onSubmit={handleDetailsNext} className="space-y-8">
             {/* Gallery Details */}
             <div>
               <h2 className="text-lg font-medium text-[#1D1D1F] mb-4">
@@ -315,17 +370,10 @@ export default function NewGalleryPage() {
             <div className="border-t border-gray-200 pt-8 flex gap-4">
               <button
                 type="submit"
-                disabled={loading}
-                className="flex-1 py-4 bg-[#0066CC] text-white rounded-full font-medium hover:bg-[#0052A3] transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                className="flex-1 py-4 bg-[#0066CC] text-white rounded-full font-medium hover:bg-[#0052A3] transition-all hover:scale-[1.02] shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
               >
-                {loading ? (
-                  <>Creating...</>
-                ) : (
-                  <>
-                    <Check className="w-5 h-5" />
-                    Create Gallery
-                  </>
-                )}
+                <Layers className="w-5 h-5" />
+                Continue to Layout
               </button>
               <Link
                 to="/dashboard"
@@ -335,6 +383,55 @@ export default function NewGalleryPage() {
               </Link>
             </div>
           </form>
+          ) : (
+            /* Layout Selection Step */
+            <div>
+              <GalleryLayoutSelector
+                selectedLayoutId={formData.layout_id}
+                onSelectLayout={handleLayoutSelect}
+                onCancel={() => setStep('details')}
+              />
+              
+              {/* Actions */}
+              <div className="mt-8 flex gap-4">
+                <button
+                  onClick={() => setStep('details')}
+                  className="px-8 py-4 bg-white/50 border border-gray-200 text-[#1D1D1F] rounded-full font-medium hover:bg-white transition-all"
+                >
+                  Back
+                </button>
+                <button
+                  onClick={handleSubmit}
+                  disabled={loading || !selectedLayout}
+                  className="flex-1 py-4 bg-[#0066CC] text-white rounded-full font-medium hover:bg-[#0052A3] transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <>Creating...</>
+                  ) : (
+                    <>
+                      <Check className="w-5 h-5" />
+                      Create Gallery ({selectedLayout?.total_slots || 0} photo slots)
+                    </>
+                  )}
+                </button>
+              </div>
+              
+              {/* Layout Info */}
+              {selectedLayout && (
+                <div className="mt-6 p-6 bg-blue-50 border border-blue-100 rounded-2xl">
+                  <h3 className="text-sm font-medium text-[#1D1D1F] mb-2 flex items-center gap-2">
+                    <Layers className="w-4 h-4 text-[#0066CC]" />
+                    Selected: {selectedLayout.name}
+                  </h3>
+                  <ul className="text-sm text-[#1D1D1F]/70 space-y-1 ml-6">
+                    <li>• {selectedLayout.total_slots} photo slots</li>
+                    <li>• {selectedLayout.description}</li>
+                    <li>• Category: {selectedLayout.category}</li>
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Next Steps Info */}
           <div className="mt-8 p-6 bg-blue-50 border border-blue-100 rounded-2xl">

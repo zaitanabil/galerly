@@ -14,7 +14,7 @@ interface Gallery {
   id: string;
   name: string;
   client_name?: string;
-  status: string;
+  status?: string;
   cover_photo?: string;
   cover_photo_url?: string;
   thumbnail_url?: string;
@@ -34,9 +34,8 @@ export default function GalleriesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   
   const { data: galleriesData, loading: galleriesLoading } = useGalleries();
-  const { data: photosData, loading: photosLoading } = usePhotos(
-    searchType === 'photo' ? { q: searchTerm } : { q: '' }
-  );
+  // Always load photos (needed for photo search tab)
+  const { data: photosData, loading: photosLoading } = usePhotos({ query: searchTerm || undefined });
 
   const galleries = galleriesData?.galleries || [];
   const photos = photosData?.photos || [];
@@ -101,7 +100,10 @@ export default function GalleriesPage() {
               Your Galleries
             </h1>
             <p className="text-[#1D1D1F]/60">
-              Manage your client collections ({filteredGalleries.length} total)
+              {searchType === 'photo' 
+                ? `Search across all photos (${photos.length} found)`
+                : `Manage your client collections (${filteredGalleries.length} total)`
+              }
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -189,16 +191,24 @@ export default function GalleriesPage() {
         {/* Content */}
         {searchType === 'photo' ? (
             // Photo Grid
-            photos.length === 0 ? (
+            photosLoading ? (
+                <div className="bg-white rounded-[32px] border border-gray-200 p-16 text-center">
+                    <div className="w-12 h-12 border-4 border-[#0066CC] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
+                    <p className="text-[#1D1D1F]/60 text-sm font-medium">Loading photos...</p>
+                </div>
+            ) : photos.length === 0 ? (
                 <div className="bg-white rounded-[32px] border border-gray-200 border-dashed p-16 text-center">
                     <div className="w-20 h-20 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-6">
                     <ImageIcon className="w-8 h-8 text-gray-300" />
                     </div>
                     <h3 className="text-xl font-medium text-[#1D1D1F] mb-2">
-                    {searchTerm ? 'No photos found' : 'Search for photos'}
+                    {searchTerm ? 'No photos found' : 'No photos yet'}
                     </h3>
                     <p className="text-[#1D1D1F]/60 text-sm mb-0 max-w-sm mx-auto">
-                    Enter keywords to search across all your galleries.
+                    {searchTerm 
+                        ? 'Try different keywords to find your photos.' 
+                        : 'Upload photos to your galleries to see them here.'
+                    }
                     </p>
                 </div>
             ) : (

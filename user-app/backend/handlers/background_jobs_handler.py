@@ -138,8 +138,12 @@ def process_account_deletion(job_id, user_id, user_email):
         current_step += 1
         update_job_status(job_id, 'in_progress', progress=(current_step / total_steps) * 100)
         
+        # Galleries table has composite key: user_id (HASH) + id (RANGE)
         for gallery_id in gallery_ids:
-            galleries_table.delete_item(Key={'id': gallery_id})
+            galleries_table.delete_item(Key={
+                'user_id': user_id,
+                'id': gallery_id
+            })
         
         # Step 4: Delete contracts
         current_step += 1

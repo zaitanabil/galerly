@@ -22,6 +22,7 @@ import FeedbackModal from '../components/FeedbackModal';
 import ShareModal from '../components/ShareModal';
 import CommentSection from '../components/CommentSection';
   import ProgressiveImage from '../components/ProgressiveImage';
+  import GalleryLayoutRenderer from '../components/GalleryLayoutRenderer';
   import { useSlideshow } from '../hooks/useSlideshow';
   import { useSwipe } from '../hooks/useSwipe';
 
@@ -31,6 +32,7 @@ import CommentSection from '../components/CommentSection';
   allow_downloads?: boolean;
   allow_comments?: boolean;
   allow_edits?: boolean;
+  layout_id?: string;  // Added for gallery layouts
   settings?: {
     download_enabled?: boolean;
     comments_enabled?: boolean;
@@ -45,6 +47,9 @@ export default function ClientGalleryPage() {
   const { showAlert, showConfirm, showPrompt, ModalComponent } = useBrandedModal();
   
   const [gallery, setGallery] = useState<ClientGallery | null>(null);
+  
+  // Gallery layout state
+  const [galleryLayout, setGalleryLayout] = useState<any>(null);
   
   // Track viewer presence for real-time globe
   useViewerTracking({
@@ -354,6 +359,23 @@ export default function ClientGalleryPage() {
           setPhotos(prev => [...prev, ...newPhotos]);
         } else {
           setGallery(response.data);
+          
+          // Fetch layout if gallery has a layout_id
+          if (response.data.layout_id) {
+            try {
+              const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5001';
+              const layoutResponse = await fetch(`${apiUrl}/v1/gallery-layouts/${response.data.layout_id}`);
+              if (layoutResponse.ok) {
+                const layoutData = await layoutResponse.json();
+                setGalleryLayout(layoutData);
+              }
+            } catch (err) {
+              console.error('Failed to fetch layout:', err);
+            }
+          } else {
+            setGalleryLayout(null);
+          }
+          
           const photosWithCounts = (response.data.photos || []).map(p => ({
             ...p,
             favorites_count: Math.max(0, p.favorites_count || 0), // Ensure no negative counts from backend
@@ -829,9 +851,36 @@ export default function ClientGalleryPage() {
           </div>
         )}
 
-        {/* Photos Grid */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {photos.map((photo) => (
+        {/* Photos Grid or Layout */}
+        {galleryLayout && photos.length >= galleryLayout.total_slots ? (
+          // Use layout renderer if layout is set and enough photos
+          <div>
+            <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-xl text-center">
+              <p className="text-sm text-[#0066CC] font-medium">
+                {galleryLayout.name} Layout ({photos.length} photos)
+              </p>
+            </div>
+            <GalleryLayoutRenderer
+              layout={galleryLayout}
+              photos={photos.map(p => ({
+                id: p.id,
+                url: getImageUrl(p.url),
+                thumbnail_url: getImageUrl(p.thumbnail_url || p.url),
+                medium_url: getImageUrl(p.medium_url || p.url),
+                is_favorite: p.is_favorite,
+                favorites_count: p.favorites_count
+              }))}
+              onPhotoClick={(photo) => {
+                const fullPhoto = photos.find(p => p.id === photo.id);
+                if (fullPhoto) setSelectedPhoto(fullPhoto);
+              }}
+              onFavoriteToggle={handleToggleFavorite}
+              showActions={settings.favorites_enabled}
+            />
+          </div>
+        ) : (
+          // Default grid view
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">{photos.map((photo) => (
             <div
               key={photo.id}
               className="relative aspect-square bg-gray-100 rounded-2xl overflow-hidden group cursor-pointer"
@@ -918,6 +967,7 @@ export default function ClientGalleryPage() {
             </div>
           ))}
         </div>
+        )}
         
         {/* Load More Button */}
         {photos.length > 0 && pagination.has_more && (

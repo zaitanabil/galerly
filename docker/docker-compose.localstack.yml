@@ -17,7 +17,7 @@ services:
       - "${LOCALSTACK_UI_PORT:-8080}:8080"
     environment:
       # Core LocalStack configuration
-      - SERVICES=${LOCALSTACK_SERVICES:-s3,dynamodb,lambda,apigateway,ses,sts,iam,cloudformation,events,cloudwatch,logs}
+      - SERVICES=${LOCALSTACK_SERVICES:-s3,dynamodb,lambda,apigateway,ses,sts,iam,cloudformation,events,cloudwatch,logs,acm,cloudfront}
       - DEBUG=${LOCALSTACK_DEBUG:-1}
       - PERSISTENCE=${LOCALSTACK_PERSISTENCE:-1}
       - LAMBDA_EXECUTOR=${LOCALSTACK_LAMBDA_EXECUTOR:-docker-reuse}

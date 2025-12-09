@@ -43,6 +43,8 @@ const EmailAutomationPage = lazy(() => import('./pages/EmailAutomationPage'));
 const CRMPage = lazy(() => import('./pages/CRMPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const NotificationPreferencesPage = lazy(() => import('./pages/NotificationPreferencesPage'));
+const CustomDomainHelpPage = lazy(() => import('./pages/CustomDomainHelpPage'));
+const GalleryLayoutPreview = lazy(() => import('./pages/GalleryLayoutPreview'));
 
 // Loading Fallback
 const PageLoader = () => (
@@ -86,6 +88,7 @@ function App() {
             <Route path="/reset-password" element={<ResetPasswordPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="/faq" element={<FAQPage />} />
+            <Route path="/help/custom-domain" element={<CustomDomainHelpPage />} />
             <Route path="/pricing" element={<PricingPage />} />
             <Route path="/privacy" element={<PrivacyPage />} />
             <Route path="/legal" element={<LegalNoticePage />} />
@@ -135,6 +138,14 @@ function App() {
               element={
                 <ProtectedRoute requireRole="photographer">
                   <GalleryPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/gallery/:galleryId/preview"
+              element={
+                <ProtectedRoute requireRole="photographer">
+                  <GalleryLayoutPreview />
                 </ProtectedRoute>
               }
             />

@@ -153,33 +153,48 @@ class TestSendInvoiceWithPaymentLink:
         assert updated_invoice['status'] == 'sent'
         assert 'sent_at' in updated_invoice
     
-    @patch('stripe.PaymentLink')
-    @patch('stripe.Price')
+    @patch('stripe.checkout.Session')
     @patch('handlers.invoice_handler.send_email')
     @patch('handlers.invoice_handler.invoices_table')
-    @patch.dict('os.environ', {'STRIPE_SECRET_KEY': 'sk_test_123'})
-    def test_send_invoice_with_stripe_payment_link(self, mock_table, mock_email, mock_price_class, mock_payment_link_class, mock_user, mock_invoice):
-        """Test sending invoice with Stripe payment link"""
+    @patch.dict('os.environ', {
+        'STRIPE_SECRET_KEY': 'sk_test_123',
+        'FRONTEND_URL': 'http://localhost:5173',
+        'DEFAULT_INVOICE_CURRENCY': 'USD',
+        'DEFAULT_INVOICE_PAYMENT_METHOD': 'manual',
+        'DEFAULT_INVOICE_DUE_DATE': 'Upon_Receipt',
+        'DEFAULT_SERVICE_NAME': 'Service',
+        'DEFAULT_PHOTOGRAPHER_NAME': 'Your_Photographer',
+        'DEFAULT_ITEM_PRICE': '0',
+        'DEFAULT_ITEM_QUANTITY': '1',
+        'DISABLE_STRIPE_INVOICE_INTEGRATION': 'false'
+    })
+    def test_send_invoice_with_stripe_payment_link(self, mock_table, mock_email, mock_session_class, mock_user, mock_invoice):
+        """Test sending invoice with Stripe checkout session"""
         mock_table.get_item.return_value = {'Item': mock_invoice}
         
-        # Mock Stripe responses
-        mock_price = MagicMock()
-        mock_price.id = 'price_123'
-        mock_price_class.create.return_value = mock_price
-        
-        mock_payment_link = MagicMock()
-        mock_payment_link.url = 'https://pay.stripe.com/test123'
-        mock_payment_link_class.create.return_value = mock_payment_link
+        # Mock Stripe Checkout Session response
+        mock_session = MagicMock()
+        mock_session.url = 'https://checkout.stripe.com/pay/test123'
+        mock_session_class.create.return_value = mock_session
         
         response = handle_send_invoice('invoice-123', mock_user)
         
         assert response['statusCode'] == 200
         body_data = json.loads(response['body'])
-        assert body_data['payment_link'] == 'https://pay.stripe.com/test123'
+        assert body_data['payment_link'] == 'https://checkout.stripe.com/pay/test123'
+        
+        # Verify Checkout Session was created with correct parameters
+        mock_session_class.create.assert_called_once()
+        create_call_kwargs = mock_session_class.create.call_args[1]
+        assert create_call_kwargs['mode'] == 'payment'
+        assert len(create_call_kwargs['line_items']) == 1
+        assert create_call_kwargs['line_items'][0]['price_data']['product_data']['name'] == 'Wedding Photography'
+        assert create_call_kwargs['success_url'] == 'http://localhost:5173/invoice/invoice-123/success'
+        assert create_call_kwargs['cancel_url'] == 'http://localhost:5173/invoice/invoice-123'
         
         # Verify email contains payment link
         email_call = mock_email.call_args
-        assert 'pay.stripe.com' in str(email_call)
+        assert 'checkout.stripe.com' in str(email_call)
     
     @patch('handlers.invoice_handler.invoices_table')
     def test_send_invoice_validates_ownership(self, mock_table, mock_user, mock_invoice):

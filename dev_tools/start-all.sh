@@ -63,6 +63,17 @@ export $(cat .env.development | grep -v '^#' | xargs)
 echo "✅ Environment variables loaded"
 echo ""
 
+# Create LocalStack data directory if it doesn't exist
+LOCALSTACK_DATA_DIR="${LOCALSTACK_DATA_DIR:-./localstack_data}"
+if [ ! -d "$LOCALSTACK_DATA_DIR" ]; then
+    echo "📁 Creating LocalStack data directory: $LOCALSTACK_DATA_DIR"
+    mkdir -p "$LOCALSTACK_DATA_DIR"
+    echo "✅ LocalStack data directory created"
+else
+    echo "✅ LocalStack data directory exists: $LOCALSTACK_DATA_DIR"
+fi
+echo ""
+
 # Stop any existing containers
 echo "🛑 Stopping existing containers (if any)..."
 docker-compose -f docker/docker-compose.localstack.yml down 2>/dev/null || true

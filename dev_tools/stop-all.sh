@@ -39,7 +39,17 @@ echo "🔍 Cleaning up any remaining processes..."
 lsof -ti:5002 | xargs kill -9 2>/dev/null || true
 lsof -ti:3001 | xargs kill -9 2>/dev/null || true
 
+# Delete LocalStack data folder for clean state
 echo ""
-echo "✅ All services stopped successfully!"
+echo "🗑️  Cleaning up LocalStack data..."
+if [ -d "localstack_data" ]; then
+    rm -rf localstack_data
+    echo "✅ LocalStack data folder deleted"
+else
+    echo "ℹ️  No LocalStack data folder found (already clean)"
+fi
+
+echo ""
+echo "✅ All services stopped and cleaned up successfully!"
 echo ""
 

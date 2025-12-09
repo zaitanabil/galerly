@@ -385,6 +385,27 @@ TABLES = {
             }
         ]
     },
+    get_table_name('galerly-video-analytics'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'id', 'AttributeType': 'S'},
+            {'AttributeName': 'gallery_id', 'AttributeType': 'S'},
+            {'AttributeName': 'timestamp', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'id', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'GalleryIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'gallery_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'timestamp', 'KeyType': 'RANGE'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
+    },
+    
     get_table_name('galerly-visitor-tracking'): {
         'AttributeDefinitions': [
             {'AttributeName': 'id', 'AttributeType': 'S'},
@@ -771,6 +792,24 @@ TABLES = {
                 'Projection': {'ProjectionType': 'ALL'}
             }
         ]
+    },
+    get_table_name('galerly-custom-domains'): {
+        'AttributeDefinitions': [
+            {'AttributeName': 'domain', 'AttributeType': 'S'},
+            {'AttributeName': 'user_id', 'AttributeType': 'S'}
+        ],
+        'KeySchema': [
+            {'AttributeName': 'domain', 'KeyType': 'HASH'}
+        ],
+        'GlobalSecondaryIndexes': [
+            {
+                'IndexName': 'UserIdIndex',
+                'KeySchema': [
+                    {'AttributeName': 'user_id', 'KeyType': 'HASH'}
+                ],
+                'Projection': {'ProjectionType': 'ALL'}
+            }
+        ]
     }
 }
 
@@ -970,14 +1009,11 @@ def main():
     if command == 'create':
         create_all_tables()
         optimize_tables()
-        # Setup S3 buckets for LocalStack
+        # Note: S3 bucket setup is handled by init scripts in LocalStack
+        # The init-resources.sh script already creates and configures S3 buckets
         if AWS_ENDPOINT_URL:
-            try:
-                from setup_s3_buckets import setup_s3_buckets
                 print("")
-                setup_s3_buckets()
-            except Exception as e:
-                print(f"⚠️  S3 bucket setup failed: {str(e)}")
+            print("ℹ️  S3 bucket setup is handled by LocalStack init scripts")
     elif command == 'optimize':
         optimize_tables()
     elif command == 'list':

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Globe, CheckCircle, AlertCircle, Copy, ExternalLink, RefreshCw, Info } from 'lucide-react';
+import { Globe, CheckCircle, AlertCircle, Copy, ExternalLink, RefreshCw, Info, Zap, Shield } from 'lucide-react';
 import { api } from '../utils/api';
 import { toast } from 'react-hot-toast';
 
@@ -13,12 +13,32 @@ interface DomainStatus {
   verified: boolean;
   cname_record?: string;
   last_verified?: string;
-  dns_records?: {
+  overall_status?: 'not_configured' | 'pending' | 'active';
+  ready?: boolean;
+  certificate?: {
+    arn: string;
+    status: string;
+    issued: boolean;
+    validation_records: {
+      name: string;
     type: string;
-    name: string;
     value: string;
-    status: 'verified' | 'pending' | 'error';
+      status: string;
   }[];
+  };
+  distribution?: {
+    id: string;
+    domain: string;
+    status: string;
+    deployed: boolean;
+  };
+  dns_propagation?: {
+    propagated: boolean;
+    percentage: number;
+    ready: boolean;
+    servers_propagated: number;
+    servers_checked: number;
+  };
 }
 
 export default function CustomDomainConfig({ initialDomain = '', onUpdate }: CustomDomainConfigProps) {
@@ -27,8 +47,8 @@ export default function CustomDomainConfig({ initialDomain = '', onUpdate }: Cus
     configured: false,
     verified: false
   });
-  const [loading, setLoading] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [autoProvisioning, setAutoProvisioning] = useState(false);
   const [showInstructions, setShowInstructions] = useState(false);
 
   useEffect(() => {
@@ -42,16 +62,31 @@ export default function CustomDomainConfig({ initialDomain = '', onUpdate }: Cus
     if (!checkDomain) return;
     
     try {
-      const response = await api.get(`/portfolio/domain-status?domain=${encodeURIComponent(checkDomain)}`);
+      // Use new comprehensive status endpoint
+      const response = await api.get(`/portfolio/custom-domain/status?domain=${encodeURIComponent(checkDomain)}`);
       if (response.success && response.data) {
         setDomainStatus(response.data);
+        
+        // Show instructions if domain is configured but not active
+        if (response.data.overall_status === 'pending') {
+          setShowInstructions(true);
+        }
       }
     } catch (error) {
       console.error('Failed to check domain status:', error);
+      // Fallback to legacy endpoint
+      try {
+        const legacyResponse = await api.get(`/portfolio/domain-status?domain=${encodeURIComponent(checkDomain)}`);
+        if (legacyResponse.success && legacyResponse.data) {
+          setDomainStatus(legacyResponse.data);
+        }
+      } catch (e) {
+        console.error('Legacy endpoint also failed:', e);
+      }
     }
   };
 
-  const handleVerify = async () => {
+  const handleAutoProvision = async () => {
     if (!domain) {
       toast.error('Please enter a domain name');
       return;
@@ -64,61 +99,64 @@ export default function CustomDomainConfig({ initialDomain = '', onUpdate }: Cus
       return;
     }
 
-    setVerifying(true);
+    setAutoProvisioning(true);
+    const toastId = toast.loading('Setting up custom domain with SSL...');
+    
     try {
-      const response = await api.post('/portfolio/verify-domain', { domain });
+      const response = await api.post('/portfolio/custom-domain/setup', { 
+        domain,
+        auto_provision: true 
+      });
       
       if (response.success) {
-        toast.success('Domain verified successfully!');
-        setDomainStatus({
-          configured: true,
-          verified: true,
-          last_verified: new Date().toISOString()
-        });
+        toast.success('Custom domain setup initiated! Follow the DNS instructions below.', { id: toastId });
+        setShowInstructions(true);
+        
+        // Refresh status
+        await checkDomainStatus(domain);
+        
         if (onUpdate) {
           onUpdate(domain);
         }
       } else {
-        toast.error(response.error || 'Domain verification failed');
-        setDomainStatus({
-          configured: true,
-          verified: false
-        });
+        toast.error(response.error || 'Failed to setup domain', { id: toastId });
       }
-      
-      // Refresh status after verification attempt
-      await checkDomainStatus(domain);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.error || 'Failed to verify domain';
-      toast.error(errorMsg);
-      setDomainStatus({
-        configured: true,
-        verified: false
-      });
+      const errorMsg = error.response?.data?.error || 'Failed to setup custom domain';
+      toast.error(errorMsg, { id: toastId });
     } finally {
-      setVerifying(false);
+      setAutoProvisioning(false);
     }
   };
 
-  const handleSave = async () => {
-    setLoading(true);
+  const handleRefreshCertificate = async () => {
+    if (!domain) return;
+    
+    setVerifying(true);
+    const toastId = toast.loading('Checking SSL certificate status...');
+    
     try {
-      const response = await api.put('/portfolio/settings', { custom_domain: domain });
+      const response = await api.post('/portfolio/custom-domain/refresh', { domain });
+      
       if (response.success) {
-        toast.success('Domain configuration saved');
-        if (onUpdate) {
-          onUpdate(domain);
+        if (response.data?.status === 'active') {
+          toast.success('SSL certificate is active! Your domain is ready.', { id: toastId });
+        } else {
+          toast('Certificate is still being validated. Please wait and try again.', { 
+            id: toastId,
+            icon: '⏳'
+          });
         }
-        if (domain) {
-          setShowInstructions(true);
-        }
+        
+        // Refresh status
+        await checkDomainStatus(domain);
       } else {
-        toast.error(response.error || 'Failed to save domain');
+        toast.error(response.error || 'Failed to refresh certificate', { id: toastId });
       }
-    } catch (error) {
-      toast.error('Failed to save domain configuration');
+    } catch (error: any) {
+      toast.error('Failed to refresh certificate status', { id: toastId });
     } finally {
-      setLoading(false);
+      setVerifying(false);
     }
   };
 
@@ -127,33 +165,183 @@ export default function CustomDomainConfig({ initialDomain = '', onUpdate }: Cus
     toast.success('Copied to clipboard');
   };
 
-  const getDNSRecords = () => {
-    const subdomain = domain.split('.')[0];
-    const rootDomain = domain.split('.').slice(1).join('.');
+  const getDNSRecords = (): Array<{
+    type: string;
+    name: string;
+    value: string;
+    description: string;
+    status?: string;
+  }> => {
+    const records: Array<{
+      type: string;
+      name: string;
+      value: string;
+      description: string;
+      status?: string;
+    }> = [];
     
-    return [
-      {
+    // CNAME for domain pointing
+    if (domainStatus.distribution?.domain) {
+      const subdomain = domain.split('.')[0];
+      records.push({
+        type: 'CNAME',
+        name: subdomain,
+        value: domainStatus.distribution.domain,
+        description: 'Points your subdomain to CloudFront distribution'
+      });
+    } else {
+      const subdomain = domain.split('.')[0];
+      records.push({
         type: 'CNAME',
         name: subdomain,
         value: 'cdn.galerly.com',
         description: 'Points your subdomain to Galerly'
-      },
-      {
-        type: 'TXT',
-        name: `_galerly-verify.${subdomain}`,
-        value: `galerly-domain-verification=${Math.random().toString(36).substring(2, 15)}`,
-        description: 'Verifies domain ownership (optional)'
-      }
-    ];
+      });
+    }
+    
+    // SSL Certificate validation records
+    if (domainStatus.certificate?.validation_records) {
+      domainStatus.certificate.validation_records.forEach((record, idx) => {
+        if (record.type === 'CNAME' && record.name && record.value) {
+          records.push({
+            type: record.type,
+            name: record.name,
+            value: record.value,
+            description: `SSL Certificate validation record ${idx + 1}`,
+            status: record.status
+          });
+        }
+      });
+    }
+    
+    return records;
   };
+
+  const getStatusInfo = () => {
+    if (!domainStatus.overall_status) {
+      return null;
+    }
+    
+    switch (domainStatus.overall_status) {
+      case 'active':
+        return {
+          icon: <CheckCircle className="w-5 h-5 text-green-600" />,
+          title: 'Domain Active',
+          message: 'Your custom domain is fully configured and secure with SSL',
+          color: 'green'
+        };
+      case 'pending':
+        return {
+          icon: <RefreshCw className="w-5 h-5 text-amber-600 animate-spin" />,
+          title: 'Configuration In Progress',
+          message: 'Complete DNS configuration to activate your domain',
+          color: 'amber'
+        };
+      default:
+        return {
+          icon: <Info className="w-5 h-5 text-blue-600" />,
+          title: 'Not Configured',
+          message: 'Set up your custom domain with automatic SSL',
+          color: 'blue'
+        };
+    }
+  };
+
+  const statusInfo = getStatusInfo();
 
   return (
     <div className="space-y-6">
+      {/* Status Banner */}
+      {statusInfo && domainStatus.overall_status && (
+        <div className={`border rounded-2xl p-4 bg-${statusInfo.color}-50/30 border-${statusInfo.color}-100`}>
+          <div className="flex items-start gap-3">
+            {statusInfo.icon}
+            <div className="flex-1">
+              <h3 className="text-sm font-semibold text-[#1D1D1F] mb-1">
+                {statusInfo.title}
+              </h3>
+              <p className="text-xs text-[#1D1D1F]/70">
+                {statusInfo.message}
+              </p>
+              
+              {/* Status Details */}
+              {domainStatus.overall_status === 'pending' && (
+                <div className="mt-3 grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="text-xs text-[#1D1D1F]/60 mb-1">SSL Certificate</p>
+                    <div className="flex items-center gap-1">
+                      {domainStatus.certificate?.issued ? (
+                        <>
+                          <CheckCircle className="w-3 h-3 text-green-600" />
+                          <span className="text-xs font-medium text-green-700">Issued</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3 h-3 text-amber-600 animate-spin" />
+                          <span className="text-xs font-medium text-amber-700">Pending</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <p className="text-xs text-[#1D1D1F]/60 mb-1">CloudFront</p>
+                    <div className="flex items-center gap-1">
+                      {domainStatus.distribution?.deployed ? (
+                        <>
+                          <CheckCircle className="w-3 h-3 text-green-600" />
+                          <span className="text-xs font-medium text-green-700">Deployed</span>
+                        </>
+                      ) : (
+                        <>
+                          <RefreshCw className="w-3 h-3 text-amber-600 animate-spin" />
+                          <span className="text-xs font-medium text-amber-700">Deploying</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <p className="text-xs text-[#1D1D1F]/60 mb-1">DNS Propagation</p>
+                    <div className="flex items-center gap-1">
+                      {domainStatus.dns_propagation?.ready ? (
+                        <>
+                          <CheckCircle className="w-3 h-3 text-green-600" />
+                          <span className="text-xs font-medium text-green-700">Complete</span>
+                        </>
+                      ) : (
+                        <>
+                          <AlertCircle className="w-3 h-3 text-amber-600" />
+                          <span className="text-xs font-medium text-amber-700">
+                            {domainStatus.dns_propagation?.percentage || 0}%
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      
       {/* Domain Input */}
       <div>
-        <label className="block text-sm font-medium text-[#1D1D1F] mb-2">
+        <div className="flex items-center justify-between mb-2">
+          <label className="block text-sm font-medium text-[#1D1D1F]">
           Custom Domain
         </label>
+          <a
+            href="/help/custom-domain"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-[#0066CC] hover:underline flex items-center gap-1"
+          >
+            <Info className="w-3.5 h-3.5" />
+            Setup Guide
+          </a>
+        </div>
         <div className="flex gap-2">
           <div className="relative flex-1">
             <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#1D1D1F]/40" />
@@ -164,36 +352,67 @@ export default function CustomDomainConfig({ initialDomain = '', onUpdate }: Cus
               className="w-full pl-12 pr-4 py-3.5 bg-white/50 border border-gray-200 rounded-2xl text-[#1D1D1F] placeholder-[#1D1D1F]/40 focus:outline-none focus:ring-2 focus:ring-[#0066CC]/20 focus:border-[#0066CC] transition-all"
               placeholder="gallery.yourstudio.com"
             />
-            {domainStatus.verified && (
+            {domainStatus.overall_status === 'active' && (
               <CheckCircle className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-green-600" />
             )}
           </div>
+          
+          {/* Auto-Provision Button (Primary Action) */}
+          {!domainStatus.certificate && (
           <button
             type="button"
-            onClick={handleSave}
-            disabled={loading || !domain || domain === initialDomain}
-            className="px-6 py-3.5 bg-white border border-gray-200 rounded-2xl font-medium text-[#1D1D1F] hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              onClick={handleAutoProvision}
+              disabled={autoProvisioning || !domain}
+              className="px-6 py-3.5 bg-gradient-to-r from-[#0066CC] to-[#0052A3] text-white rounded-2xl font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
-            {loading ? 'Saving...' : 'Save'}
+              {autoProvisioning ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Setting up...
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4" />
+                  Auto-Setup
+                </>
+              )}
           </button>
+          )}
+          
+          {/* Refresh Certificate Button (if pending) */}
+          {domainStatus.certificate && !domainStatus.certificate.issued && (
           <button
             type="button"
-            onClick={handleVerify}
-            disabled={verifying || !domain}
+              onClick={handleRefreshCertificate}
+              disabled={verifying}
             className="px-6 py-3.5 bg-[#0066CC] text-white rounded-2xl font-medium hover:bg-[#0052A3] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {verifying ? (
               <>
                 <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                Verifying...
+                  Checking...
               </>
             ) : (
               <>
-                <RefreshCw className="w-4 h-4" />
-                Verify
+                  <Shield className="w-4 h-4" />
+                  Check SSL
               </>
             )}
           </button>
+          )}
+          
+          {/* Legacy Verify Button */}
+          {domainStatus.overall_status === 'active' && (
+            <button
+              type="button"
+              onClick={() => checkDomainStatus(domain)}
+              disabled={verifying}
+              className="px-6 py-3.5 bg-white border border-gray-200 rounded-2xl font-medium text-[#1D1D1F] hover:bg-gray-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </button>
+          )}
         </div>
 
         {/* Status Indicator */}
@@ -234,7 +453,7 @@ export default function CustomDomainConfig({ initialDomain = '', onUpdate }: Cus
       </div>
 
       {/* DNS Configuration Instructions */}
-      {domain && (domainStatus.configured || showInstructions) && (
+      {domain && (domainStatus.certificate || domainStatus.configured || showInstructions) && (
         <div className="border border-blue-100 bg-blue-50/30 rounded-2xl p-6">
           <div className="flex items-start justify-between mb-4">
             <div className="flex items-start gap-3">
@@ -257,7 +476,7 @@ export default function CustomDomainConfig({ initialDomain = '', onUpdate }: Cus
             {getDNSRecords().map((record, index) => (
               <div key={index} className="bg-white rounded-xl p-4 border border-gray-200">
                 <div className="flex items-start justify-between mb-3">
-                  <div>
+                  <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs font-bold text-[#0066CC] bg-blue-50 px-2 py-0.5 rounded">
                         {record.type}
@@ -265,6 +484,12 @@ export default function CustomDomainConfig({ initialDomain = '', onUpdate }: Cus
                       <span className="text-sm font-medium text-[#1D1D1F]">
                         {record.name}
                       </span>
+                      {record.status === 'SUCCESS' && (
+                        <CheckCircle className="w-4 h-4 text-green-600" />
+                      )}
+                      {record.status === 'PENDING_VALIDATION' && (
+                        <RefreshCw className="w-4 h-4 text-amber-600 animate-spin" />
+                      )}
                     </div>
                     <p className="text-xs text-[#1D1D1F]/60">
                       {record.description}
@@ -278,13 +503,13 @@ export default function CustomDomainConfig({ initialDomain = '', onUpdate }: Cus
                       Name/Host
                     </label>
                     <div className="flex items-center gap-2">
-                      <code className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-[#1D1D1F]">
+                      <code className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-[#1D1D1F] break-all">
                         {record.name}
                       </code>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(record.name)}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
                         title="Copy to clipboard"
                       >
                         <Copy className="w-4 h-4 text-[#1D1D1F]/60" />
@@ -297,13 +522,13 @@ export default function CustomDomainConfig({ initialDomain = '', onUpdate }: Cus
                       Value/Points to
                     </label>
                     <div className="flex items-center gap-2">
-                      <code className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-[#1D1D1F]">
+                      <code className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-mono text-[#1D1D1F] break-all">
                         {record.value}
                       </code>
                       <button
                         type="button"
                         onClick={() => copyToClipboard(record.value)}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
                         title="Copy to clipboard"
                       >
                         <Copy className="w-4 h-4 text-[#1D1D1F]/60" />

@@ -171,7 +171,8 @@ export async function searchPhotos(params: {
   if (params.page) queryParams.append('page', params.page.toString());
   if (params.limit) queryParams.append('limit', params.limit.toString());
   
-  return api.get<{ photos: Photo[]; total: number }>(`/photos/search?${queryParams.toString()}`);
+  const queryString = queryParams.toString();
+  return api.get<{ photos: Photo[]; total: number }>(`/photos/search${queryString ? '?' + queryString : ''}`);
 }
 
 // Send batch notification to clients
