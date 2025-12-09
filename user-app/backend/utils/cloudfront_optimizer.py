@@ -214,7 +214,7 @@ class CloudFrontOptimizer:
                         'Quantity': len(paths),
                         'Items': paths
                     },
-                    'CallerReference': f'galerly-invalidation-{datetime.utcnow().isoformat()}'
+                    'CallerReference': f'galerly-invalidation-{datetime.now(timezone.utc).isoformat()}'
                 }
             )
             

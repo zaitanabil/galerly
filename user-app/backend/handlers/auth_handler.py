@@ -6,7 +6,7 @@ import secrets
 import re
 import random
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from utils.config import users_table, sessions_table
 from utils.response import create_response
 from utils.auth import hash_password
@@ -152,7 +152,7 @@ def handle_request_verification_code(body):
     verification_code = str(random.randint(100000, 999999))
     
     # Store verification code in sessions table with expiration (10 minutes)
-    expires_at = int(datetime.utcnow().timestamp() + 600)  # 10 minutes from now
+    expires_at = int(datetime.now(timezone.utc).timestamp() + 600)  # 10 minutes from now
     token = secrets.token_urlsafe(32)  # Unique token to retrieve the code
     
     sessions_table.put_item(Item={
@@ -160,7 +160,7 @@ def handle_request_verification_code(body):
         'type': 'email_verification',
         'email': email,
         'code': verification_code,
-        'created_at': datetime.utcnow().isoformat() + 'Z',
+        'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
         'expires_at': expires_at,
         'verified': False
     })
@@ -199,7 +199,7 @@ def handle_verify_code(body):
         
         # Check if token has expired
         expires_at = verification_record.get('expires_at', 0)
-        if int(datetime.utcnow().timestamp()) > expires_at:
+        if int(datetime.now(timezone.utc).timestamp()) > expires_at:
             # Delete expired token
             sessions_table.delete_item(Key={'token': verification_token})
             return create_response(400, {'error': 'Verification code has expired. Please request a new one.'})
@@ -278,7 +278,7 @@ def handle_register(body):
             
             # Check if token has expired
             expires_at = verification_record.get('expires_at', 0)
-            if int(datetime.utcnow().timestamp()) > expires_at:
+            if int(datetime.now(timezone.utc).timestamp()) > expires_at:
                 sessions_table.delete_item(Key={'token': verification_token})
                 return create_response(400, {'error': 'Verification token has expired. Please request a new verification code.'})
             
@@ -309,7 +309,7 @@ def handle_register(body):
         'username': username,  # Auto-generated unique username
         'role': role,
         'password_hash': hash_password(password),
-        'created_at': datetime.utcnow().isoformat() + 'Z',
+        'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
         'subscription': 'free',
         'plan': 'free', # Initialize plan
         'email_verified': True  # Email was verified during registration
@@ -335,7 +335,7 @@ def handle_register(body):
     sessions_table.put_item(Item={
         'token': token,
         'user': user,
-        'created_at': datetime.utcnow().isoformat() + 'Z'
+        'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
     })
     
     # Set HttpOnly cookie for security
@@ -359,7 +359,7 @@ def handle_register(body):
     }, headers={'Set-Cookie': cookie_value})
 
 def handle_login(body):
-    """Login user"""
+    """Login user - with account restoration support"""
     email = body.get('email', '').lower().strip()
     password = body.get('password', '')
     
@@ -378,7 +378,47 @@ def handle_login(body):
         user = response['Item']
         if user['password_hash'] != hash_password(password):
             return create_response(401, {'error': 'Invalid credentials'})
-    except:
+        
+        # Check if account is marked for deletion
+        account_status = user.get('account_status', 'active')
+        if account_status == 'pending_deletion':
+            deletion_scheduled_for = user.get('deletion_scheduled_for')
+            
+            # Check if still within grace period
+            if deletion_scheduled_for:
+                deletion_date = datetime.fromisoformat(deletion_scheduled_for.replace('Z', ''))
+                if datetime.now(timezone.utc) < deletion_date:
+                    # Within grace period - offer restoration
+                    days_remaining = (deletion_date - datetime.now(timezone.utc)).days
+                    return create_response(403, {
+                        'error': 'account_pending_deletion',
+                        'message': f'Your account is scheduled for deletion in {days_remaining} days. Would you like to restore it?',
+                        'deletion_date': deletion_scheduled_for,
+                        'days_remaining': days_remaining,
+                        'can_restore': True
+                    })
+                else:
+                    # Grace period expired - account should be deleted
+                    return create_response(403, {
+                        'error': 'account_deleted',
+                        'message': 'This account has been deleted and cannot be restored.'
+                    })
+            
+            # No deletion date set (shouldn't happen, but handle gracefully)
+            return create_response(403, {
+                'error': 'account_unavailable',
+                'message': 'This account is not available. Please contact support.'
+            })
+        
+        # Check if account is suspended by admin
+        if account_status == 'suspended':
+            return create_response(403, {
+                'error': 'account_suspended',
+                'message': 'Your account has been suspended. Please contact support.'
+            })
+        
+    except Exception as e:
+        print(f"Login error: {str(e)}")
         return create_response(401, {'error': 'Invalid credentials'})
     
     # Create session token
@@ -386,7 +426,7 @@ def handle_login(body):
     sessions_table.put_item(Item={
         'token': token,
         'user': user,
-        'created_at': datetime.utcnow().isoformat() + 'Z'
+        'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
     })
     
     # Set HttpOnly cookie for security
@@ -493,13 +533,13 @@ def handle_request_password_reset(body):
         reset_token = secrets.token_urlsafe(32)
         
         # Store reset token in sessions table with expiration (1 hour)
-        expires_at = int(datetime.utcnow().timestamp() + 3600)  # 1 hour from now
+        expires_at = int(datetime.now(timezone.utc).timestamp() + 3600)  # 1 hour from now
         sessions_table.put_item(Item={
             'token': reset_token,
             'type': 'password_reset',
             'user_id': user['id'],
             'email': email,
-            'created_at': datetime.utcnow().isoformat() + 'Z',
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
             'expires_at': expires_at
         })
         
@@ -543,7 +583,7 @@ def handle_reset_password(body):
         
         # Check if token has expired
         expires_at = reset_record.get('expires_at', 0)
-        if int(datetime.utcnow().timestamp()) > expires_at:
+        if int(datetime.now(timezone.utc).timestamp()) > expires_at:
             # Delete expired token
             sessions_table.delete_item(Key={'token': token})
             return create_response(400, {'error': 'Reset token has expired. Please request a new one.'})
@@ -559,7 +599,7 @@ def handle_reset_password(body):
             UpdateExpression='SET password_hash = :hash, updated_at = :now',
             ExpressionAttributeValues={
                 ':hash': hash_password(new_password),
-                ':now': datetime.utcnow().isoformat() + 'Z'
+                ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
         )
         
@@ -575,13 +615,27 @@ def handle_reset_password(body):
 
 def handle_delete_account(user, cookie_header=None):
     """
-    Initiate account deletion as a background job
-    In LocalStack mode: Process deletion synchronously for immediate testing
-    In Production: Queue as background job for asynchronous processing
+    Mark account for deletion (soft delete with 30-day grace period)
+    
+    GDPR Compliance Notes:
+    - Account marked for deletion immediately (status: 'pending_deletion')
+    - User logged out immediately
+    - Account actually deleted after 30 days
+    - User can restore account within 30 days
+    - Scheduled cleanup job removes accounts past grace period
+    
+    Grace Period Rationale:
+    - Allows users to change their mind
+    - Common industry practice
+    - Still complies with GDPR "without undue delay"
     """
     try:
-        from handlers.background_jobs_handler import create_background_job, process_account_deletion
-        from utils.config import AWS_ENDPOINT_URL
+        from datetime import timedelta
+        
+        user_id = user['id']
+        user_email = user['email']
+        
+        print(f"🗑️ Marking account for deletion: {user_email}")
         
         # Extract session token from cookie to clear it immediately
         session_token = None
@@ -592,60 +646,72 @@ def handle_delete_account(user, cookie_header=None):
                     session_token = cookie.split('=')[1].strip()
                     break
         
-        # Delete the current session immediately so user is logged out
-        if session_token:
-            try:
-                sessions_table.delete_item(Key={'token': session_token})
-            except Exception as e:
-                print(f"Error deleting session: {str(e)}")
+        # Delete ALL user sessions immediately (logs them out everywhere)
+        try:
+            sessions_response = sessions_table.scan(
+                FilterExpression='user.id = :user_id',
+                ExpressionAttributeValues={':user_id': user_id}
+            )
+            for session in sessions_response.get('Items', []):
+                sessions_table.delete_item(Key={'token': session['token']})
+            print(f"  Deleted {len(sessions_response.get('Items', []))} active sessions")
+        except Exception as e:
+            print(f"⚠️ Error deleting sessions: {str(e)}")
         
-        # Create background job for full account deletion
-        job_id = create_background_job(
-            job_type='account_deletion',
-            user_id=user['id'],
-            user_email=user['email'],
-            metadata={'initiated_at': datetime.utcnow().isoformat() + 'Z'}
+        # Calculate deletion date (30 days from now)
+        deletion_date = datetime.now(timezone.utc) + timedelta(days=30)
+        deletion_date_str = deletion_date.isoformat() + 'Z'
+        
+        # Mark account as pending deletion
+        users_table.update_item(
+            Key={'email': user_email},
+            UpdateExpression='SET account_status = :status, '
+                           'deletion_requested_at = :now, '
+                           'deletion_scheduled_for = :deletion_date, '
+                           'updated_at = :now',
+            ExpressionAttributeValues={
+                ':status': 'pending_deletion',
+                ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+                ':deletion_date': deletion_date_str
+            }
         )
         
-        # In LocalStack mode: Process deletion synchronously
-        if AWS_ENDPOINT_URL and 'localstack' in AWS_ENDPOINT_URL.lower():
-            print(f"Processing account deletion synchronously for user {user['email']}")
-            success = process_account_deletion(
-                job_id=job_id,
-                user_id=user['id'],
-                user_email=user['email']
-            )
-            
-            # Clear session cookie
-            is_local = os.environ.get('ENVIRONMENT') == 'local'
-            secure_flag = '; Secure' if not is_local else ''
-            cookie_value = f'galerly_session=; HttpOnly{secure_flag}; SameSite=Strict; Path=/; Max-Age=0'
-            
-            if success:
-                return create_response(200, {
-                    'message': 'Account deleted successfully',
-                    'job_id': job_id
-                }, headers={'Set-Cookie': cookie_value})
-            else:
-                return create_response(500, {'error': 'Failed to delete account'})
+        print(f"  Account marked for deletion")
+        print(f"  Scheduled deletion: {deletion_date_str}")
         
-        # Production mode: Queue as background job for async processing
+        # Send confirmation email with restore link
+        try:
+            from utils.email import send_account_deletion_scheduled_email
+            send_account_deletion_scheduled_email(
+                user_email,
+                user.get('name') or user.get('username', 'User'),
+                deletion_date_str
+            )
+            print(f"  Sent deletion confirmation email")
+        except Exception as e:
+            print(f"⚠️ Failed to send confirmation email: {str(e)}")
+            # Don't fail the request if email fails
+        
         # Clear session cookie
         is_local = os.environ.get('ENVIRONMENT') == 'local'
         secure_flag = '; Secure' if not is_local else ''
         cookie_value = f'galerly_session=; HttpOnly{secure_flag}; SameSite=Strict; Path=/; Max-Age=0'
         
         return create_response(200, {
-            'message': 'Account deletion initiated. This process may take a few minutes.',
-            'job_id': job_id,
-            'status': 'pending'
+            'message': 'Account scheduled for deletion. You have 30 days to change your mind.',
+            'deletion_date': deletion_date_str,
+            'grace_period_days': 30,
+            'restore_info': 'You can restore your account by logging in within the next 30 days.'
         }, headers={'Set-Cookie': cookie_value})
         
     except Exception as e:
-        print(f"Error initiating account deletion: {str(e)}")
+        print(f"❌ Error marking account for deletion: {str(e)}")
         import traceback
         traceback.print_exc()
-        return create_response(500, {'error': 'Failed to initiate account deletion'})
+        return create_response(500, {
+            'error': 'Failed to schedule account deletion',
+            'message': 'An error occurred. Please try again or contact support.'
+        })
 
 
 def handle_generate_api_key(user):
@@ -666,7 +732,7 @@ def handle_generate_api_key(user):
             UpdateExpression='SET api_key = :key, api_key_created_at = :now',
             ExpressionAttributeValues={
                 ':key': api_key,
-                ':now': datetime.utcnow().isoformat() + 'Z'
+                ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
         )
         
@@ -693,3 +759,113 @@ def handle_get_api_key(user):
     except Exception as e:
         print(f"Error getting API key: {str(e)}")
         return create_response(500, {'error': 'Failed to get API key'})
+
+
+def handle_restore_account(body):
+    """
+    Restore account that was marked for deletion
+    Allows user to cancel deletion within 30-day grace period
+    
+    POST /v1/auth/restore-account
+    Body: { "email": "user@example.com", "password": "password" }
+    """
+    try:
+        email = body.get('email', '').lower().strip()
+        password = body.get('password', '')
+        
+        if not email or not password:
+            return create_response(400, {'error': 'Email and password required'})
+        
+        # Validate email format
+        if not validate_email_format(email):
+            return create_response(400, {'error': 'Invalid email format'})
+        
+        # Get user
+        response = users_table.get_item(Key={'email': email})
+        if 'Item' not in response:
+            return create_response(404, {'error': 'Account not found'})
+        
+        user = response['Item']
+        
+        # Verify password
+        if user['password_hash'] != hash_password(password):
+            return create_response(401, {'error': 'Invalid credentials'})
+        
+        # Check if account is pending deletion
+        account_status = user.get('account_status', 'active')
+        if account_status != 'pending_deletion':
+            if account_status == 'active':
+                return create_response(400, {'error': 'Account is already active'})
+            else:
+                return create_response(400, {'error': f'Account cannot be restored (status: {account_status})'})
+        
+        # Check if still within grace period
+        deletion_scheduled_for = user.get('deletion_scheduled_for')
+        if not deletion_scheduled_for:
+            return create_response(400, {'error': 'No deletion date found'})
+        
+        deletion_date = datetime.fromisoformat(deletion_scheduled_for.replace('Z', ''))
+        if datetime.now(timezone.utc) >= deletion_date:
+            return create_response(403, {
+                'error': 'Grace period expired',
+                'message': 'The 30-day grace period has expired. This account cannot be restored.'
+            })
+        
+        # Restore account
+        users_table.update_item(
+            Key={'email': email},
+            UpdateExpression='SET account_status = :status, '
+                           'updated_at = :now '
+                           'REMOVE deletion_requested_at, deletion_scheduled_for',
+            ExpressionAttributeValues={
+                ':status': 'active',
+                ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+            }
+        )
+        
+        print(f"✅ Account restored: {email}")
+        
+        # Send confirmation email
+        try:
+            from utils.email import send_account_restored_email
+            send_account_restored_email(
+                email,
+                user.get('name') or user.get('username', 'User')
+            )
+        except Exception as e:
+            print(f"⚠️ Failed to send restoration email: {str(e)}")
+        
+        # Create new session token
+        token = secrets.token_urlsafe(32)
+        sessions_table.put_item(Item={
+            'token': token,
+            'user': user,
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+        })
+        
+        # Set HttpOnly cookie
+        max_age = int(os.environ.get('SESSION_MAX_AGE'))
+        is_local = os.environ.get('ENVIRONMENT') == 'local'
+        secure_flag = '; Secure' if not is_local else ''
+        cookie_value = f'galerly_session={token}; HttpOnly{secure_flag}; SameSite=Strict; Path=/; Max-Age={max_age}'
+        
+        return create_response(200, {
+            'message': 'Account restored successfully! Welcome back.',
+            'user': {
+                'id': user['id'],
+                'email': user['email'],
+                'username': user.get('username'),
+                'name': user.get('name'),
+                'role': user.get('role', 'photographer'),
+                'plan': user.get('plan', 'free')
+            }
+        }, headers={'Set-Cookie': cookie_value})
+        
+    except Exception as e:
+        print(f"❌ Error restoring account: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {
+            'error': 'Failed to restore account',
+            'message': 'An error occurred. Please try again or contact support.'
+        })

@@ -1,7 +1,7 @@
 """
 Subscription management and plan enforcement
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table, users_table, dynamodb, features_table, user_features_table
 from utils.response import create_response
@@ -262,7 +262,7 @@ def check_gallery_limit(user):
         )
         
         galleries = response.get('Items', [])
-        current_month = datetime.utcnow().strftime('%Y-%m')
+        current_month = datetime.now(timezone.utc).strftime('%Y-%m')
         
         # Count galleries created this month
         monthly_count = sum(

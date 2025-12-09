@@ -5,7 +5,7 @@ Allows photographers to remove Galerly branding and use custom branding
 import os
 import uuid
 import base64
-from datetime import datetime
+from datetime import datetime, timezone
 from utils.config import users_table, s3_client, S3_BUCKET
 from utils.response import create_response
 from handlers.subscription_handler import get_user_features
@@ -125,7 +125,7 @@ def handle_update_branding_settings(user, body):
         
         # Add updated timestamp
         update_expressions.append('updated_at = :updated_at')
-        expression_values[':updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        expression_values[':updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Update user record
         users_table.update_item(
@@ -211,7 +211,7 @@ def handle_upload_branding_logo(user, body):
             UpdateExpression='SET custom_branding_logo_url = :logo_url, updated_at = :updated_at',
             ExpressionAttributeValues={
                 ':logo_url': logo_url,
-                ':updated_at': datetime.utcnow().isoformat() + 'Z'
+                ':updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
         )
         

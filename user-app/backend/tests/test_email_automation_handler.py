@@ -5,7 +5,7 @@ Automated email scheduling and queue processing
 import pytest
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 from handlers.email_automation_handler import (
     handle_schedule_automated_email,
@@ -35,11 +35,11 @@ def mock_scheduled_email():
         'subject': 'Test Subject',
         'body_html': '<p>Test email</p>',
         'body_text': 'Test email',
-        'scheduled_time': (datetime.utcnow() + timedelta(hours=1)).isoformat() + 'Z',
+        'scheduled_time': (datetime.now(timezone.utc) + timedelta(hours=1)).replace(tzinfo=None).isoformat() + 'Z',
         'status': 'scheduled',
         'email_type': 'custom',
         'retry_count': 0,
-        'created_at': datetime.utcnow().isoformat() + 'Z'
+        'created_at': datetime.now(timezone.utc).replace(tzinfo=None).replace(tzinfo=None).replace(tzinfo=None).isoformat() + 'Z'
     }
 
 
@@ -58,7 +58,7 @@ class TestScheduleAutomatedEmail:
             'email_type': 'custom',
             'subject': 'Gallery Ready',
             'body': '<p>Your gallery is ready</p>',
-            'scheduled_time': (datetime.utcnow() + timedelta(days=1)).isoformat() + 'Z'
+            'scheduled_time': (datetime.now(timezone.utc) + timedelta(days=1)).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         response = handle_schedule_automated_email(mock_user, body)
@@ -78,7 +78,7 @@ class TestScheduleAutomatedEmail:
             'gallery_id': 'gallery-123',
             'email_type': 'custom',
             'subject': 'Test',
-            'scheduled_time': (datetime.utcnow() + timedelta(days=1)).isoformat() + 'Z'
+            'scheduled_time': (datetime.now(timezone.utc) + timedelta(days=1)).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         response = handle_schedule_automated_email(mock_user, body)
@@ -114,7 +114,7 @@ class TestScheduleAutomatedEmail:
             'email_type': 'custom',
             'subject': 'Test',
             'body': '<p>Test</p>',
-            'scheduled_time': (datetime.utcnow() - timedelta(days=1)).isoformat() + 'Z'
+            'scheduled_time': (datetime.now(timezone.utc) - timedelta(days=1)).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         response = handle_schedule_automated_email(mock_user, body)
@@ -138,8 +138,8 @@ class TestSetupGalleryAutomation:
                 'id': 'gallery-123',
                 'user_id': mock_user['id'],
                 'title': 'Wedding Photos',
-                'selection_deadline': (datetime.utcnow() + timedelta(days=7)).isoformat() + 'Z',
-                'created_at': datetime.utcnow().isoformat() + 'Z',
+                'selection_deadline': (datetime.now(timezone.utc) + timedelta(days=7)).replace(tzinfo=None).isoformat() + 'Z',
+                'created_at': datetime.now(timezone.utc).replace(tzinfo=None).replace(tzinfo=None).replace(tzinfo=None).isoformat() + 'Z',
                 'client_emails': ['client@test.com']
             }
         }
@@ -188,7 +188,7 @@ class TestProcessEmailQueue:
     @patch('handlers.email_automation_handler.email_queue_table')
     def test_process_queue_sends_due_emails(self, mock_table, mock_send):
         """Test processing emails that are due"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         mock_table.scan.return_value = {
             'Items': [
                 {
@@ -217,7 +217,7 @@ class TestProcessEmailQueue:
     @patch('handlers.email_automation_handler.email_queue_table')
     def test_process_queue_retries_failed_emails(self, mock_table, mock_send):
         """Test retry logic for failed emails"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         mock_table.scan.return_value = {
             'Items': [
                 {
@@ -245,7 +245,7 @@ class TestProcessEmailQueue:
     @patch('handlers.email_automation_handler.email_queue_table')
     def test_process_queue_marks_failed_after_max_retries(self, mock_table, mock_send):
         """Test marking emails as failed after max retries"""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         mock_table.scan.return_value = {
             'Items': [
                 {

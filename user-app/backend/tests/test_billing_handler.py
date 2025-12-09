@@ -5,6 +5,7 @@ Tests cover: get subscription, cancel subscription, change plan, reactivate subs
 import pytest
 from unittest.mock import Mock, patch
 import json
+from datetime import datetime, timezone
 
 @pytest.fixture
 def mock_billing_dependencies():
@@ -433,7 +434,7 @@ class TestSubscriptionValidation:
         from datetime import datetime
         
         # FIX: current_period_end must be a numeric timestamp (float), not ISO string
-        future_timestamp = (datetime.utcnow().timestamp() + 86400)  # 1 day in the future
+        future_timestamp = (datetime.now(timezone.utc).timestamp() + 86400)  # 1 day in the future
         
         canceled_sub = {
             **sample_subscription,

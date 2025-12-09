@@ -2,7 +2,7 @@
 Authentication utilities
 """
 import hashlib
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from boto3.dynamodb.conditions import Key
 from .config import sessions_table, users_table
 
@@ -85,7 +85,7 @@ def get_user_from_token(event):
                 
                 # Check if session is expired (7 days - Swiss law compliance)
                 created_at = datetime.fromisoformat(session.get('created_at', '2000-01-01').replace('Z', ''))
-                age = datetime.utcnow() - created_at
+                age = datetime.now(timezone.utc) - created_at
                 
                 if age <= timedelta(days=7):
                     return session.get('user')
@@ -109,7 +109,7 @@ def get_session(token):
         
         # Check if session is expired (7 days)
         created_at = datetime.fromisoformat(session.get('created_at', '2000-01-01').replace('Z', ''))
-        age = datetime.utcnow() - created_at
+        age = datetime.now(timezone.utc) - created_at
         
         if age > timedelta(days=7):
             sessions_table.delete_item(Key={'token': token})

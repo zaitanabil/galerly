@@ -4,7 +4,7 @@ Manages email notification settings for photographers and their clients
 """
 import boto3
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from utils.response import create_response
 from utils.email import (
     send_gallery_ready_email,
@@ -54,8 +54,8 @@ def get_notification_preferences(user_id):
             preferences = {
                 'user_id': user_id,
                 **DEFAULT_PREFERENCES,
-                'created_at': datetime.utcnow().isoformat(),
-                'updated_at': datetime.utcnow().isoformat()
+                'created_at': datetime.now(timezone.utc).isoformat(),
+                'updated_at': datetime.now(timezone.utc).isoformat()
             }
             preferences_table.put_item(Item=preferences)
             return preferences
@@ -81,7 +81,7 @@ def update_notification_preferences(user_id, preferences_update):
         if 'photographer_notifications' in preferences_update:
             current_prefs['photographer_notifications'].update(preferences_update['photographer_notifications'])
         
-        current_prefs['updated_at'] = datetime.utcnow().isoformat()
+        current_prefs['updated_at'] = datetime.now(timezone.utc).isoformat()
         
         # Save to DynamoDB
         preferences_table.put_item(Item=current_prefs)

@@ -3,7 +3,9 @@ import { useState, FormEvent, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { getUserData } from '../utils/api';
+import { restoreAccount } from '../services/userService';
 import { Mail, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import AccountRestorationPrompt from '../components/AccountRestorationPrompt';
 
 export default function LoginPage() {
   const navigate = useNavigate();
@@ -13,6 +15,14 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Restoration prompt state
+  const [showRestorationPrompt, setShowRestorationPrompt] = useState(false);
+  const [restorationData, setRestorationData] = useState<{
+    email: string;
+    daysRemaining: number;
+    deletionDate: string;
+  } | null>(null);
 
   useEffect(() => {
     if (isAuthenticated && user) {
@@ -32,9 +42,36 @@ export default function LoginPage() {
       const userData = getUserData();
       const targetPath = userData?.role === 'client' ? '/client-dashboard' : '/dashboard';
       navigate(targetPath);
-    } else {
-      setError(result.error || 'Login failed. Please try again.');
+    } else if (result.error === 'account_pending_deletion' && result.canRestore) {
+      // Show restoration prompt
+      setShowRestorationPrompt(true);
+      setRestorationData({
+        email,
+        daysRemaining: result.daysRemaining || 0,
+        deletionDate: result.deletionDate || ''
+      });
       setLoading(false);
+    } else {
+      setError(result.message || result.error || 'Login failed. Please try again.');
+      setLoading(false);
+    }
+  };
+
+  const handleRestore = async (email: string, password: string) => {
+    try {
+      const response = await restoreAccount(email, password);
+      
+      if (response.success) {
+        // Account restored successfully
+        setShowRestorationPrompt(false);
+        
+        // Refresh page to login with restored account
+        window.location.href = '/dashboard';
+      } else {
+        throw new Error(response.error || 'Failed to restore account');
+      }
+    } catch (err: any) {
+      throw err;
     }
   };
 
@@ -161,6 +198,20 @@ export default function LoginPage() {
           </p>
         </div>
       </div>
+      
+      {/* Account Restoration Prompt */}
+      {showRestorationPrompt && restorationData && (
+        <AccountRestorationPrompt
+          email={restorationData.email}
+          daysRemaining={restorationData.daysRemaining}
+          deletionDate={restorationData.deletionDate}
+          onRestore={handleRestore}
+          onCancel={() => {
+            setShowRestorationPrompt(false);
+            setRestorationData(null);
+          }}
+        />
+      )}
     </div>
   );
 }

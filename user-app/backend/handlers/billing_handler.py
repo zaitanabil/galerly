@@ -3,7 +3,7 @@ Billing and payment handlers - Stripe integration
 """
 import os
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from utils.config import users_table, billing_table, subscriptions_table
 from utils.response import create_response
@@ -367,7 +367,7 @@ def handle_change_plan(user, body):
                 ExpressionAttributeValues={
                     ':true': True,
                     ':false': False,
-                    ':now': datetime.utcnow().isoformat() + 'Z'
+                    ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 }
             )
         except Exception as e:
@@ -511,7 +511,7 @@ def handle_change_plan(user, body):
                     )
                     subscription['cancel_at_period_end'] = False
                     subscription['status'] = 'active'  # Update status to active
-                    subscription['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+                    subscription['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                     subscription['processing_change'] = False  # Release lock
                     subscriptions_table.put_item(Item=subscription)
                     print(f"Reactivated subscription {stripe_subscription_id} (removed cancel_at_period_end)")
@@ -525,7 +525,7 @@ def handle_change_plan(user, body):
                                 ExpressionAttributeNames={'#plan': 'plan'},
                                 ExpressionAttributeValues={
                                     ':plan_val': plan_id,
-                                    ':now': datetime.utcnow().isoformat() + 'Z'
+                                    ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                                 }
                             )
                             print(f"Updated user {user_email} to plan {plan_id} (reactivation)")
@@ -630,7 +630,7 @@ def handle_change_plan(user, body):
                 # Store pending plan change in subscription record
                 subscription['pending_plan'] = plan_id
                 subscription['pending_plan_change_at'] = stripe_sub.get('current_period_end')
-                subscription['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+                subscription['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 subscription['processing_change'] = False  # Release lock
                 subscriptions_table.put_item(Item=subscription)
                 
@@ -723,7 +723,7 @@ def handle_change_plan(user, body):
                             ExpressionAttributeNames={'#plan': 'plan'},
                             ExpressionAttributeValues={
                                 ':plan_val': plan_id,
-                                ':now': datetime.utcnow().isoformat() + 'Z'
+                                ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                             }
                         )
                         print(f"Updated user {user_email} to plan {plan_id} (immediate upgrade)")
@@ -733,7 +733,7 @@ def handle_change_plan(user, body):
                 # Update subscription record
                 try:
                     subscription['plan'] = plan_id
-                    subscription['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+                    subscription['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                     subscription['processing_change'] = False  # Release lock
                     subscriptions_table.put_item(Item=subscription)
                     print(f"Updated subscription record to plan {plan_id}")
@@ -1314,7 +1314,7 @@ def handle_check_downgrade_limits(user, target_plan):
         total_storage_mb = sum(float(g.get('storage_used', 0)) for g in all_galleries)
         total_storage_gb = total_storage_mb / 1024
         
-        current_month = datetime.utcnow().strftime('%Y-%m')
+        current_month = datetime.now(timezone.utc).strftime('%Y-%m')
         monthly_galleries = sum(
             1 for g in all_galleries 
             if g.get('created_at', '').startswith(current_month)
@@ -1453,7 +1453,7 @@ def handle_downgrade_subscription(user, body):
                             ExpressionAttributeNames={'#plan': 'plan'},
                             ExpressionAttributeValues={
                                 ':plan_val': subscription_plan,
-                                ':now': datetime.utcnow().isoformat() + 'Z'
+                                ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                             }
                         )
                         print(f"Synced user record with subscription plan: {subscription_plan}")
@@ -1537,7 +1537,7 @@ def handle_downgrade_subscription(user, body):
             subscription['status'] = 'canceled'
             subscription['cancel_at_period_end'] = True
             subscription['pending_plan'] = 'free'  # Will change to free at period end
-            subscription['canceled_at'] = datetime.utcnow().isoformat() + 'Z'
+            subscription['canceled_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             
             # Get period end from Stripe
             if stripe_subscription_id and stripe:
@@ -1688,8 +1688,8 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                         try:
                             old_sub['status'] = 'canceled'
                             old_sub['cancel_at_period_end'] = False
-                            old_sub['canceled_at'] = datetime.utcnow().isoformat() + 'Z'
-                            old_sub['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+                            old_sub['canceled_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+                            old_sub['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                             subscriptions_table.put_item(Item=old_sub)
                             print(f"Marked old subscription record as canceled for user {user_id}")
                         except Exception as e:
@@ -1707,7 +1707,7 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                         },
                         ExpressionAttributeValues={
                             ':plan': plan,
-                            ':now': datetime.utcnow().isoformat() + 'Z'
+                            ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                         }
                     )
                     print(f"Updated user {customer_email} to plan {plan}")
@@ -1741,8 +1741,8 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                         'plan': plan,
                         'status': 'active',
                         'interval': interval,
-                        'created_at': datetime.utcnow().isoformat() + 'Z',
-                        'updated_at': datetime.utcnow().isoformat() + 'Z'
+                        'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+                        'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                     })
                     print(f"Created subscription record for user {user_id} with interval {interval}")
                 except Exception as e:
@@ -1768,7 +1768,7 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                                     'currency': invoice.get('currency', 'usd'),
                                     'status': 'paid',
                                     'plan': plan,
-                                    'created_at': datetime.utcnow().isoformat() + 'Z'
+                                    'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                                 })
                                 print(f"Created billing record for invoice {invoice_id} from checkout session")
                         except Exception as e:
@@ -1823,13 +1823,13 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                 
                 # Update cancel_at_period_end flag
                 subscription['cancel_at_period_end'] = cancel_at_period_end
-                subscription['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+                subscription['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 
                 # Check if this is a period end and pending plan change should take effect
                 if pending_plan and pending_plan_change_at:
                     # Check if current period end has passed (or is very close to) the scheduled change time
                     # pending_plan_change_at is a Unix timestamp, current_period_end is also Unix timestamp
-                    current_time = datetime.utcnow().timestamp()
+                    current_time = datetime.now(timezone.utc).timestamp()
                     # Apply change if we're past the scheduled time (with 1 hour buffer for webhook delays)
                     if current_time >= (pending_plan_change_at - 3600):
                         # Period has ended (or is ending), apply pending plan change
@@ -1848,7 +1848,7 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                                     ExpressionAttributeNames={'#plan': 'plan'},
                                     ExpressionAttributeValues={
                                         ':plan_val': pending_plan,
-                                        ':now': datetime.utcnow().isoformat() + 'Z'
+                                        ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                                     }
                                 )
                                 print(f"Updated user {user_email} to plan {pending_plan} at period end (downgrade applied)")
@@ -1870,7 +1870,7 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                                     ExpressionAttributeNames={'#plan': 'plan'},
                                     ExpressionAttributeValues={
                                         ':plan_val': plan,
-                                        ':now': datetime.utcnow().isoformat() + 'Z'
+                                        ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                                     }
                                 )
                                 print(f"Updated user {user_email} to plan {plan} via webhook (immediate upgrade)")
@@ -1923,7 +1923,7 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                             ExpressionAttributeNames={'#plan': 'plan'},
                             ExpressionAttributeValues={
                                 ':plan_val': plan_to_set,
-                                ':now': datetime.utcnow().isoformat() + 'Z'
+                                ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                             }
                         )
                         print(f"Updated user {user_email} to plan {plan_to_set} after subscription deletion")
@@ -1932,7 +1932,7 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                 
                 # Update subscription status
                 subscription['status'] = 'canceled'
-                subscription['canceled_at'] = datetime.utcnow().isoformat() + 'Z'
+                subscription['canceled_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 # Clear pending plan since it's been applied
                 if pending_plan:
                     subscription['pending_plan'] = None
@@ -1995,7 +1995,7 @@ def handle_stripe_webhook(event_data, stripe_signature='', raw_body=''):
                             'currency': data.get('currency', 'usd'),
                             'status': 'paid',
                             'plan': data.get('subscription_details', {}).get('metadata', {}).get('plan') or 'free',
-                            'created_at': datetime.utcnow().isoformat() + 'Z'
+                            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                         })
                         print(f"Created billing record for invoice {invoice_id}, user {user_id}, amount ${amount_paid / 100}")
                         

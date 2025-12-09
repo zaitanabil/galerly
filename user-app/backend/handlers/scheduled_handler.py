@@ -2,7 +2,7 @@
 Scheduled Lambda handlers for periodic tasks
 """
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table, users_table
 from utils.response import create_response
@@ -30,7 +30,7 @@ def _handle_gallery_expiration_reminders_DEPRECATED(event, context):
         print("🔄 Starting gallery expiration reminder check...")
         
         # Calculate date range (galleries expiring within 7 days)
-        today = datetime.utcnow()
+        today = datetime.now(timezone.utc)
         reminder_window = today + timedelta(days=7)
         
         # Format dates for comparison (ISO format strings)
@@ -178,7 +178,7 @@ def _handle_gallery_expiration_reminders_DEPRECATED(event, context):
             'galleries_expiring_soon': len(expiring_galleries),
             'emails_sent': emails_sent,
             'emails_failed': emails_failed,
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         print(f"Reminder check completed: {emails_sent} emails sent, {emails_failed} failed")
@@ -191,7 +191,7 @@ def _handle_gallery_expiration_reminders_DEPRECATED(event, context):
         return {
             'status': 'error',
             'error': str(e),
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
 
 def handle_expire_galleries(event, context):
@@ -215,7 +215,7 @@ def _handle_expire_galleries_DEPRECATED(event, context):
     try:
         print("🔄 Starting gallery expiration check...")
         
-        today = datetime.utcnow()
+        today = datetime.now(timezone.utc)
         today_str = today.isoformat() + 'Z'
         
         # Scan all galleries
@@ -275,7 +275,7 @@ def _handle_expire_galleries_DEPRECATED(event, context):
         for gallery in expired_galleries:
             try:
                 gallery['archived'] = True
-                gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+                gallery['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 galleries_table.put_item(Item=gallery)
                 archived_count += 1
                 print(f"Archived expired gallery {gallery.get('id')}")
@@ -287,7 +287,7 @@ def _handle_expire_galleries_DEPRECATED(event, context):
             'galleries_checked': len(all_galleries),
             'expired_galleries': len(expired_galleries),
             'archived_count': archived_count,
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         print(f"Expiration check completed: {archived_count} galleries archived")
@@ -300,6 +300,6 @@ def _handle_expire_galleries_DEPRECATED(event, context):
         return {
             'status': 'error',
             'error': str(e),
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
 

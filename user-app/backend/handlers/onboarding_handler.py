@@ -3,7 +3,7 @@ Client Onboarding Automation
 Automated workflows for new client onboarding
 """
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb, users_table
 from utils.response import create_response
@@ -59,7 +59,7 @@ def handle_create_onboarding_workflow(user, body):
         
         # Create workflow
         workflow_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         workflow = {
             'id': workflow_id,
@@ -128,7 +128,7 @@ def handle_trigger_onboarding(photographer_id, trigger_type, client_data):
         for workflow in workflows:
             try:
                 execution_id = str(uuid.uuid4())
-                timestamp = datetime.utcnow().isoformat() + 'Z'
+                timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 
                 # Create execution record
                 execution = {
@@ -259,7 +259,7 @@ def handle_update_workflow(user, workflow_id, body):
         
         # Always update timestamp
         update_fields.append('updated_at = :updated_at')
-        expr_values[':updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        expr_values[':updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Execute update
         update_expression = 'SET ' + ', '.join(update_fields)

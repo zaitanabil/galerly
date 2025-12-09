@@ -6,7 +6,7 @@ Export analytics data in CSV/PDF/Excel formats
 import json
 import csv
 import io
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import boto3
 from utils.auth import get_user_from_token
 from utils.response import create_response
@@ -307,7 +307,7 @@ def generate_pdf_report(photographer_id, report_type, start_date, end_date):
     from reportlab.lib.enums import TA_CENTER
     
     # Use module-level s3 client (already imported at top)
-    filename = f"analytics/{photographer_id}/report_{report_type}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+    filename = f"analytics/{photographer_id}/report_{report_type}_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.pdf"
     bucket_name = os.environ.get('S3_BUCKET_NAME', 'galerly-files')
     
     # Fetch analytics data for the report
@@ -363,7 +363,7 @@ def generate_pdf_report(photographer_id, report_type, start_date, end_date):
     # Report metadata
     meta_data = [
         ['Report Period:', f"{start_date[:10]} to {end_date[:10]}"],
-        ['Generated:', datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC')],
+        ['Generated:', datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')],
         ['Report Type:', report_type.replace('_', ' ').title()],
         ['Photographer ID:', photographer_id[:8] + '...'],
     ]
@@ -460,7 +460,7 @@ def generate_pdf_report(photographer_id, report_type, start_date, end_date):
                 'start_date': start_date[:10],
                 'end_date': end_date[:10],
                 'content_type': 'analytics_report',
-                'generated_at': datetime.utcnow().isoformat()
+                'generated_at': datetime.now(timezone.utc).isoformat()
             }
         )
         

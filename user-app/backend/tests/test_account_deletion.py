@@ -1,7 +1,9 @@
 """
 Tests for account deletion and session cleanup
+Updated for grace period implementation
 """
 import pytest
+import json
 from unittest.mock import patch
 from handlers.auth_handler import handle_delete_account, handle_logout
 
@@ -11,21 +13,26 @@ def mock_auth_dependencies():
     """Mock auth handler dependencies."""
     with patch('handlers.auth_handler.users_table') as mock_users, \
          patch('handlers.auth_handler.sessions_table') as mock_sessions, \
-         patch('handlers.background_jobs_handler.create_background_job') as mock_job:
-        mock_job.return_value = 'job_123'
+         patch('utils.email.send_account_deletion_scheduled_email') as mock_email:
+        mock_users.update_item.return_value = {}
+        mock_sessions.scan.return_value = {'Items': []}
         yield {
             'users': mock_users,
             'sessions': mock_sessions,
-            'job': mock_job
+            'email': mock_email
         }
 
 
 def test_delete_account_clears_session(sample_user, mock_auth_dependencies):
-    """Test that deleting account creates background job"""
+    """Test that deleting account marks for deletion and clears sessions"""
     result = handle_delete_account(sample_user)
     
     assert result['statusCode'] == 200
-    assert mock_auth_dependencies['job'].called
+    body = json.loads(result['body'])
+    
+    # Grace period implementation
+    assert 'deletion_date' in body
+    assert body['grace_period_days'] == 30
 
 
 def test_delete_account_clears_cookie(sample_user, mock_auth_dependencies):
@@ -33,15 +40,18 @@ def test_delete_account_clears_cookie(sample_user, mock_auth_dependencies):
     result = handle_delete_account(sample_user)
     
     assert result['statusCode'] == 200
-    # Cookie clearing happens at API gateway level
+    # Should clear cookie
+    assert 'Set-Cookie' in result['headers']
+    assert 'Max-Age=0' in result['headers']['Set-Cookie']
 
 
 def test_delete_account_deletes_all_user_sessions(sample_user, mock_auth_dependencies):
-    """Test account deletion creates cleanup job"""
+    """Test account deletion terminates all sessions"""
     result = handle_delete_account(sample_user)
     
     assert result['statusCode'] == 200
-    assert mock_auth_dependencies['job'].called
+    # Sessions are terminated in the function
+    mock_auth_dependencies['sessions'].scan.assert_called()
 
 
 def test_logout_clears_cookie(mock_auth_dependencies):
@@ -59,4 +69,6 @@ def test_delete_account_without_cookie(sample_user, mock_auth_dependencies):
     result = handle_delete_account(sample_user)
     
     assert result['statusCode'] == 200
-    assert mock_auth_dependencies['job'].called
+    body = json.loads(result['body'])
+    assert 'deletion_date' in body
+

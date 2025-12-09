@@ -5,7 +5,7 @@ Tests cover: check refund eligibility, request refund, get refund status.
 import pytest
 from unittest.mock import Mock, patch
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 @pytest.fixture
 def mock_refund_dependencies():
@@ -29,7 +29,7 @@ class TestCheckRefundEligibility:
         # FIX: Use timezone-aware datetime with 'Z' suffix to match handler parsing
         recent_sub = {
             **sample_subscription,
-            'created_at': (datetime.utcnow() - timedelta(days=5)).isoformat() + 'Z'
+            'created_at': (datetime.now(timezone.utc) - timedelta(days=5)).replace(tzinfo=None).replace(tzinfo=None).isoformat() + 'Z'
         }
         mock_refund_dependencies['subscriptions'].query.return_value = {'Items': [recent_sub]}
         
@@ -46,7 +46,7 @@ class TestCheckRefundEligibility:
         # FIX: Use timezone-aware datetime with 'Z' suffix
         old_sub = {
             **sample_subscription,
-            'created_at': (datetime.utcnow() - timedelta(days=60)).isoformat() + 'Z'
+            'created_at': (datetime.now(timezone.utc) - timedelta(days=60)).replace(tzinfo=None).replace(tzinfo=None).isoformat() + 'Z'
         }
         mock_refund_dependencies['subscriptions'].query.return_value = {'Items': [old_sub]}
         
@@ -75,8 +75,8 @@ class TestCheckRefundEligibility:
         # FIX: Use timezone-aware datetime with 'Z' suffix
         mid_period_sub = {
             **sample_subscription,
-            'created_at': (datetime.utcnow() - timedelta(days=15)).isoformat() + 'Z',
-            'current_period_end': (datetime.utcnow() + timedelta(days=15)).isoformat() + 'Z'
+            'created_at': (datetime.now(timezone.utc) - timedelta(days=15)).replace(tzinfo=None).replace(tzinfo=None).isoformat() + 'Z',
+            'current_period_end': (datetime.now(timezone.utc) + timedelta(days=15)).replace(tzinfo=None).replace(tzinfo=None).isoformat() + 'Z'
         }
         mock_refund_dependencies['subscriptions'].query.return_value = {'Items': [mid_period_sub]}
         
@@ -104,7 +104,7 @@ class TestRequestRefund:
         # FIX: Use timezone-aware datetime, mock users_table, and provide complete Stripe mocks
         recent_sub = {
             **sample_subscription,
-            'created_at': (datetime.utcnow() - timedelta(days=5)).isoformat() + 'Z',
+            'created_at': (datetime.now(timezone.utc) - timedelta(days=5)).replace(tzinfo=None).isoformat() + 'Z',
             'stripe_subscription_id': 'sub_test123',
             'stripe_customer_id': 'cus_test123'
         }
@@ -135,7 +135,7 @@ class TestRequestRefund:
         # FIX: Use timezone-aware datetime. Handler returns 403 for ineligible refunds
         old_sub = {
             **sample_subscription,
-            'created_at': (datetime.utcnow() - timedelta(days=60)).isoformat() + 'Z'
+            'created_at': (datetime.now(timezone.utc) - timedelta(days=60)).replace(tzinfo=None).isoformat() + 'Z'
         }
         mock_refund_dependencies['subscriptions'].query.return_value = {'Items': [old_sub]}
         
@@ -153,7 +153,7 @@ class TestRequestRefund:
         # Note: Reason is optional (has default), so this tests eligibility without reason
         old_sub = {
             **sample_subscription,
-            'created_at': (datetime.utcnow() - timedelta(days=60)).isoformat() + 'Z'
+            'created_at': (datetime.now(timezone.utc) - timedelta(days=60)).replace(tzinfo=None).isoformat() + 'Z'
         }
         mock_refund_dependencies['subscriptions'].query.return_value = {'Items': [old_sub]}
         
@@ -170,7 +170,7 @@ class TestRequestRefund:
         # FIX: Use timezone-aware datetime and correct refund_status field (handler checks 'refund_status', not 'refund_requested')
         sub_with_refund = {
             **sample_subscription,
-            'created_at': (datetime.utcnow() - timedelta(days=5)).isoformat() + 'Z',
+            'created_at': (datetime.now(timezone.utc) - timedelta(days=5)).replace(tzinfo=None).isoformat() + 'Z',
             'refund_status': 'requested',  # Handler checks this field
             'refund_id': 're_existing'
         }
@@ -189,7 +189,7 @@ class TestRequestRefund:
         # FIX: Use timezone-aware datetime and provide complete Stripe mocks
         recent_sub = {
             **sample_subscription,
-            'created_at': (datetime.utcnow() - timedelta(days=3)).isoformat() + 'Z',
+            'created_at': (datetime.now(timezone.utc) - timedelta(days=3)).replace(tzinfo=None).isoformat() + 'Z',
             'stripe_subscription_id': 'sub_test123',
             'stripe_customer_id': 'cus_test123'
         }

@@ -2,7 +2,7 @@
 Subscription audit logging for compliance and dispute resolution
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from utils.config import dynamodb, get_required_env
 
 # Initialize audit log table
@@ -38,7 +38,7 @@ def log_subscription_change(user_id, action, from_plan, to_plan, effective_at=No
             'action': action,
             'from_plan': from_plan or 'none',
             'to_plan': to_plan,
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
             'effective_at': effective_at,
             'metadata': metadata or {}
         }
@@ -100,7 +100,7 @@ def log_refund_action(user_id, refund_id, action, from_status, to_status, metada
             'action': action,
             'from_plan': from_status,
             'to_plan': to_status,
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
             'effective_at': None,
             'metadata': metadata or {'refund_id': refund_id}
         }
@@ -132,7 +132,7 @@ def analyze_subscription_patterns(user_id):
         
         # Check for rapid changes (more than 3 changes in 24 hours)
         from datetime import timedelta
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         recent_changes = [
             e for e in history 
             if (now - datetime.fromisoformat(e['timestamp'].replace('Z', '+00:00').replace('+00:00', ''))).total_seconds() < 86400

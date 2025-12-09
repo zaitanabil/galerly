@@ -58,6 +58,21 @@ export async function deleteAccount() {
   return api.delete('/auth/delete-account');
 }
 
+// Restore account (within 30-day grace period)
+export async function restoreAccount(email: string, password: string) {
+  return api.post('/auth/restore-account', { email, password });
+}
+
+// GDPR: Export all user data
+export async function exportUserData() {
+  return api.post('/gdpr/export-data');
+}
+
+// GDPR: Get data retention information
+export async function getDataRetentionInfo() {
+  return api.get('/gdpr/data-retention');
+}
+
 // Portfolio settings
 export async function getPortfolioSettings() {
   return api.get<PortfolioSettings>('/portfolio/settings');
@@ -89,6 +104,9 @@ export default {
   getProfile,
   updateProfile,
   deleteAccount,
+  restoreAccount,
+  exportUserData,
+  getDataRetentionInfo,
   getPortfolioSettings,
   updatePortfolioSettings,
   getPublicPortfolio,

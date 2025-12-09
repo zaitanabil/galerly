@@ -5,7 +5,7 @@ Automates CloudFront distribution creation and management for custom domains
 import os
 import boto3
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Initialize CloudFront client
 cloudfront_client = boto3.client(
@@ -39,7 +39,7 @@ def create_custom_domain_distribution(user_id, custom_domain, acm_certificate_ar
         s3_bucket = os.environ.get('S3_BUCKET', 'galerly-photos-local')
         
         # Caller reference for idempotency
-        caller_reference = f"galerly-{user_id}-{custom_domain}-{int(datetime.utcnow().timestamp())}"
+        caller_reference = f"galerly-{user_id}-{custom_domain}-{int(datetime.now(timezone.utc).timestamp())}"
         
         # Build distribution config
         distribution_config = {
@@ -280,7 +280,7 @@ def invalidate_distribution_cache(distribution_id, paths=None):
         if paths is None:
             paths = ['/*']
         
-        caller_reference = f"invalidation-{int(datetime.utcnow().timestamp())}"
+        caller_reference = f"invalidation-{int(datetime.now(timezone.utc).timestamp())}"
         
         response = cloudfront_client.create_invalidation(
             DistributionId=distribution_id,

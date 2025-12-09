@@ -3,7 +3,7 @@ Services Pricing Handler
 Manages photographer service offerings and pricing for portfolio/booking pages
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 from utils.config import dynamodb
@@ -70,7 +70,7 @@ def handle_create_service(user, body):
         
         # Create service
         service_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         service = {
             'id': service_id,
@@ -152,7 +152,7 @@ def handle_update_service(user, service_id, body):
         
         # Always update timestamp
         update_fields.append('updated_at = :updated_at')
-        expr_values[':updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        expr_values[':updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Execute update
         update_expression = 'SET ' + ', '.join(update_fields)

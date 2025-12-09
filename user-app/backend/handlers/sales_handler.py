@@ -4,7 +4,7 @@ Stripe Payment Intents integration for selling individual photos and packages
 """
 import uuid
 import stripe
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb, users_table, photos_table, galleries_table
@@ -79,7 +79,7 @@ def handle_create_package(user, body):
         
         # Create package
         package_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         package = {
             'id': package_id,
@@ -194,7 +194,7 @@ def handle_create_payment_intent(body):
         
         # Create sale record
         sale_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         sale = {
             'id': sale_id,
@@ -272,7 +272,7 @@ def handle_confirm_sale(sale_id, payment_intent_id):
             return create_response(400, {'error': 'Payment not completed'})
         
         # Update sale status
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         sales_table.update_item(
             Key={'id': sale_id},
@@ -300,7 +300,7 @@ def handle_confirm_sale(sale_id, payment_intent_id):
                 'status': 'available',
                 'download_count': 0,
                 'max_downloads': 10,  # Allow 10 downloads
-                'expires_at': (datetime.utcnow() + timedelta(days=30)).isoformat() + 'Z',
+                'expires_at': (datetime.now(timezone.utc) + timedelta(days=30)).isoformat() + 'Z',
                 'created_at': timestamp
             }
             
@@ -373,7 +373,7 @@ def handle_get_download(download_id, customer_email):
             return create_response(403, {'error': 'Access denied'})
         
         # Check if expired
-        if datetime.utcnow().isoformat() + 'Z' > download['expires_at']:
+        if datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z' > download['expires_at']:
             return create_response(410, {'error': 'Download link has expired'})
         
         # Check download limit
@@ -414,7 +414,7 @@ def handle_get_download(download_id, customer_email):
             UpdateExpression='SET download_count = download_count + :inc, last_downloaded_at = :timestamp',
             ExpressionAttributeValues={
                 ':inc': 1,
-                ':timestamp': datetime.utcnow().isoformat() + 'Z'
+                ':timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
         )
         

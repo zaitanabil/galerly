@@ -4,7 +4,7 @@ Real-time availability checking, time zone handling, and calendar sync
 """
 import os
 import uuid
-from datetime import datetime, timedelta, time
+from datetime import datetime, timedelta, time, timezone
 from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb, appointments_table, users_table
 from utils.response import create_response
@@ -65,7 +65,7 @@ def handle_update_availability_settings(user, body):
         
         settings = {
             'user_id': user['id'],
-            'updated_at': datetime.utcnow().isoformat() + 'Z'
+            'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         # Update allowed fields

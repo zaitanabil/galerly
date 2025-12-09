@@ -4,7 +4,7 @@ Handles large file uploads with resume capability
 """
 import uuid
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from utils.config import s3_client, S3_BUCKET, galleries_table, photos_table, AWS_ENDPOINT_URL
 from utils.response import create_response
@@ -258,7 +258,7 @@ def handle_complete_multipart_upload(gallery_id, user, event):
         clean_metadata = convert_floats_to_decimal(metadata)
         
         # Create photo record in DynamoDB
-        current_time = datetime.utcnow().isoformat() + 'Z'
+        current_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Generate CDN URLs for all renditions
         photo_urls = get_photo_urls(s3_key)

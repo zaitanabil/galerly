@@ -260,6 +260,35 @@ def generate_invoice_pdf(invoice):
         elements.append(Spacer(1, 6))
         elements.append(Paragraph(invoice.get('notes', ''), styles['Normal']))
     
+    # PCI DSS Compliance: Payment method info (masked)
+    # NEVER include full credit card numbers in invoices
+    if invoice.get('payment_method'):
+        elements.append(Spacer(1, 12))
+        payment_method = invoice.get('payment_method', {})
+        
+        # Only show last 4 digits if card payment
+        if payment_method.get('type') == 'card' and payment_method.get('last4'):
+            payment_text = f"<b>Payment Method:</b> {payment_method.get('brand', 'Card')} ending in ****{payment_method.get('last4')}"
+        else:
+            payment_text = f"<b>Payment Method:</b> {payment_method.get('type', 'N/A')}"
+        
+        elements.append(Paragraph(payment_text, styles['Normal']))
+    
+    # Disclaimer (required for GDPR/PCI compliance)
+    elements.append(Spacer(1, 24))
+    disclaimer_style = ParagraphStyle(
+        'Disclaimer',
+        parent=styles['Normal'],
+        fontSize=8,
+        textColor=colors.grey,
+        alignment=TA_CENTER,
+    )
+    elements.append(Paragraph(
+        "This invoice is generated electronically. For security, full payment details are not shown. "
+        "Contact us if you need additional information.",
+        disclaimer_style
+    ))
+    
     # Build PDF
     doc.build(elements)
     

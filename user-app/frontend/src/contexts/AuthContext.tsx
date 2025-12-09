@@ -28,7 +28,14 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ 
+    success: boolean; 
+    error?: string;
+    message?: string;
+    daysRemaining?: number;
+    deletionDate?: string;
+    canRestore?: boolean;
+  }>;
   register: (email: string, password: string, name: string, role: string, city?: string, country?: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -79,6 +86,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(userData);
         
         return { success: true };
+      }
+      
+      // Check if account is pending deletion
+      if (response.error) {
+        const errorData = response as any;
+        if (errorData.error === 'account_pending_deletion') {
+          // Return special error with restoration info
+          return {
+            success: false,
+            error: errorData.error,
+            message: errorData.message,
+            daysRemaining: errorData.days_remaining,
+            deletionDate: errorData.deletion_date,
+            canRestore: errorData.can_restore
+          };
+        }
       }
       
       return { success: false, error: response.error || 'Login failed' };

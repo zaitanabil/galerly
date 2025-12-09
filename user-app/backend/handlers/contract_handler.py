@@ -4,7 +4,7 @@ Contract and eSignature handlers
 import uuid
 import base64
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import contracts_table, s3_client, S3_BUCKET
 from utils.response import create_response
@@ -42,7 +42,7 @@ def handle_create_contract(user, body):
             return create_response(400, {'error': 'Missing required fields'})
             
         contract_id = str(uuid.uuid4())
-        current_time = datetime.utcnow().isoformat() + 'Z'
+        current_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         contract = {
             'id': contract_id,
@@ -104,7 +104,7 @@ def handle_update_contract(contract_id, user, body):
             if f in body:
                 contract[f] = body[f]
                 
-        contract['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        contract['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         contracts_table.put_item(Item=contract)
         
         return create_response(200, contract)
@@ -140,7 +140,7 @@ def handle_send_contract(contract_id, user):
             return create_response(403, {'error': 'Access denied'})
             
         contract['status'] = 'sent'
-        contract['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        contract['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         contracts_table.put_item(Item=contract)
         
         # Send email
@@ -206,9 +206,9 @@ def handle_sign_contract(contract_id, body, ip_address):
             
         contract['status'] = 'signed'
         contract['signature_key'] = signature_path # Store Key instead of URL to be safe
-        contract['signed_at'] = datetime.utcnow().isoformat() + 'Z'
+        contract['signed_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         contract['signed_ip'] = ip_address
-        contract['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        contract['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         contracts_table.put_item(Item=contract)
         

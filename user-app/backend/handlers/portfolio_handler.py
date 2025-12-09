@@ -2,7 +2,7 @@
 Portfolio customization handlers
 """
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import users_table, galleries_table, dynamodb
 from utils.response import create_response
@@ -150,7 +150,7 @@ def handle_update_portfolio_settings(user, body):
         # Always update updated_at
         from datetime import datetime
         update_expressions.append('updated_at = :updated_at')
-        expression_values[':updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        expression_values[':updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         if not update_expressions:
             return create_response(400, {'error': 'No fields to update'})
@@ -392,7 +392,7 @@ def handle_verify_domain(user, body):
             UpdateExpression='SET portfolio_custom_domain = :d, updated_at = :now',
             ExpressionAttributeValues={
                 ':d': domain,
-                ':now': datetime.utcnow().isoformat() + 'Z'
+                ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
         )
         
@@ -536,8 +536,8 @@ def handle_setup_custom_domain(user, body):
             'distribution_domain': distribution_domain,
             'status': 'pending_validation',
             'validation_records': validation_records,
-            'created_at': datetime.utcnow().isoformat() + 'Z',
-            'updated_at': datetime.utcnow().isoformat() + 'Z'
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+            'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         try:
@@ -553,7 +553,7 @@ def handle_setup_custom_domain(user, body):
                 ':d': domain,
                 ':dist_id': distribution_id,
                 ':cert_arn': certificate_arn,
-                ':now': datetime.utcnow().isoformat() + 'Z'
+                ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
         )
         
@@ -700,7 +700,7 @@ def handle_check_custom_domain_status(user, domain):
             'certificate': cert_status,
             'distribution': dist_status,
             'dns_propagation': dns_status,
-            'checked_at': datetime.utcnow().isoformat() + 'Z'
+            'checked_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         })
         
     except Exception as e:
@@ -764,7 +764,7 @@ def handle_refresh_custom_domain_certificate(user, domain):
                     ExpressionAttributeNames={'#status': 'status'},
                     ExpressionAttributeValues={
                         ':active': 'active',
-                        ':now': datetime.utcnow().isoformat() + 'Z'
+                        ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                     }
                 )
             except:

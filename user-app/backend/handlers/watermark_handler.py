@@ -5,7 +5,7 @@ Handles logo image upload and watermark settings for watermarking feature
 import uuid
 import base64
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from utils.config import s3_client, S3_BUCKET, users_table
 from utils.response import create_response
 from handlers.subscription_handler import get_user_features
@@ -80,7 +80,7 @@ def handle_upload_watermark_logo(user, body):
             UpdateExpression='SET watermark_s3_key = :s3_key, updated_at = :updated_at',
             ExpressionAttributeValues={
                 ':s3_key': s3_key,
-                ':updated_at': datetime.utcnow().isoformat() + 'Z'
+                ':updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
         )
         
@@ -198,7 +198,7 @@ def handle_update_watermark_settings(user, body):
         
         # Add updated timestamp
         update_expressions.append('updated_at = :updated_at')
-        expression_values[':updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        expression_values[':updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Update user record
         users_table.update_item(

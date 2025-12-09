@@ -4,7 +4,7 @@ Photo management handlers
 import uuid
 import base64
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table, photos_table, s3_client, S3_BUCKET, users_table
@@ -264,7 +264,7 @@ def handle_upload_photo(gallery_id, user, event):
             'file_size': file_size,  # Store for filename+size duplicate detection (bytes)
             'size_mb': Decimal(str(round(size_mb, 2))),  # Store size in MB for display and storage tracking (use Decimal for DynamoDB)
             'is_raw': is_raw,  # Flag for RAW files
-            'created_at': datetime.utcnow().isoformat() + 'Z'
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         # Add RAW metadata if available
@@ -286,7 +286,7 @@ def handle_upload_photo(gallery_id, user, event):
                 ExpressionAttributeValues={
                     ':inc': 1,
                     ':size': Decimal(str(round(size_mb, 2))),
-                    ':time': datetime.utcnow().isoformat() + 'Z',
+                    ':time': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
                     ':thumb': photo_urls['thumbnail_url'],
                     ':zero': 0
                 }
@@ -359,7 +359,7 @@ def handle_update_photo(photo_id, body, user=None):
             # Allow if user is one of the clients
             if user_email in [email.lower() for email in client_emails]:
                 photo['status'] = 'approved'
-                photo['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+                photo['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 photos_table.put_item(Item=photo)
                 print(f"Photo {photo_id} approved by client {user_email}")
                 return create_response(200, photo)
@@ -385,7 +385,7 @@ def handle_update_photo(photo_id, body, user=None):
         if 'status' in body:
             photo['status'] = body['status']
         
-            photo['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+            photo['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             photos_table.put_item(Item=photo)
         
         if 'status' in body:
@@ -455,8 +455,8 @@ def handle_add_comment(photo_id, user, body):
             'annotation': body.get('annotation'), # Store annotation data (points, color, etc.)
             'timestamp': timestamp, # For video comments: timestamp in seconds (as Decimal)
             'is_edited': False,
-            'created_at': datetime.utcnow().isoformat() + 'Z',
-            'updated_at': datetime.utcnow().isoformat() + 'Z'
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+            'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         # Add to photo's comments list
@@ -643,7 +643,7 @@ def handle_update_comment(photo_id, comment_id, user, body):
             elif action == 'remove' and user_id in reactions_list:
                 reactions_list.remove(user_id)
             
-            comment['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+            comment['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Handle text update (edit) - ONLY comment author can edit text
         elif 'text' in body:
@@ -662,7 +662,7 @@ def handle_update_comment(photo_id, comment_id, user, body):
             comment['text'] = new_text
             comment['mentions'] = mentions
             comment['is_edited'] = True
-            comment['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+            comment['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Update photo in DynamoDB
         photos_table.put_item(Item=photo)
@@ -975,7 +975,7 @@ def handle_delete_photos(gallery_id, user, event):
                     ExpressionAttributeValues={
                         ':count': new_count,
                         ':storage': Decimal(str(round(new_storage, 2))),
-                        ':time': datetime.utcnow().isoformat() + 'Z'
+                        ':time': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                     }
                 )
                 print(f"Updated gallery stats (removed {deleted_count} photos, final storage: {new_storage}MB)")

@@ -3,7 +3,7 @@ Client gallery access handlers
 """
 import secrets
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table, photos_table, users_table, client_favorites_table
 from utils.response import create_response
@@ -18,7 +18,7 @@ def is_token_expired(token_created_at):
     
     try:
         created_date = datetime.fromisoformat(token_created_at.replace('Z', ''))
-        age = datetime.utcnow() - created_date
+        age = datetime.now(timezone.utc) - created_date
         return age > timedelta(days=TOKEN_EXPIRATION_DAYS)
     except Exception as e:
         print(f"Error checking token expiration: {str(e)}")
@@ -28,7 +28,7 @@ def regenerate_gallery_token(gallery):
     """Regenerate expired share token for a gallery"""
     try:
         new_token = secrets.token_urlsafe(16)
-        current_time = datetime.utcnow().isoformat() + 'Z'
+        current_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         frontend_url = os.environ.get('FRONTEND_URL')
         new_share_url = f"{frontend_url}/client-gallery?token={new_token}"
         

@@ -3,7 +3,7 @@ Payment Reminder Automation
 Automated reminders for unpaid invoices and pending payments
 """
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb, users_table
@@ -44,7 +44,7 @@ def handle_create_reminder_schedule(user, invoice_id, body):
             return create_response(400, {'error': 'Invoice is already paid'})
         
         reminder_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Calculate reminder dates
         due_date = datetime.fromisoformat(invoice.get('due_date', timestamp).replace('Z', '+00:00'))
@@ -55,7 +55,7 @@ def handle_create_reminder_schedule(user, invoice_id, body):
         for days in body.get('reminder_days', [7, 3, 1]):
             reminder_date = due_date - timedelta(days=days)
             # Compare timezone-aware datetimes
-            if reminder_date > datetime.utcnow().replace(tzinfo=reminder_date.tzinfo):
+            if reminder_date > datetime.now(timezone.utc).replace(tzinfo=reminder_date.tzinfo):
                 reminders.append({
                     'type': 'before_due',
                     'days': days,
@@ -141,7 +141,7 @@ def handle_process_payment_reminders(event, context):
                         send_at = datetime.fromisoformat(reminder['send_at'].replace('Z', '+00:00'))
                         
                         # Send if time has passed
-                        if datetime.utcnow().replace(tzinfo=None) >= send_at:
+                        if datetime.now(timezone.utc).replace(tzinfo=None) >= send_at:
                             # Get photographer details
                             photographer_response = users_table.get_item(
                                 Key={'id': schedule['photographer_id']}
@@ -185,7 +185,7 @@ def handle_process_payment_reminders(event, context):
                             )
                             
                             reminder['sent'] = True
-                            reminder['sent_at'] = datetime.utcnow().isoformat() + 'Z'
+                            reminder['sent_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                             sent_count += 1
                     
                     updated_reminders.append(reminder)
@@ -196,7 +196,7 @@ def handle_process_payment_reminders(event, context):
                     UpdateExpression='SET reminders = :reminders, updated_at = :updated_at',
                     ExpressionAttributeValues={
                         ':reminders': updated_reminders,
-                        ':updated_at': datetime.utcnow().isoformat() + 'Z'
+                        ':updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                     }
                 )
                 
@@ -247,7 +247,7 @@ def handle_cancel_reminder_schedule(user, invoice_id):
                 ExpressionAttributeNames={'#status': 'status'},
                 ExpressionAttributeValues={
                     ':status': 'cancelled',
-                    ':updated_at': datetime.utcnow().isoformat() + 'Z'
+                    ':updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 }
             )
         

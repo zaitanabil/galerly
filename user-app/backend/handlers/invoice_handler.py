@@ -3,7 +3,7 @@ Invoice management handlers
 """
 import uuid
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 from utils.config import invoices_table, users_table
@@ -45,7 +45,7 @@ def handle_create_invoice(user, body):
             return create_response(400, {'error': 'Missing required fields'})
             
         invoice_id = str(uuid.uuid4())
-        current_time = datetime.utcnow().isoformat() + 'Z'
+        current_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Calculate total
         total = Decimal('0.00')
@@ -131,7 +131,7 @@ def handle_update_invoice(invoice_id, user, body):
             invoice['items'] = new_items
             invoice['total_amount'] = total
             
-        invoice['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        invoice['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         invoices_table.put_item(Item=invoice)
         
@@ -172,9 +172,9 @@ def handle_mark_invoice_paid(invoice_id, user, body):
         
         # Update invoice status
         invoice['status'] = 'paid'
-        invoice['paid_at'] = datetime.utcnow().isoformat() + 'Z'
+        invoice['paid_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         invoice['payment_method'] = body.get('payment_method', os.environ.get('DEFAULT_INVOICE_PAYMENT_METHOD'))
-        invoice['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        invoice['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Store transaction ID if provided
         if 'transaction_id' in body:
@@ -263,8 +263,8 @@ def handle_send_invoice(invoice_id, user):
             
         # Update status to sent
         invoice['status'] = 'sent'
-        invoice['sent_at'] = datetime.utcnow().isoformat() + 'Z'
-        invoice['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        invoice['sent_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+        invoice['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         invoices_table.put_item(Item=invoice)
         
         # Send email with payment link

@@ -10,7 +10,7 @@ import json
 import tempfile
 from PIL import Image
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone
 
 from utils.config import s3_client, S3_BUCKET, S3_RENDITIONS_BUCKET
 
@@ -45,7 +45,7 @@ def extract_video_metadata(video_data, filename):
         'filename': filename,
         'file_size': len(video_data),
         'size_mb': round(len(video_data) / (1024 * 1024), 2),
-        'upload_timestamp': datetime.utcnow().isoformat() + 'Z',
+        'upload_timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
         'format': 'video',
         'type': 'video',
         'dimensions': None,

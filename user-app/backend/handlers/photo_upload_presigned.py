@@ -5,7 +5,7 @@ INCLUDES POST-UPLOAD SECURITY VALIDATION
 """
 import uuid
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from utils.config import s3_client, S3_BUCKET
 from utils.response import create_response
@@ -466,7 +466,7 @@ def handle_confirm_upload(gallery_id, user, event):
             
             # Processing status (Step 9: queued for async processing)
             'status': 'processing',  # Will be updated to 'active' after renditions generated
-            'processing_started_at': datetime.utcnow().isoformat() + 'Z',
+            'processing_started_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
             
             # Engagement metrics
             'views': 0,
@@ -474,8 +474,8 @@ def handle_confirm_upload(gallery_id, user, event):
             'comments': [],
             
             # Timestamps
-            'created_at': datetime.utcnow().isoformat() + 'Z',
-            'updated_at': datetime.utcnow().isoformat() + 'Z'
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+            'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         photos_table.put_item(Item=photo)
@@ -580,7 +580,7 @@ def handle_confirm_upload(gallery_id, user, event):
                 ExpressionAttributeValues={
                     ':inc': 1,
                     ':size': size_mb,
-                    ':time': datetime.utcnow().isoformat() + 'Z',
+                    ':time': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
                     ':thumb': photo_urls['thumbnail_url'],
                     ':zero': 0
                 }
@@ -597,7 +597,7 @@ def handle_confirm_upload(gallery_id, user, event):
             
             gallery['photo_count'] = new_photo_count
             gallery['storage_used'] = new_storage_mb
-            gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+            gallery['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             if not gallery.get('thumbnail_url'):
                 gallery['thumbnail_url'] = photo_urls['thumbnail_url']
             if not gallery.get('cover_photo_url'):

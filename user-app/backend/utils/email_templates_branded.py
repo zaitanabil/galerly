@@ -783,6 +783,102 @@ BRANDED_EMAIL_TEMPLATES = {
 <p class="email-text" style="color: #86868B; font-size: 14px;">If you didn't request this deletion, contact support immediately at <strong>{support_email}</strong></p>
 </div>''' + get_email_footer() + '''</div></body></html>''',
         'text': 'Your Galerly account has been scheduled for deletion on {deletion_date}. You have {days_remaining} days to contact support at {support_email} to recover your account.'
+    },
+    
+    'account_deletion_scheduled': {
+        'subject': 'Account Deletion Scheduled - {days} Days to Restore',
+        'html': '''<!DOCTYPE html><html><head>''' + GALERLY_EMAIL_STYLES + '''</head><body>
+<div class="email-container">''' + get_email_header() + '''
+<div class="email-body">
+<h1 class="email-title" style="color: #FF9500;">Account Deletion Scheduled</h1>
+<p class="email-text">Hi <strong>{user_name}</strong>,</p>
+<p class="email-text">Your Galerly account has been scheduled for permanent deletion.</p>
+<div class="email-info-box" style="background: #FFF3CD; border-left: 4px solid #FF9500;">
+<p class="email-info-item"><span class="email-info-label">Deletion Date:</span> {deletion_date}</p>
+<p class="email-info-item"><span class="email-info-label">Days Remaining:</span> {days} days</p>
+<p class="email-info-item" style="margin-top: 12px;"><strong>You can still restore your account</strong> within this grace period.</p>
+</div>
+<p class="email-text"><strong>What will be deleted:</strong></p>
+<ul style="margin: 16px 0; padding-left: 24px; color: #1D1D1F; font-size: 15px; line-height: 1.6;">
+<li style="margin-bottom: 8px;">All galleries and photos</li>
+<li style="margin-bottom: 8px;">Client access links and feedback</li>
+<li style="margin-bottom: 8px;">Analytics and visitor tracking data</li>
+<li style="margin-bottom: 8px;">Custom email templates and branding</li>
+<li style="margin-bottom: 8px;">Profile and portfolio settings</li>
+</ul>
+<p class="email-text"><strong>What will be kept:</strong></p>
+<ul style="margin: 16px 0; padding-left: 24px; color: #1D1D1F; font-size: 15px; line-height: 1.6;">
+<li style="margin-bottom: 8px;">Billing records (required for tax compliance, 7 years)</li>
+</ul>
+<div class="email-info-box">
+<p class="email-info-item"><strong>Changed your mind?</strong></p>
+<p class="email-info-item">Simply log in to your account at <a href="{login_url}">{login_url}</a> within the next {days} days to restore your account instantly.</p>
+</div>
+<table class="email-button-table" cellspacing="0" cellpadding="0">
+<tr><td align="center">
+<a href="{login_url}" class="email-button" style="background: #FF9500; border: 1px solid #FF9500;">Restore My Account</a>
+</td></tr>
+</table>
+<hr class="email-divider">
+<p class="email-text" style="color: #86868B; font-size: 14px;">If you didn't request this deletion, please log in immediately or contact support at <strong>{support_email}</strong></p>
+</div>''' + get_email_footer() + '''</div></body></html>''',
+        'text': 'Your Galerly account is scheduled for deletion on {deletion_date} ({days} days). You can restore your account by logging in at {login_url}. Contact: {support_email}'
+    },
+    
+    'account_restored': {
+        'subject': 'Welcome Back! Your Account Has Been Restored',
+        'html': '''<!DOCTYPE html><html><head>''' + GALERLY_EMAIL_STYLES + '''</head><body>
+<div class="email-container">''' + get_email_header() + '''
+<div class="email-body">
+<h1 class="email-title" style="color: #34C759;">Account Restored</h1>
+<p class="email-text">Hi <strong>{user_name}</strong>,</p>
+<p class="email-text">Great news! Your Galerly account has been successfully restored.</p>
+<div class="email-info-box" style="background: #E8F5E9; border-left: 4px solid #34C759;">
+<p class="email-info-item"><strong>All your data has been recovered:</strong></p>
+<ul style="margin: 8px 0 0 0; padding-left: 24px; color: #1D1D1F; font-size: 15px; line-height: 1.6;">
+<li style="margin-bottom: 6px;">Galleries and photos</li>
+<li style="margin-bottom: 6px;">Client access and feedback</li>
+<li style="margin-bottom: 6px;">Analytics and settings</li>
+<li style="margin-bottom: 6px;">Custom templates and branding</li>
+</ul>
+</div>
+<p class="email-text">You can now continue using Galerly as before. All client links remain active.</p>
+<table class="email-button-table" cellspacing="0" cellpadding="0">
+<tr><td align="center">
+<a href="{dashboard_url}" class="email-button">Go to Dashboard</a>
+</td></tr>
+</table>
+<hr class="email-divider">
+<p class="email-text" style="color: #86868B; font-size: 14px;">Questions? Contact us at <strong>{support_email}</strong></p>
+</div>''' + get_email_footer() + '''</div></body></html>''',
+        'text': 'Welcome back! Your Galerly account has been successfully restored. All your galleries, photos, and data are back. Visit {dashboard_url}'
+    },
+    
+    'account_deleted_confirmation': {
+        'subject': 'Account Deleted - Your Data Has Been Removed',
+        'html': '''<!DOCTYPE html><html><head>''' + GALERLY_EMAIL_STYLES + '''</head><body>
+<div class="email-container">''' + get_email_header() + '''
+<div class="email-body">
+<h1 class="email-title" style="color: #FF3B30;">Account Permanently Deleted</h1>
+<p class="email-text">Your Galerly account has been permanently deleted as scheduled.</p>
+<div class="email-info-box" style="background: #FFEBEE; border-left: 4px solid #FF3B30;">
+<p class="email-info-item"><strong>What was deleted:</strong></p>
+<ul style="margin: 8px 0 0 0; padding-left: 24px; color: #1D1D1F; font-size: 15px; line-height: 1.6;">
+<li style="margin-bottom: 6px;">All galleries and photos</li>
+<li style="margin-bottom: 6px;">Profile and portfolio data</li>
+<li style="margin-bottom: 6px;">Client access and feedback</li>
+<li style="margin-bottom: 6px;">Analytics and visitor data</li>
+<li style="margin-bottom: 6px;">Custom templates and settings</li>
+</ul>
+<p class="email-info-item" style="margin-top: 12px;"><strong>Billing records retained:</strong> As required by law, billing and transaction records are kept for 7 years for tax compliance.</p>
+</div>
+<p class="email-text">Your data has been removed from our systems in accordance with GDPR and data protection laws.</p>
+<p class="email-text"><strong>Want to come back?</strong></p>
+<p class="email-text">You can create a new account anytime at <a href="{register_url}">{register_url}</a>. We'd love to have you back!</p>
+<hr class="email-divider">
+<p class="email-text" style="color: #86868B; font-size: 14px;">If you didn't request this deletion, please contact us immediately at <strong>{support_email}</strong></p>
+</div>''' + get_email_footer() + '''</div></body></html>''',
+        'text': 'Your Galerly account has been permanently deleted. All personal data removed as per GDPR. Billing records retained for 7 years (legal requirement). Register again: {register_url}'
     }
 }
 

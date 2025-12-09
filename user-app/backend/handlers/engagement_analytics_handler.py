@@ -3,7 +3,7 @@ Client Engagement Analytics Handler
 Tracks photo/video engagement, client preferences, and generates insights
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key, Attr
 from utils.config import analytics_table, galleries_table, photos_table
@@ -26,7 +26,7 @@ def handle_track_visit(body):
             'id': str(uuid.uuid4()),
             'gallery_id': gallery_id,
             'event_type': 'visit',
-            'timestamp': body.get('event_time', datetime.utcnow().isoformat() + 'Z'),
+            'timestamp': body.get('event_time', datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'),
             'metadata': {
                 'path': body.get('path') or metadata.get('path', ''),
                 'referrer': body.get('referrer') or metadata.get('referrer', ''),
@@ -66,7 +66,7 @@ def handle_track_event(body):
             'id': str(uuid.uuid4()),
             'gallery_id': gallery_id,
             'event_type': event_type,
-            'timestamp': body.get('event_time', datetime.utcnow().isoformat() + 'Z'),
+            'timestamp': body.get('event_time', datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'),
             'metadata': metadata
         }
         
@@ -99,10 +99,10 @@ def handle_track_photo_engagement(body):
             'gallery_id': gallery_id,
             'photo_id': photo_id,
             'event_type': f'photo_{event_type}',  # photo_view, photo_zoom, etc.
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
             'duration': duration,
             'metadata': {
-                'event_time': body.get('event_time', datetime.utcnow().isoformat() + 'Z')
+                'event_time': body.get('event_time', datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z')
             }
         }
         
@@ -136,11 +136,11 @@ def handle_track_video_engagement(body):
             'gallery_id': gallery_id,
             'photo_id': photo_id,
             'event_type': f'video_{event_type}',  # video_play, video_pause, video_complete
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
             'video_timestamp': video_timestamp,
             'duration': session_duration,
             'metadata': {
-                'event_time': body.get('event_time', datetime.utcnow().isoformat() + 'Z')
+                'event_time': body.get('event_time', datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z')
             }
         }
         
@@ -383,7 +383,7 @@ def handle_get_overall_engagement(user):
         from datetime import timedelta
         from collections import defaultdict
         
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=30)
         
         daily_stats = {}
@@ -548,7 +548,7 @@ def handle_get_gallery_engagement_summary(user, gallery_id):
         
         # Calculate daily stats (last 30 days)
         from datetime import timedelta
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=30)
         
         daily_stats = {}

@@ -10,7 +10,7 @@ IMPORTANT: Images are stored in the ZIP file exactly as uploaded by the photogra
 """
 import io
 import zipfile
-from datetime import datetime
+from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import s3_client, S3_BUCKET, S3_RENDITIONS_BUCKET, photos_table
 
@@ -259,7 +259,7 @@ def generate_gallery_zip(gallery_id):
                                 'Quantity': 1,
                                 'Items': [f'/{zip_s3_key}']
                             },
-                            'CallerReference': f'zip-{gallery_id}-{datetime.utcnow().isoformat()}'
+                            'CallerReference': f'zip-{gallery_id}-{datetime.now(timezone.utc).isoformat()}'
                         }
                     )
                     invalidation_id = invalidation.get('Invalidation', {}).get('Id', 'N/A')

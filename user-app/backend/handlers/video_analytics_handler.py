@@ -2,7 +2,7 @@
 Video playback analytics tracking
 Tracks video views, watch time, and engagement
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from utils.config import video_analytics_table
 from utils.response import create_response
@@ -26,7 +26,7 @@ def handle_track_video_view(body):
             return create_response(400, {'error': 'photo_id and gallery_id required'})
         
         # Create analytics entry
-        event_id = f"{session_id or photo_id}_{datetime.utcnow().timestamp()}"
+        event_id = f"{session_id or photo_id}_{datetime.now(timezone.utc).timestamp()}"
         
         event = {
             'id': event_id,
@@ -39,7 +39,7 @@ def handle_track_video_view(body):
             'completion_rate': Decimal(str((duration_watched / total_duration * 100) if total_duration > 0 else 0)),
             'quality': quality,
             'session_id': session_id,
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         video_analytics_table.put_item(Item=event)

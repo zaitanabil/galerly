@@ -3,7 +3,7 @@ Refund management handlers
 Handles 14-day money-back guarantee
 """
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from utils.config import users_table, subscriptions_table, billing_table
 from utils.response import create_response
 from boto3.dynamodb.conditions import Key
@@ -211,11 +211,11 @@ def handle_request_refund(user, body):
             # Update subscription record
             subscription['refund_status'] = 'refunded'
             subscription['refund_amount'] = refund.amount / 100  # Convert cents to dollars
-            subscription['refund_date'] = datetime.utcnow().isoformat() + 'Z'
+            subscription['refund_date'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             subscription['refund_reason'] = reason
             subscription['refund_id'] = refund.id
             subscription['status'] = 'canceled'
-            subscription['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+            subscription['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             
             subscriptions_table.put_item(Item=subscription)
             
@@ -225,7 +225,7 @@ def handle_request_refund(user, body):
                 user_data = user_response['Item']
                 user_data['plan'] = 'free'
                 user_data['subscription'] = 'free'
-                user_data['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+                user_data['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 users_table.put_item(Item=user_data)
             
             return create_response(200, {

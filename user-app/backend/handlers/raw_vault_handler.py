@@ -5,7 +5,7 @@ Ultimate plan feature for cost-effective RAW file archival
 """
 import uuid
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 from utils.config import s3_client, S3_BUCKET, users_table, photos_table, raw_vault_table
@@ -85,7 +85,7 @@ def handle_archive_to_vault(user, body):
                     'TagSet': [
                         {'Key': 'storage-class', 'Value': 'glacier'},
                         {'Key': 'archived-by', 'Value': user['id']},
-                        {'Key': 'archived-at', 'Value': datetime.utcnow().isoformat()}
+                        {'Key': 'archived-at', 'Value': datetime.now(timezone.utc).isoformat()}
                     ]
                 }
             )
@@ -106,7 +106,7 @@ def handle_archive_to_vault(user, body):
             'camera_model': photo.get('camera_model'),
             'status': 'archiving',  # archiving -> archived
             'storage_class': 'GLACIER_DEEP_ARCHIVE',
-            'archived_at': datetime.utcnow().isoformat() + 'Z',
+            'archived_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
             'retrieval_tier': 'bulk',  # bulk (12-48h, cheapest), standard (3-5h), expedited (1-5min, expensive)
         }
         
@@ -218,7 +218,7 @@ def handle_request_retrieval(vault_id, user, body):
         else:  # expedited
             hours = 0.1  # ~5 minutes
         
-        completion_time = (datetime.utcnow() + timedelta(hours=hours)).isoformat() + 'Z'
+        completion_time = (datetime.now(timezone.utc) + timedelta(hours=hours)).isoformat() + 'Z'
         
         try:
             # Initiate S3 Glacier restore
@@ -242,7 +242,7 @@ def handle_request_retrieval(vault_id, user, body):
             elif 'ObjectAlreadyInActiveTierError' in str(restore_error):
                 # File is already restored
                 vault_entry['status'] = 'available'
-                vault_entry['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+                vault_entry['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 raw_vault_table.put_item(Item=vault_entry)
                 
                 return create_response(200, {
@@ -255,9 +255,9 @@ def handle_request_retrieval(vault_id, user, body):
         # Update vault entry
         vault_entry['status'] = 'retrieving'
         vault_entry['retrieval_tier'] = tier
-        vault_entry['retrieval_requested_at'] = datetime.utcnow().isoformat() + 'Z'
+        vault_entry['retrieval_requested_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         vault_entry['retrieval_completion_time'] = completion_time
-        vault_entry['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        vault_entry['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         raw_vault_table.put_item(Item=vault_entry)
         
@@ -319,7 +319,7 @@ def handle_check_retrieval_status(vault_id, user):
                 if 'ongoing-request="false"' in restore_status:
                     # Restore complete
                     vault_entry['status'] = 'available'
-                    vault_entry['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+                    vault_entry['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                     raw_vault_table.put_item(Item=vault_entry)
                     
                     # Send completion email

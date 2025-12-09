@@ -5,7 +5,7 @@ Tests cover: register, login, logout, password reset, email verification, accoun
 import pytest
 from unittest.mock import Mock, patch, MagicMock
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 @pytest.fixture(autouse=False)
 def mock_auth_dependencies():
@@ -43,7 +43,7 @@ class TestHandleRegister:
                 'type': 'email_verification',
                 'verified': True,
                 'email': 'newuser@example.com',
-                'expires_at': int((datetime.utcnow() + timedelta(hours=1)).timestamp())
+                'expires_at': int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp())
             }
         }
         
@@ -100,7 +100,7 @@ class TestHandleRegister:
                 'type': 'email_verification',
                 'verified': True,
                 'email': 'existing@example.com',
-                'expires_at': int((datetime.utcnow() + timedelta(hours=1)).timestamp())
+                'expires_at': int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp())
             }
         }
         
@@ -279,7 +279,7 @@ class TestHandleVerifyCode:
                 'type': 'email_verification',
                 'email': 'test@example.com',
                 'code': '123456',
-                'expires_at': int((datetime.utcnow() + timedelta(hours=1)).timestamp()),
+                'expires_at': int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
                 'verified': False
             }
         }
@@ -303,7 +303,7 @@ class TestHandleVerifyCode:
                 'type': 'email_verification',
                 'email': 'test@example.com',
                 'code': '123456',
-                'expires_at': int((datetime.utcnow() + timedelta(hours=1)).timestamp()),
+                'expires_at': int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp()),
                 'verified': False
             }
         }
@@ -359,7 +359,7 @@ class TestHandleResetPassword:
                 'token': 'valid_token',
                 'type': 'password_reset',
                 'email': 'test@example.com',
-                'expires_at': int((datetime.utcnow() + timedelta(hours=1)).timestamp())
+                'expires_at': int((datetime.now(timezone.utc) + timedelta(hours=1)).timestamp())
             }
         }
         
@@ -397,33 +397,31 @@ class TestHandleDeleteAccount:
     """Tests for account deletion."""
     
     def test_delete_account_success(self, sample_user, mock_auth_dependencies):
-        """Delete user account successfully."""
+        """Delete user account successfully with grace period."""
         from handlers.auth_handler import handle_delete_account
         
-        with patch('handlers.background_jobs_handler.create_background_job') as mock_create_job:
-            mock_create_job.return_value = 'job_123'
-            
-            result = handle_delete_account(sample_user)
-            
-            assert result['statusCode'] == 200
-            body_data = json.loads(result['body'])
-            assert 'deletion' in body_data['message'].lower() or 'job_id' in body_data
-            # Should create background job
-            assert mock_create_job.called
-            mock_create_job.assert_called_once()
+        result = handle_delete_account(sample_user)
+        
+        assert result['statusCode'] == 200
+        body_data = json.loads(result['body'])
+        
+        # Grace period implementation
+        assert 'deletion_date' in body_data
+        assert body_data['grace_period_days'] == 30
+        assert 'restore_info' in body_data
     
     def test_delete_account_cascading_deletions(self, sample_user, sample_gallery, mock_auth_dependencies):
-        """Delete account creates background job for cascading deletions."""
+        """Delete account with grace period - cascading deletions happen after 30 days."""
         from handlers.auth_handler import handle_delete_account
         
-        with patch('handlers.background_jobs_handler.create_background_job') as mock_create_job:
-            mock_create_job.return_value = 'job_123'
-            
-            result = handle_delete_account(sample_user)
-            
-            assert result['statusCode'] == 200
-            # Account deletion is now async via background job
-            mock_create_job.assert_called_once()
+        result = handle_delete_account(sample_user)
+        
+        assert result['statusCode'] == 200
+        body = json.loads(result['body'])
+        
+        # Account deletion is now soft delete with grace period
+        assert 'deletion_date' in body
+        assert 'grace_period_days' in body
 
 # Test: handle_get_me
 class TestHandleGetMe:

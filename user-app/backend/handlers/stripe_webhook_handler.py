@@ -4,7 +4,7 @@ Processes Stripe webhook events for subscription and payment updates
 """
 import json
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from utils.response import create_response
 from utils.config import users_table
 
@@ -125,7 +125,7 @@ def handle_subscription_event(event_type, subscription):
             update_expression_parts.append('updated_at = :now')
             expression_values[':sub_id'] = subscription_id
             expression_values[':status'] = status
-            expression_values[':now'] = datetime.utcnow().isoformat() + 'Z'
+            expression_values[':now'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         elif event_type == 'customer.subscription.updated':
             print(f"🔄 Subscription updated")
@@ -143,7 +143,7 @@ def handle_subscription_event(event_type, subscription):
             update_expression_parts.append('subscription_status = :status')
             update_expression_parts.append('updated_at = :now')
             expression_values[':status'] = status
-            expression_values[':now'] = datetime.utcnow().isoformat() + 'Z'
+            expression_values[':now'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             
             if current_period_end:
                 update_expression_parts.append('subscription_period_end = :period_end')
@@ -156,7 +156,7 @@ def handle_subscription_event(event_type, subscription):
             update_expression_parts.append('updated_at = :now')
             expression_values[':status'] = 'canceled'
             expression_values[':plan'] = 'free'
-            expression_values[':now'] = datetime.utcnow().isoformat() + 'Z'
+            expression_values[':now'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         elif event_type == 'customer.subscription.trial_will_end':
             print(f"Trial ending soon")
@@ -253,8 +253,8 @@ def handle_invoice_event(event_type, invoice):
                     'plan': plan,
                     'invoice_pdf': invoice_pdf,  # Store PDF URL
                     'invoice_number': invoice_number,  # Store invoice number
-                    'created_at': datetime.utcnow().isoformat() + 'Z',
-                    'updated_at': datetime.utcnow().isoformat() + 'Z'
+                    'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+                    'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 })
                 
                 print(f"Billing record created: {billing_id} for plan: {plan}")

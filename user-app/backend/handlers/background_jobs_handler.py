@@ -3,7 +3,7 @@ Background job processing for long-running tasks
 Handles account deletion, bulk operations, etc.
 """
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from utils.config import (
     s3_client, S3_BUCKET,
@@ -32,8 +32,8 @@ def create_background_job(job_type, user_id, user_email, metadata=None):
         'status': 'pending',  # pending, in_progress, completed, failed
         'progress': Decimal('0'),  # 0-100
         'metadata': json.dumps(metadata) if metadata else '{}',
-        'created_at': datetime.utcnow().isoformat() + 'Z',
-        'updated_at': datetime.utcnow().isoformat() + 'Z'
+        'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+        'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
     }
     
     background_jobs_table.put_item(Item=job_item)
@@ -45,7 +45,7 @@ def update_job_status(job_id, status, progress=None, error_message=None):
     update_expression = 'SET #status = :status, updated_at = :now'
     expression_values = {
         ':status': status,
-        ':now': datetime.utcnow().isoformat() + 'Z'
+        ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
     }
     expression_names = {'#status': 'status'}
     

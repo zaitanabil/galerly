@@ -3,7 +3,7 @@ Galerly - Newsletter Handler
 Handles newsletter subscription management
 """
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from utils.config import dynamodb
 from utils.response import create_response
 import os
@@ -63,7 +63,7 @@ def handle_newsletter_subscribe(body):
                         ExpressionAttributeValues={
                             ':status': 'active',
                             ':firstName': first_name,
-                            ':subscribed_at': datetime.utcnow().isoformat() + 'Z'
+                            ':subscribed_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                         }
                     )
                     return create_response(200, {
@@ -78,10 +78,10 @@ def handle_newsletter_subscribe(body):
             Item={
                 'email': email,
                 'firstName': first_name,
-                'subscribed_at': datetime.utcnow().isoformat() + 'Z',
+                'subscribed_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
                 'status': 'active',
                 'source': 'website',
-                'updated_at': datetime.utcnow().isoformat() + 'Z'
+                'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
         )
         
@@ -129,7 +129,7 @@ def handle_newsletter_unsubscribe(body):
             },
             ExpressionAttributeValues={
                 ':status': 'unsubscribed',
-                ':updated_at': datetime.utcnow().isoformat() + 'Z'
+                ':updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
         )
         
@@ -173,7 +173,7 @@ def handle_get_newsletter_stats(user):
         
         return create_response(200, {
             'active_subscribers': active_count,
-            'timestamp': datetime.utcnow().isoformat() + 'Z'
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         })
         
     except Exception as e:

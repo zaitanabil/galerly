@@ -3,7 +3,7 @@ Enhanced Metadata Extraction - Steps 6-8
 Extracts and preserves comprehensive metadata from uploaded images and videos
 """
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 try:
     from PIL import Image
@@ -51,7 +51,7 @@ def extract_image_metadata(image_data, filename):
         'filename': filename,
         'file_size': len(image_data),
         'size_mb': round(len(image_data) / (1024 * 1024), 2),
-        'upload_timestamp': datetime.utcnow().isoformat() + 'Z',
+        'upload_timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
         'format': None,
         'type': 'image',
         'dimensions': None,
@@ -235,7 +235,7 @@ def create_photo_record_with_metadata(photo_id, gallery_id, user_id, s3_key, met
         
         # Processing status
         'status': 'processing',  # Will be updated to 'active' after renditions generated
-        'processing_started_at': datetime.utcnow().isoformat() + 'Z',
+        'processing_started_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
         
         # Photo metadata (from user)
         'title': '',

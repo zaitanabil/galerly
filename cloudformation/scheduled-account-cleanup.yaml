@@ -1,0 +1,207 @@
+# CloudFormation Template for Scheduled Account Cleanup
+# Deploys Lambda function with CloudWatch Events trigger
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Galerly - Scheduled Account Cleanup Lambda'
+
+Parameters:
+  Environment:
+    Type: String
+    Default: production
+    AllowedValues:
+      - production
+      - staging
+    Description: Deployment environment
+  
+  ScheduleExpression:
+    Type: String
+    Default: 'cron(0 2 * * ? *)'
+    Description: CloudWatch Events schedule (default: daily at 2 AM UTC)
+
+Resources:
+  # IAM Role for Lambda
+  CleanupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'galerly-scheduled-cleanup-role-${Environment}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Policies:
+        - PolicyName: DynamoDBAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'dynamodb:Scan'
+                  - 'dynamodb:Query'
+                  - 'dynamodb:GetItem'
+                  - 'dynamodb:DeleteItem'
+                  - 'dynamodb:UpdateItem'
+                Resource:
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/galerly-users-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/galerly-galleries-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/galerly-photos-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/galerly-sessions-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/galerly-billing-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/galerly-subscriptions-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/galerly-analytics-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/galerly-*-${Environment}'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/galerly-*-${Environment}/index/*'
+        
+        - PolicyName: S3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:DeleteObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !Sub 'arn:aws:s3:::galerly-photos-${Environment}'
+                  - !Sub 'arn:aws:s3:::galerly-photos-${Environment}/*'
+        
+        - PolicyName: SESAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'ses:SendEmail'
+                  - 'ses:SendRawEmail'
+                Resource: '*'
+
+  # Lambda Function
+  CleanupLambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'galerly-scheduled-account-cleanup-${Environment}'
+      Runtime: python3.11
+      Handler: scheduled_account_cleanup.lambda_handler
+      Role: !GetAtt CleanupLambdaRole.Arn
+      Timeout: 900  # 15 minutes
+      MemorySize: 512
+      Code:
+        S3Bucket: !Sub 'galerly-lambda-deployments-${Environment}'
+        S3Key: 'scheduled-account-cleanup.zip'
+      Environment:
+        Variables:
+          ENVIRONMENT: !Ref Environment
+          AWS_REGION: !Ref AWS::Region
+          DYNAMODB_TABLE_USERS: !Sub 'galerly-users-${Environment}'
+          DYNAMODB_TABLE_GALLERIES: !Sub 'galerly-galleries-${Environment}'
+          DYNAMODB_TABLE_PHOTOS: !Sub 'galerly-photos-${Environment}'
+          DYNAMODB_TABLE_SESSIONS: !Sub 'galerly-sessions-${Environment}'
+          DYNAMODB_TABLE_BILLING: !Sub 'galerly-billing-${Environment}'
+          DYNAMODB_TABLE_SUBSCRIPTIONS: !Sub 'galerly-subscriptions-${Environment}'
+          DYNAMODB_TABLE_ANALYTICS: !Sub 'galerly-analytics-${Environment}'
+          DYNAMODB_TABLE_CLIENT_FAVORITES: !Sub 'galerly-client-favorites-${Environment}'
+          DYNAMODB_TABLE_CLIENT_FEEDBACK: !Sub 'galerly-client-feedback-${Environment}'
+          DYNAMODB_TABLE_INVOICES: !Sub 'galerly-invoices-${Environment}'
+          DYNAMODB_TABLE_APPOINTMENTS: !Sub 'galerly-appointments-${Environment}'
+          DYNAMODB_TABLE_CONTRACTS: !Sub 'galerly-contracts-${Environment}'
+          DYNAMODB_TABLE_SEO_SETTINGS: !Sub 'galerly-seo-settings-${Environment}'
+          DYNAMODB_TABLE_RAW_VAULT: !Sub 'galerly-raw-vault-${Environment}'
+          DYNAMODB_TABLE_EMAIL_TEMPLATES: !Sub 'galerly-email-templates-${Environment}'
+          DYNAMODB_TABLE_BACKGROUND_JOBS: !Sub 'galerly-background-jobs-${Environment}'
+          DYNAMODB_TABLE_VISITOR_TRACKING: !Sub 'galerly-visitor-tracking-${Environment}'
+          DYNAMODB_TABLE_VIDEO_ANALYTICS: !Sub 'galerly-video-analytics-${Environment}'
+          S3_BUCKET: !Sub 'galerly-photos-${Environment}'
+          SES_FROM_EMAIL: 'noreply@galerly.com'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Application
+          Value: Galerly
+        - Key: Component
+          Value: ScheduledCleanup
+
+  # CloudWatch Events Rule
+  CleanupScheduleRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'galerly-cleanup-schedule-${Environment}'
+      Description: 'Trigger account cleanup daily at 2 AM UTC'
+      ScheduleExpression: !Ref ScheduleExpression
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt CleanupLambdaFunction.Arn
+          Id: CleanupLambdaTarget
+
+  # Permission for CloudWatch Events to invoke Lambda
+  CleanupLambdaInvokePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      FunctionName: !Ref CleanupLambdaFunction
+      Action: 'lambda:InvokeFunction'
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt CleanupScheduleRule.Arn
+
+  # CloudWatch Log Group
+  CleanupLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/galerly-scheduled-account-cleanup-${Environment}'
+      RetentionInDays: 30
+
+  # CloudWatch Alarm for Lambda Errors
+  CleanupErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'galerly-cleanup-errors-${Environment}'
+      AlarmDescription: 'Alert when scheduled cleanup job fails'
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Statistic: Sum
+      Period: 86400  # 1 day
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CleanupLambdaFunction
+      TreatMissingData: notBreaching
+
+  # CloudWatch Alarm for Lambda Duration
+  CleanupDurationAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'galerly-cleanup-duration-${Environment}'
+      AlarmDescription: 'Alert when cleanup takes longer than 10 minutes'
+      MetricName: Duration
+      Namespace: AWS/Lambda
+      Statistic: Maximum
+      Period: 86400
+      EvaluationPeriods: 1
+      Threshold: 600000  # 10 minutes in milliseconds
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref CleanupLambdaFunction
+
+Outputs:
+  LambdaFunctionArn:
+    Description: ARN of the cleanup Lambda function
+    Value: !GetAtt CleanupLambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaArn'
+  
+  ScheduleRuleArn:
+    Description: ARN of the CloudWatch Events rule
+    Value: !GetAtt CleanupScheduleRule.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ScheduleRuleArn'
+  
+  LogGroupName:
+    Description: Name of the CloudWatch Log Group
+    Value: !Ref CleanupLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LogGroup'
+

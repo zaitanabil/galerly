@@ -3,7 +3,7 @@ Client Favorites Handler
 Allows clients to favorite photos for easy access
 """
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import uuid
 from boto3.dynamodb.conditions import Key
 from utils.config import photos_table, galleries_table, client_favorites_table, users_table
@@ -36,7 +36,7 @@ def auto_register_guest_client(email, name, photographer_id):
                         ExpressionAttributeNames={'#name': 'name'},
                         ExpressionAttributeValues={
                             ':name': name,
-                            ':time': datetime.utcnow().isoformat() + 'Z'
+                            ':time': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                         }
                     )
                     print(f"Updated guest client name: {name}")
@@ -57,8 +57,8 @@ def auto_register_guest_client(email, name, photographer_id):
             'role': 'client',
             'name': name or email.split('@')[0],
             'photographer_id': photographer_id,
-            'created_at': datetime.utcnow().isoformat() + 'Z',
-            'updated_at': datetime.utcnow().isoformat() + 'Z',
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+            'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
             'account_status': 'ACTIVE',
             'is_guest': True,  # Mark as guest account (created via shared link)
             'verified': False  # Email not verified yet
@@ -260,7 +260,7 @@ def handle_add_favorite(user, body):
                             UpdateExpression='SET client_emails = :emails, updated_at = :time',
                             ExpressionAttributeValues={
                                 ':emails': current_emails,
-                                ':time': datetime.utcnow().isoformat() + 'Z'
+                                ':time': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                             }
                         )
                         print(f"Added {client_email} to gallery client_emails")
@@ -302,7 +302,7 @@ def handle_add_favorite(user, body):
             'photo_id': photo_id,
             'gallery_id': gallery_id,
             'photographer_id': photographer_id,
-            'created_at': datetime.utcnow().isoformat() + 'Z'
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         try:

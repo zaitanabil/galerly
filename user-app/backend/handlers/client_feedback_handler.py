@@ -4,7 +4,7 @@ Structured feedback collection for galleries
 """
 import uuid
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table
 from utils.response import create_response
@@ -121,7 +121,7 @@ def handle_submit_client_feedback(gallery_id, body):
         
         # Create feedback record
         feedback_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         feedback = {
             'id': feedback_id,

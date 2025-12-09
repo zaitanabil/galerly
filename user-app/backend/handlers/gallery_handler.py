@@ -4,7 +4,7 @@ Gallery management handlers
 import os
 import uuid
 import secrets
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table, photos_table, s3_client, S3_BUCKET, client_favorites_table
@@ -188,7 +188,7 @@ def handle_create_gallery(user, body):
     
     gallery_id = str(uuid.uuid4())
     share_token = secrets.token_urlsafe(16)
-    current_time = datetime.utcnow().isoformat() + 'Z'
+    current_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
     
     # Get frontend URL from environment
     frontend_url = os.environ.get('FRONTEND_URL')
@@ -584,7 +584,7 @@ def handle_update_gallery(gallery_id, user, body):
         if 'layout_config' in body:
             gallery['layout_config'] = body.get('layout_config', {})
         
-        gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        gallery['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Save back to DynamoDB
         galleries_table.put_item(Item=gallery)
@@ -616,7 +616,7 @@ def handle_duplicate_gallery(gallery_id, user, body):
         # Create new gallery ID and share token
         new_gallery_id = str(uuid.uuid4())
         new_share_token = secrets.token_urlsafe(16)
-        current_time = datetime.utcnow().isoformat() + 'Z'
+        current_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Get new name from body or use default
         new_name = body.get('name', '').strip() or f"{original_gallery.get('name', 'Gallery')} (Copy)"
@@ -645,7 +645,7 @@ def handle_duplicate_gallery(gallery_id, user, body):
             'storage_used': 0,
             'tags': original_gallery.get('tags', []),  # Copy tags from original
             'created_at': current_time,
-            'updated_at': datetime.utcnow().isoformat() + 'Z',
+            'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
             'archived': False  # New gallery is not archived
         }
         
@@ -674,8 +674,8 @@ def handle_duplicate_gallery(gallery_id, user, body):
                             'filename': photo.get('filename'),
                             'size_mb': photo.get('size_mb', 0),
                             'status': 'pending',  # Reset status for copied photos
-                            'created_at': datetime.utcnow().isoformat() + 'Z',
-                            'updated_at': datetime.utcnow().isoformat() + 'Z'
+                            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+                            'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                         }
                         photos_table.put_item(Item=new_photo)
                         copied_photos += 1
@@ -710,7 +710,7 @@ def handle_archive_gallery(gallery_id, user, archive=True):
         
         gallery = response['Item']
         gallery['archived'] = archive
-        gallery['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        gallery['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Save updated gallery
         galleries_table.put_item(Item=gallery)

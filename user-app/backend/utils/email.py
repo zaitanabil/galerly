@@ -550,3 +550,73 @@ def send_payment_receipt_email(user_email, user_name, amount, currency, plan_nam
         """,
         body_text=f"Payment Received: We received your payment of {amount} {currency.upper()} for the {plan_name} plan. Thank you!"
     )
+
+
+# Account Deletion / GDPR Email Functions
+
+def send_account_deletion_scheduled_email(user_email, user_name, deletion_date):
+    """
+    Send email notification when account deletion is scheduled (30-day grace period)
+    """
+    import datetime
+    
+    # Calculate days remaining
+    deletion_dt = datetime.datetime.fromisoformat(deletion_date.replace('Z', '+00:00'))
+    now = datetime.datetime.now(datetime.timezone.utc)
+    days_remaining = (deletion_dt - now).days
+    
+    frontend_url = get_required_env('FRONTEND_URL')
+    login_url = f"{frontend_url}/login"
+    support_email = os.environ.get('SUPPORT_EMAIL', 'support@galerly.com')
+    
+    # Format deletion date for display
+    formatted_date = deletion_dt.strftime('%B %d, %Y at %I:%M %p UTC')
+    
+    return send_email(
+        to_email=user_email,
+        template_name='account_deletion_scheduled',
+        template_vars={
+            'user_name': user_name or 'there',
+            'deletion_date': formatted_date,
+            'days': days_remaining,
+            'login_url': login_url,
+            'support_email': support_email
+        }
+    )
+
+
+def send_account_restored_email(user_email, user_name):
+    """
+    Send email confirmation when account is successfully restored
+    """
+    frontend_url = get_required_env('FRONTEND_URL')
+    dashboard_url = f"{frontend_url}/dashboard"
+    support_email = os.environ.get('SUPPORT_EMAIL', 'support@galerly.com')
+    
+    return send_email(
+        to_email=user_email,
+        template_name='account_restored',
+        template_vars={
+            'user_name': user_name or 'there',
+            'dashboard_url': dashboard_url,
+            'support_email': support_email
+        }
+    )
+
+
+def send_account_deleted_confirmation_email(user_email):
+    """
+    Send final confirmation email after account is permanently deleted
+    """
+    frontend_url = get_required_env('FRONTEND_URL')
+    register_url = f"{frontend_url}/register"
+    support_email = os.environ.get('SUPPORT_EMAIL', 'support@galerly.com')
+    
+    return send_email(
+        to_email=user_email,
+        template_name='account_deleted_confirmation',
+        template_vars={
+            'register_url': register_url,
+            'support_email': support_email
+        }
+    )

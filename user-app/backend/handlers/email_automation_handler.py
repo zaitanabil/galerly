@@ -4,7 +4,7 @@ Automated email triggers and scheduling system for Pro/Ultimate plans
 """
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb, galleries_table, users_table, photos_table
@@ -48,7 +48,7 @@ def handle_schedule_automated_email(user, body):
         # Validate scheduled time is not in the past
         try:
             scheduled_dt = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
-            if scheduled_dt < datetime.utcnow().replace(tzinfo=scheduled_dt.tzinfo):
+            if scheduled_dt < datetime.now(timezone.utc).replace(tzinfo=scheduled_dt.tzinfo):
                 return create_response(400, {'error': 'Cannot schedule emails in the past'})
         except ValueError:
             return create_response(400, {'error': 'Invalid scheduled_time format'})
@@ -68,7 +68,7 @@ def handle_schedule_automated_email(user, body):
             'recipient_email': recipient_email,
             'scheduled_time': scheduled_time,
             'status': 'scheduled',
-            'created_at': datetime.utcnow().isoformat() + 'Z',
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
             'attempts': 0
         }
         
@@ -101,7 +101,7 @@ def handle_process_email_queue(event, context):
     try:
         print("🔄 Processing email queue...")
         
-        current_time = datetime.utcnow()
+        current_time = datetime.now(timezone.utc)
         current_time_str = current_time.isoformat() + 'Z'
         
         # Scan for emails that are ready to send
@@ -127,7 +127,7 @@ def handle_process_email_queue(event, context):
                         ExpressionAttributeNames={'#status': 'status'},
                         ExpressionAttributeValues={
                             ':sent': 'sent',
-                            ':now': datetime.utcnow().isoformat() + 'Z',
+                            ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
                             ':attempts': email.get('attempts', 0) + 1
                         }
                     )
@@ -329,7 +329,7 @@ def handle_setup_gallery_automation(user, body):
                 'id': str(uuid.uuid4()),
                 'user_id': user['id'],
                 'status': 'scheduled',
-                'created_at': datetime.utcnow().isoformat() + 'Z',
+                'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
                 'attempts': 0
             })
             email_queue_table.put_item(Item=email_data)
@@ -372,7 +372,7 @@ def handle_cancel_scheduled_email(user, email_id):
             ExpressionAttributeNames={'#status': 'status'},
             ExpressionAttributeValues={
                 ':cancelled': 'cancelled',
-                ':now': datetime.utcnow().isoformat() + 'Z'
+                ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
         )
         
@@ -453,8 +453,8 @@ def handle_create_automation_rule(user, body):
             'trigger': body['trigger'],
             'action': body['action'],
             'active': body.get('active', True),
-            'created_at': datetime.utcnow().isoformat() + 'Z',
-            'updated_at': datetime.utcnow().isoformat() + 'Z'
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+            'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         try:
@@ -563,7 +563,7 @@ def handle_update_automation_rule(user, rule_id, body):
             
             # Always update timestamp
             update_expressions.append('updated_at = :updated')
-            expression_values[':updated'] = datetime.utcnow().isoformat() + 'Z'
+            expression_values[':updated'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             
             if update_expressions:
                 automation_rules_table.update_item(

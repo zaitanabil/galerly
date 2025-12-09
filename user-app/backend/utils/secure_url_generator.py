@@ -5,7 +5,7 @@ Prevents unauthorized sharing while maintaining direct CDN access
 """
 import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from botocore.signers import CloudFrontSigner
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
@@ -58,7 +58,7 @@ class SecureURLGenerator:
         
         try:
             # Calculate expiry timestamp
-            expiry_time = datetime.utcnow() + timedelta(minutes=expiry_minutes)
+            expiry_time = datetime.now(timezone.utc) + timedelta(minutes=expiry_minutes)
             
             # Create CloudFront signer
             def rsa_signer(message):

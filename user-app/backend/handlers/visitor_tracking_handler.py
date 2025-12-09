@@ -4,7 +4,7 @@ Tracks all website visitors and their behavior for UX improvement
 """
 import uuid
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from utils.config import dynamodb
 from utils.response import create_response
@@ -54,7 +54,7 @@ def handle_track_visit(body):
     """
     try:
         event_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Extract required fields
         session_id = body.get('session_id', '')
@@ -85,7 +85,7 @@ def handle_track_visit(body):
         region = location.get('region', '')
         latitude = safe_decimal(location.get('latitude', 0), 0)
         longitude = safe_decimal(location.get('longitude', 0), 0)
-        timezone = location.get('timezone', '')
+        visitor_timezone = location.get('timezone', '')
         ip_address = location.get('ip', '')
         location_accuracy = location.get('accuracy', 'ip-based')
         
@@ -139,7 +139,7 @@ def handle_track_visit(body):
             'region': region,
             'latitude': latitude,
             'longitude': longitude,
-            'timezone': timezone,
+            'timezone': visitor_timezone,
             'ip_address': ip_address,
             'location_accuracy': location_accuracy,
             
@@ -200,7 +200,7 @@ def handle_track_event(body):
     """
     try:
         event_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         session_id = body.get('session_id', '')
         visitor_id = body.get('visitor_id', '')
@@ -290,7 +290,7 @@ def handle_track_session_end(body):
     """
     try:
         event_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         session_id = body.get('session_id', '')
         visitor_id = body.get('visitor_id', '')

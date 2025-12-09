@@ -6,7 +6,7 @@ Pro/Ultimate plan feature
 import os
 import json
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table, users_table, seo_settings_table, photos_table
 from utils.response import create_response
@@ -335,7 +335,7 @@ def handle_update_seo_settings(user, body):
             'meta_robots': body.get('meta_robots', 'index, follow'),
             'canonical_urls': body.get('canonical_urls', True),
             'structured_data': body.get('structured_data', True),
-            'updated_at': datetime.utcnow().isoformat() + 'Z'
+            'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         seo_settings_table.put_item(Item=settings)
@@ -417,7 +417,7 @@ def handle_one_click_optimize(user):
             'meta_robots': 'index, follow',
             'canonical_urls': True,
             'structured_data': True,
-            'updated_at': datetime.utcnow().isoformat() + 'Z'
+            'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         }
         
         seo_settings_table.put_item(Item=optimal_settings)
@@ -470,7 +470,7 @@ def handle_one_click_optimize(user):
                 UpdateExpression='SET seo_optimized = :opt, seo_optimized_at = :time',
                 ExpressionAttributeValues={
                     ':opt': True,
-                    ':time': datetime.utcnow().isoformat() + 'Z'
+                    ':time': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 }
             )
             optimizations.append('Updated SEO optimization status')

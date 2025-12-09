@@ -22,7 +22,7 @@ Valid Actions:
 - refund (with approval process)
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Dict, Optional, Tuple, List
 
 # Plan hierarchy for upgrade/downgrade logic
@@ -60,7 +60,7 @@ class SubscriptionState:
         self.has_pending_refund = False  # Will be set by caller
         
         # Timestamps
-        self.current_time = datetime.utcnow().timestamp()
+        self.current_time = datetime.now(timezone.utc).timestamp()
         self.period_end = subscription_data.get('current_period_end', 0)
 
 

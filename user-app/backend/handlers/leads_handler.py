@@ -5,7 +5,7 @@ Pro/Ultimate plan feature
 """
 import uuid
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb, users_table
@@ -135,7 +135,7 @@ def handle_capture_lead(photographer_id, body):
         
         # Create lead entry
         lead_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         lead = {
             'id': lead_id,
@@ -349,7 +349,7 @@ def handle_update_lead(user, lead_id, body):
             new_note = {
                 'id': str(uuid.uuid4()),
                 'text': body['notes'],
-                'created_at': datetime.utcnow().isoformat() + 'Z',
+                'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
                 'created_by': user['id']
             }
             current_notes = lead.get('notes', [])
@@ -372,7 +372,7 @@ def handle_update_lead(user, lead_id, body):
         
         # Always update timestamp
         update_fields.append('updated_at = :updated_at')
-        expr_values[':updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        expr_values[':updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Execute update
         update_expression = 'SET ' + ', '.join(update_fields)
@@ -409,7 +409,7 @@ def handle_trigger_followup_sequence(photographer_id, lead_id, lead_quality):
     """
     try:
         sequence_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Define email schedule based on quality
         if lead_quality == 'hot':
@@ -497,7 +497,7 @@ def handle_process_followup_sequences(event, context):
                 delay_hours = schedule[current_step]['delay_hours']
                 send_time = created_at + timedelta(hours=delay_hours)
                 
-                if datetime.utcnow() >= send_time.replace(tzinfo=None):
+                if datetime.now(timezone.utc) >= send_time.replace(tzinfo=None):
                     # Send email
                     template = schedule[current_step]['template']
                     
@@ -521,7 +521,7 @@ def handle_process_followup_sequences(event, context):
                         UpdateExpression='SET current_step = current_step + :inc, emails_sent = emails_sent + :inc, updated_at = :updated_at',
                         ExpressionAttributeValues={
                             ':inc': 1,
-                            ':updated_at': datetime.utcnow().isoformat() + 'Z'
+                            ':updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                         }
                     )
                     
@@ -530,7 +530,7 @@ def handle_process_followup_sequences(event, context):
                         Key={'id': lead['id']},
                         UpdateExpression='SET last_contacted_at = :timestamp, follow_up_count = follow_up_count + :inc',
                         ExpressionAttributeValues={
-                            ':timestamp': datetime.utcnow().isoformat() + 'Z',
+                            ':timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
                             ':inc': 1
                         }
                     )
@@ -575,7 +575,7 @@ def handle_cancel_followup_sequence(user, lead_id):
                 ExpressionAttributeNames={'#status': 'status'},
                 ExpressionAttributeValues={
                     ':status': 'cancelled',
-                    ':updated_at': datetime.utcnow().isoformat() + 'Z'
+                    ':updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
                 }
             )
         

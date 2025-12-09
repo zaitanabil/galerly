@@ -10,7 +10,7 @@ Architecture:
 """
 import os
 import boto3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 
 class StorageLifecycleManager:
@@ -282,7 +282,7 @@ class StorageLifecycleManager:
                 Tagging={
                     'TagSet': [
                         {'Key': 'status', 'Value': 'deleted'},
-                        {'Key': 'deleted_at', 'Value': datetime.utcnow().isoformat()}
+                        {'Key': 'deleted_at', 'Value': datetime.now(timezone.utc).isoformat()}
                     ]
                 }
             )
@@ -302,7 +302,7 @@ class StorageLifecycleManager:
             # Get storage metrics from CloudWatch (no fallback)
             cloudwatch = boto3.client('cloudwatch', region_name=os.environ.get('AWS_REGION'))
             
-            end_time = datetime.utcnow()
+            end_time = datetime.now(timezone.utc)
             start_time = end_time - timedelta(days=1)
             
             metrics = {

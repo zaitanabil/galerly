@@ -5,7 +5,7 @@ Provides real-time location data for 3D globe visualization
 """
 import uuid
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key, Attr
 from utils.config import analytics_table, galleries_table
@@ -195,7 +195,7 @@ def handle_get_active_viewers(user):
             'total_active': len(viewers_list),
             'by_country': by_country,
             'by_gallery': by_gallery,
-            'last_updated': datetime.utcnow().isoformat() + 'Z'
+            'last_updated': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         })
         
     except Exception as e:

@@ -4,7 +4,7 @@ Handles contact form submissions and support tickets
 """
 import uuid
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from utils.config import dynamodb
 from utils.response import create_response
 import os
@@ -63,7 +63,7 @@ def handle_contact_submit(body):
         
         # Create ticket
         ticket_id = str(uuid.uuid4())
-        timestamp = datetime.utcnow().isoformat() + 'Z'
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         ticket = {
             'id': ticket_id,
@@ -157,7 +157,7 @@ def handle_update_ticket_status(ticket_id, body, user):
             },
             ExpressionAttributeValues={
                 ':status': status,
-                ':updated_at': datetime.utcnow().isoformat() + 'Z'
+                ':updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             }
         )
         

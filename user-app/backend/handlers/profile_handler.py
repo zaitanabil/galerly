@@ -1,7 +1,7 @@
 """
 Profile management handlers
 """
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from utils.config import users_table, sessions_table
 from utils.response import create_response
@@ -119,7 +119,7 @@ def handle_update_profile(user, body):
             except (ValueError, TypeError):
                 pass
 
-        user_data['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        user_data['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         # Save to DynamoDB
         users_table.put_item(Item=user_data)

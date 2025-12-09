@@ -4,7 +4,7 @@ Allows Pro users to customize email templates sent to clients
 """
 import json
 import boto3
-from datetime import datetime
+from datetime import datetime, timezone
 from utils.response import create_response
 from utils.config import dynamodb, users_table, email_templates_table
 
@@ -174,7 +174,7 @@ def handle_save_template(user, template_type, body):
                 print(f"Warning: Template missing variable {var}")
         
         # Save template
-        now = datetime.utcnow().isoformat() + 'Z'
+        now = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         template_item = {
             'user_id': user_id,

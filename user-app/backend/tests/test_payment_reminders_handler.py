@@ -1,6 +1,6 @@
 """Tests for Payment Reminders Handler"""
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import patch, MagicMock
 from handlers.payment_reminders_handler import handle_create_reminder_schedule, handle_process_payment_reminders
 
@@ -10,7 +10,7 @@ class TestPaymentRemindersHandler:
     def test_create_reminder_schedule(self, mock_invoices_table, mock_reminders_table):
         user = {'user_id': 'photo1', 'id': 'photo1', 'role': 'photographer'}
         # Mock invoice exists with proper user_id field and future due date
-        future_date = (datetime.utcnow() + timedelta(days=14)).isoformat() + 'Z'
+        future_date = (datetime.now(timezone.utc) + timedelta(days=14)).replace(tzinfo=None).isoformat() + 'Z'
         mock_invoices_table.get_item.return_value = {
             'Item': {
                 'id': 'inv1', 

@@ -3,7 +3,7 @@ Analytics and insights handlers
 """
 import uuid
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import analytics_table, galleries_table, photos_table
 from utils.response import create_response
@@ -17,7 +17,7 @@ def track_event(user_id, gallery_id, event_type, metadata=None):
             'user_id': user_id,
             'gallery_id': gallery_id,
             'event_type': event_type,
-            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
             'metadata': metadata or {}
         }
         analytics_table.put_item(Item=event)
@@ -48,9 +48,9 @@ def handle_get_gallery_analytics(user, gallery_id, query_params=None):
             try:
                 end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
             except:
-                end_date = datetime.utcnow()
+                end_date = datetime.now(timezone.utc)
         else:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(timezone.utc)
             
         if start_date_str:
             try:
@@ -208,9 +208,9 @@ def handle_get_overall_analytics(user, query_params=None):
             try:
                 end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
             except:
-                end_date = datetime.utcnow()
+                end_date = datetime.now(timezone.utc)
         else:
-            end_date = datetime.utcnow()
+            end_date = datetime.now(timezone.utc)
             
         if start_date_str:
             try:
@@ -717,7 +717,7 @@ def handle_track_bulk_download(gallery_id, viewer_user_id=None, metadata=None, c
                                 'photo_count': photo_count,
                                 'downloader_type': downloader_type,
                                 'downloader_name': downloader_name,
-                                'download_time': datetime.utcnow().strftime('%Y-%m-%d %H:%M UTC'),
+                                'download_time': datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC'),
                                 'gallery_url': f"{metadata.get('frontend_url', os.environ.get('FRONTEND_URL'))}/gallery?id={gallery_id}" if metadata else f"{os.environ.get('FRONTEND_URL')}/gallery?id={gallery_id}"
                             }
                         )
@@ -774,7 +774,7 @@ def handle_get_bulk_downloads(user):
             })
         
         # Get bulk download events for all galleries
-        end_date = datetime.utcnow()
+        end_date = datetime.now(timezone.utc)
         start_date = end_date - timedelta(days=90)  # Last 90 days
         
         all_events = []

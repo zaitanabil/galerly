@@ -3,7 +3,7 @@ Galerly API - Clean Modular Architecture
 Main entry point for AWS Lambda
 """
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 # Import utilities
 from utils.response import create_response
@@ -14,7 +14,8 @@ from handlers.auth_handler import (
     handle_register, handle_login, handle_logout, handle_get_me, 
     handle_request_password_reset, handle_reset_password, 
     handle_request_verification_code, handle_verify_code, 
-    handle_delete_account, handle_generate_api_key, handle_get_api_key
+    handle_delete_account, handle_restore_account,
+    handle_generate_api_key, handle_get_api_key
 )
 
 from handlers.city_handler import handle_city_search
@@ -281,6 +282,10 @@ from handlers.feature_requests_handler import (
     handle_unvote_feature_request,
     handle_update_feature_request_status
 )
+from handlers.gdpr_handler import (
+    handle_export_user_data,
+    handle_get_data_retention_info
+)
 
 def handler(event, context):
     """Main Lambda handler with clean routing"""
@@ -321,7 +326,7 @@ def handler(event, context):
                 'architecture': 'Modular',
                 'storage': 'DynamoDB (isolated per photographer)',
                 'status': 'running',
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             })
         
         # Health check
@@ -330,7 +335,7 @@ def handler(event, context):
                 'status': 'healthy',
                 'architecture': 'modular',
                 'storage': 'DynamoDB',
-                'timestamp': datetime.utcnow().isoformat() + 'Z'
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             })
         
         # Authentication endpoints
@@ -358,6 +363,10 @@ def handler(event, context):
             # Pass cookie header to delete account handler so it can clear the session
             cookie_header = event.get('headers', {}).get('cookie') or event.get('headers', {}).get('Cookie')
             return handle_delete_account(user, cookie_header)
+        
+        # Restore account (within 30-day grace period)
+        if path == '/v1/auth/restore-account' and method == 'POST':
+            return handle_restore_account(body)
         
         # API Keys (Protected)
         if path == '/v1/auth/api-key' and method == 'POST':
@@ -1478,6 +1487,18 @@ def handler(event, context):
         # ================================================================
         
         # Gallery cleanup endpoint removed - galleries never expire
+        
+        # ================================================================
+        # GDPR COMPLIANCE
+        # ================================================================
+        
+        # Export user data (GDPR Article 20 - Right to Data Portability)
+        if path == '/v1/gdpr/export-data' and method == 'POST':
+            return handle_export_user_data(user)
+        
+        # Get data retention information (GDPR Article 13)
+        if path == '/v1/gdpr/data-retention' and method == 'GET':
+            return handle_get_data_retention_info(user)
         
         # ================================================================
         # FEATURE REQUESTS & FEEDBACK

@@ -2,7 +2,7 @@
 Appointment scheduler handlers
 """
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import appointments_table, users_table
 from utils.response import create_response
@@ -61,7 +61,7 @@ def handle_create_appointment(user, body):
                     return create_response(409, {'error': 'Time slot conflict'})
         
         appt_id = str(uuid.uuid4())
-        current_time = datetime.utcnow().isoformat() + 'Z'
+        current_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         appointment = {
             'id': appt_id,
@@ -138,7 +138,7 @@ def handle_create_public_appointment_request(photographer_id, body):
                     return create_response(409, {'error': 'Time slot conflict'})
         
         appt_id = str(uuid.uuid4())
-        current_time = datetime.utcnow().isoformat() + 'Z'
+        current_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         
         appointment = {
             'id': appt_id,
@@ -235,7 +235,7 @@ def handle_update_appointment(appt_id, user, body):
             if f in body:
                 appt[f] = body[f]
                 
-        appt['updated_at'] = datetime.utcnow().isoformat() + 'Z'
+        appt['updated_at'] = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
         appointments_table.put_item(Item=appt)
         
         # If status changed to confirmed/cancelled, notify client
