@@ -1,6 +1,7 @@
 """
 Payment Reminder Automation
 Automated reminders for unpaid invoices and pending payments
+Pro+ feature - requires Pro or Ultimate plan
 """
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -9,6 +10,7 @@ from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb, users_table
 from utils.response import create_response
 from utils.email import send_email
+from handlers.subscription_handler import get_user_features
 import os
 
 # Initialize DynamoDB tables
@@ -18,7 +20,7 @@ payment_reminders_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_PAYMENT_
 
 def handle_create_reminder_schedule(user, invoice_id, body):
     """
-    Create automated payment reminder schedule
+    Create automated payment reminder schedule - Pro+ feature
     
     POST /api/v1/invoices/{invoice_id}/reminders
     Body: {
@@ -28,6 +30,15 @@ def handle_create_reminder_schedule(user, invoice_id, body):
     }
     """
     try:
+        # Check plan permission - Pro+ feature
+        features, _, _ = get_user_features(user)
+        if not features.get('client_invoicing'):
+            return create_response(403, {
+                'error': 'Payment reminders require Pro plan',
+                'upgrade_required': True,
+                'required_feature': 'client_invoicing'
+            })
+        
         # Get invoice
         invoice_response = invoices_table.get_item(Key={'id': invoice_id})
         if 'Item' not in invoice_response:
@@ -231,8 +242,16 @@ def handle_process_payment_reminders(event, context):
 
 
 def handle_cancel_reminder_schedule(user, invoice_id):
-    """Cancel payment reminder schedule"""
+    """Cancel payment reminder schedule - Pro+ feature"""
     try:
+        # Check plan permission
+        features, _, _ = get_user_features(user)
+        if not features.get('client_invoicing'):
+            return create_response(403, {
+                'error': 'Payment reminders require Pro plan',
+                'upgrade_required': True
+            })
+        
         # Find schedule for this invoice
         response = payment_reminders_table.scan(
             FilterExpression=Attr('invoice_id').eq(invoice_id) & Attr('photographer_id').eq(user['id']) & Attr('status').eq('active')

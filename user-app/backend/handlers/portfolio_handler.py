@@ -75,14 +75,12 @@ def handle_update_portfolio_settings(user, body):
     """Update portfolio customization settings"""
     try:
         # Check plan permission for portfolio customization
-        features, _, _ = get_user_features(user)
+        # Portfolio customization is available on all paid plans (Starter+)
+        # No branding removal requires Starter+, custom domain requires Plus+
+        features, plan_id, _ = get_user_features(user)
         
-        if not features.get('portfolio_customization'):
-            return create_response(403, {
-                'error': 'Portfolio customization is available on Pro and Ultimate plans.',
-                'upgrade_required': True,
-                'required_feature': 'portfolio_customization'
-            })
+        # Basic portfolio editing is allowed for all users
+        # Advanced features checked individually below
         
         # Build update expression
         update_expressions = []

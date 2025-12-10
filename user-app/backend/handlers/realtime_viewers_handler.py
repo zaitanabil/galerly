@@ -2,6 +2,7 @@
 Real-time Viewer Tracking Handler
 Tracks active viewers on galleries and portfolio pages
 Provides real-time location data for 3D globe visualization
+Plus+ feature - requires Plus or higher plan
 """
 import uuid
 import time
@@ -11,6 +12,7 @@ from boto3.dynamodb.conditions import Key, Attr
 from utils.config import analytics_table, galleries_table
 from utils.response import create_response
 from utils.geolocation import get_location_from_ip, get_ip_from_request
+from handlers.subscription_handler import get_user_features
 
 
 # In-memory store for active viewers (in production, use Redis with TTL)
@@ -139,7 +141,7 @@ def handle_track_viewer_heartbeat(event):
 
 def handle_get_active_viewers(user):
     """
-    Get all active viewers for authenticated photographer
+    Get all active viewers for authenticated photographer - Plus+ feature
     Returns only viewers on galleries owned by this user
     
     Returns: {
@@ -159,6 +161,17 @@ def handle_get_active_viewers(user):
     }
     """
     try:
+        # Check plan permission - Plus+ feature
+        features, plan_id, _ = get_user_features(user)
+        analytics_level = features.get('analytics_level', 'basic')
+        
+        if analytics_level == 'basic':
+            return create_response(403, {
+                'error': 'Real-time viewer tracking is a Plus feature',
+                'upgrade_required': True,
+                'message': 'Upgrade to Plus for live visitor globe and real-time analytics'
+            })
+        
         # Clean up inactive viewers first
         cleanup_inactive_viewers()
         

@@ -1,6 +1,7 @@
 """
 Services Pricing Handler
 Manages photographer service offerings and pricing for portfolio/booking pages
+Pro+ feature - requires Pro or Ultimate plan
 """
 import uuid
 from datetime import datetime, timezone
@@ -8,6 +9,7 @@ from decimal import Decimal
 from boto3.dynamodb.conditions import Key
 from utils.config import dynamodb
 from utils.response import create_response
+from handlers.subscription_handler import get_user_features
 import os
 
 # Initialize DynamoDB
@@ -46,7 +48,7 @@ def handle_list_services(photographer_id, is_public=True):
 
 def handle_create_service(user, body):
     """
-    Create a new service offering
+    Create a new service offering - Pro+ feature
     
     POST /api/v1/services
     Body: {
@@ -63,6 +65,15 @@ def handle_create_service(user, body):
     }
     """
     try:
+        # Check plan permission - Pro+ feature
+        features, _, _ = get_user_features(user)
+        if not features.get('client_invoicing'):  # Services bundled with invoicing (Pro+)
+            return create_response(403, {
+                'error': 'Services management is a Pro feature',
+                'upgrade_required': True,
+                'required_feature': 'client_invoicing'
+            })
+        
         # Validate required fields
         name = body.get('name', '').strip()
         if not name:
@@ -106,11 +117,19 @@ def handle_create_service(user, body):
 
 def handle_update_service(user, service_id, body):
     """
-    Update service details
+    Update service details - Pro+ feature
     
     PUT /api/v1/services/{id}
     """
     try:
+        # Check plan permission
+        features, _, _ = get_user_features(user)
+        if not features.get('client_invoicing'):
+            return create_response(403, {
+                'error': 'Services management is a Pro feature',
+                'upgrade_required': True
+            })
+        
         # Get existing service
         response = services_table.get_item(Key={'id': service_id})
         
@@ -174,8 +193,16 @@ def handle_update_service(user, service_id, body):
 
 
 def handle_delete_service(user, service_id):
-    """Delete a service"""
+    """Delete a service - Pro+ feature"""
     try:
+        # Check plan permission
+        features, _, _ = get_user_features(user)
+        if not features.get('client_invoicing'):
+            return create_response(403, {
+                'error': 'Services management is a Pro feature',
+                'upgrade_required': True
+            })
+        
         # Get service to verify ownership
         response = services_table.get_item(Key={'id': service_id})
         

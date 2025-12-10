@@ -25,8 +25,15 @@ def handle_list_contracts(user, query_params=None):
         return create_response(500, {'error': 'Failed to list contracts'})
 
 def handle_create_contract(user, body):
-    """Create draft contract"""
+    """Create draft contract - Photographer only"""
     try:
+        # Check user role - photographers only
+        if user.get('role') != 'photographer':
+            return create_response(403, {
+                'error': 'Only photographers can create contracts',
+                'required_role': 'photographer'
+            })
+        
         # Check Plan Limits
         from handlers.subscription_handler import get_user_features
         features, _, _ = get_user_features(user)

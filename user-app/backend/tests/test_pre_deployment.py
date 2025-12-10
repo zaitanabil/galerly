@@ -54,9 +54,9 @@ class TestEnvironmentVariables:
         
         if missing:
             pytest.fail(
-                f"Missing required environment variables:\n  " + 
+                f"Missing required environment variables:\n  " +
                 "\n  ".join(missing) +
-                "\n\nPlease set these in .env.local or .env file"
+                "\n\nPlease set these in .env.development or .env.production"
             )
     
     def test_aws_region_is_valid(self):

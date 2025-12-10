@@ -12,11 +12,16 @@ class TestServicesHandler:
         response = handle_list_services('photo1', is_public=True)
         assert response['statusCode'] == 200
     
-    @patch('handlers.services_handler.dynamodb')
-    def test_create_service(self, mock_dynamodb):
+    @patch('handlers.services_handler.services_table')
+    @patch('handlers.services_handler.get_user_features')
+    def test_create_service(self, mock_features, mock_table):
         user = {'user_id': 'photo1', 'id': 'photo1', 'role': 'photographer'}
-        mock_table = MagicMock()
-        mock_dynamodb.Table.return_value = mock_table
+        # Mock user has client_invoicing feature (Pro+)
+        mock_features.return_value = ({'client_invoicing': True}, 'pro', None)
+        
+        # Mock put_item to return success
+        mock_table.put_item.return_value = {}
+        
         body = {'name': 'Wedding Photography', 'price': 2500, 'description': 'Full day'}
         response = handle_create_service(user, body)
         assert response['statusCode'] == 201

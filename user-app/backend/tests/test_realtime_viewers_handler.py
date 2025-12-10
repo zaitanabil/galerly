@@ -93,12 +93,14 @@ def test_cleanup_inactive_viewers():
 
 def test_get_active_viewers_for_user():
     """Test getting active viewers for authenticated photographer"""
+    from unittest.mock import patch
+    import time
+    
     active_viewers.clear()
     
     user = {'id': 'photographer-123'}
     
     # Add some viewers
-    import time
     active_viewers['viewer-1'] = {
         'viewer_id': 'viewer-1',
         'gallery_id': 'gallery-1',
@@ -115,15 +117,19 @@ def test_get_active_viewers_for_user():
         'last_seen': time.time()
     }
     
-    response = handle_get_active_viewers(user)
-    assert response['statusCode'] == 200
-    
-    body = response['body']
-    import json
-    data = json.loads(body)
-    assert data['total_active'] == 1
-    assert len(data['viewers']) == 1
-    assert data['by_country']['US'] == 1
-    
-    # Cleanup
-    active_viewers.clear()
+    # Mock user has Plus+ plan with advanced analytics
+    with patch('handlers.realtime_viewers_handler.get_user_features') as mock_features:
+        mock_features.return_value = ({'analytics_level': 'advanced'}, 'plus', None)
+        
+        response = handle_get_active_viewers(user)
+        assert response['statusCode'] == 200
+        
+        body = response['body']
+        import json
+        data = json.loads(body)
+        assert data['total_active'] == 1
+        assert len(data['viewers']) == 1
+        assert data['by_country']['US'] == 1
+        
+        # Cleanup
+        active_viewers.clear()

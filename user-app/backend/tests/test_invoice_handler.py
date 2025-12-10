@@ -22,6 +22,7 @@ def mock_user():
         'id': 'test-user-123',
         'email': 'photographer@test.com',
         'name': 'Test Photographer',
+        'role': 'photographer',  # Add photographer role
         'plan': 'pro'
     }
 
@@ -85,13 +86,29 @@ class TestCreateInvoice:
     
     @patch('handlers.subscription_handler.get_user_features')
     def test_create_invoice_requires_pro_plan(self, mock_features, mock_user):
-        """Test that invoicing requires Pro/Ultimate plan"""
-        mock_features.return_value = ({'client_invoicing': False}, None, None)
+        """Test that invoicing requires Pro/Ultimate plan and photographer role"""
+        # Test 1: Non-photographer role
+        client_user = {
+            'id': 'client-123',
+            'email': 'client@test.com',
+            'role': 'client',
+            'plan': 'pro'
+        }
         
         body = {
             'client_email': 'client@test.com',
             'items': [{'description': 'Test', 'price': 100, 'quantity': 1}]
         }
+        
+        response = handle_create_invoice(client_user, body)
+        
+        assert response['statusCode'] == 403
+        body_data = json.loads(response['body'])
+        assert 'required_role' in body_data
+        assert body_data['required_role'] == 'photographer'
+        
+        # Test 2: Photographer without Pro plan
+        mock_features.return_value = ({'client_invoicing': False}, None, None)
         
         response = handle_create_invoice(mock_user, body)
         

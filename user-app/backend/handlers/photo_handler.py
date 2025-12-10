@@ -163,10 +163,32 @@ def handle_upload_photo(gallery_id, user, event):
             # Decode base64
             image_data = base64.b64decode(base64_data)
             
-            # Image validation removed - accept all files as-is
+            # Validate file data for security (minimum 50 bytes for tiny test images)
+            if len(image_data) < 50:
+                return create_response(400, {'error': 'File data too small to be valid'})
             
-            # Note: No size limit - photographers need full quality
-            # Storage limits are enforced at the subscription level
+            # Check file size limit (100MB per file)
+            max_file_size_mb = 100
+            file_size_mb = len(image_data) / (1024 * 1024)
+            if file_size_mb > max_file_size_mb:
+                return create_response(400, {
+                    'error': f'File size exceeds maximum limit of {max_file_size_mb}MB',
+                    'file_size_mb': round(file_size_mb, 2)
+                })
+            
+            # Basic file extension validation
+            import os
+            filename_from_client = body.get('filename', 'unknown.jpg')
+            ext = os.path.splitext(filename_from_client.lower())[1]
+            allowed_extensions = {
+                '.jpg', '.jpeg', '.png', '.gif', '.webp', '.heic', '.heif',
+                '.cr2', '.nef', '.arw', '.dng', '.orf', '.rw2', '.pef', '.srw', '.raf'
+            }
+            if ext not in allowed_extensions:
+                return create_response(400, {
+                    'error': f'File extension {ext} not allowed',
+                    'hint': 'Only image and RAW photo files are accepted'
+                })
             
         except json.JSONDecodeError:
             return create_response(400, {'error': 'Invalid JSON'})
@@ -177,6 +199,16 @@ def handle_upload_photo(gallery_id, user, event):
         file_hash = calculate_file_hash(image_data)
         file_size = get_file_size(image_data)
         size_mb = file_size / (1024 * 1024)  # Convert bytes to MB
+        
+        # Enforce storage limits before upload
+        from handlers.subscription_handler import enforce_storage_limit
+        storage_allowed, storage_error = enforce_storage_limit(user, size_mb)
+        if not storage_allowed:
+            return create_response(403, {
+                'error': storage_error,
+                'upgrade_required': True,
+                'feature': 'storage'
+            })
         
         # Extract file extension from original filename to preserve format
         import os

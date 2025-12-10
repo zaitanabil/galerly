@@ -28,12 +28,19 @@ def handle_list_invoices(user, query_params=None):
         return create_response(500, {'error': 'Failed to list invoices'})
 
 def handle_create_invoice(user, body):
-    """Create a new invoice"""
+    """Create a new invoice - Photographer only"""
     try:
+        # Check user role - photographers only
+        if user.get('role') != 'photographer':
+            return create_response(403, {
+                'error': 'Only photographers can create invoices',
+                'required_role': 'photographer'
+            })
+        
         # Check Plan Limits
         from handlers.subscription_handler import get_user_features
         features, _, _ = get_user_features(user)
-        
+
         if not features.get('client_invoicing'):
              return create_response(403, {
                  'error': 'Client Invoicing is available on Pro and Ultimate plans.',
@@ -43,10 +50,10 @@ def handle_create_invoice(user, body):
         # Validate required fields
         if 'client_email' not in body or 'items' not in body:
             return create_response(400, {'error': 'Missing required fields'})
-            
+
         invoice_id = str(uuid.uuid4())
         current_time = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
-        
+
         # Calculate total
         total = Decimal('0.00')
         items = body.get('items', [])

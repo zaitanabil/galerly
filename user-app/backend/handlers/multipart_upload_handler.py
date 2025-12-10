@@ -34,6 +34,18 @@ def handle_initialize_multipart_upload(gallery_id, user, event):
         if not filename or not file_size:
             return create_response(400, {'error': 'filename and file_size required'})
         
+        # Enforce storage limits before initializing upload
+        file_size_mb = file_size / (1024 * 1024)
+        from handlers.subscription_handler import enforce_storage_limit
+        storage_allowed, storage_error = enforce_storage_limit(user, file_size_mb)
+        if not storage_allowed:
+            return create_response(403, {
+                'error': storage_error,
+                'upgrade_required': True,
+                'feature': 'storage',
+                'file_size_mb': round(file_size_mb, 2)
+            })
+        
         # Generate unique photo ID and S3 key
         photo_id = str(uuid.uuid4())
         import os

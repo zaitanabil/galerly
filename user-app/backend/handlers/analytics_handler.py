@@ -1,5 +1,9 @@
 """
 Analytics and insights handlers
+Tiered analytics access based on subscription plan:
+- Basic (Free/Starter): 7 days retention, limited metrics
+- Advanced (Plus): 30 days retention, full metrics
+- Pro (Pro/Ultimate): 90 days retention, full metrics + exports
 """
 import uuid
 import re
@@ -7,6 +11,9 @@ from datetime import datetime, timedelta, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import analytics_table, galleries_table, photos_table
 from utils.response import create_response
+from handlers.subscription_handler import get_user_features
+from utils.rate_limiter import rate_limit
+from utils.plan_monitoring import track_feature_violation
 
 
 def track_event(user_id, gallery_id, event_type, metadata=None):
@@ -27,9 +34,18 @@ def track_event(user_id, gallery_id, event_type, metadata=None):
         return False
 
 
+@rate_limit('analytics_view', 'user_id')
 def handle_get_gallery_analytics(user, gallery_id, query_params=None):
-    """Get analytics for a specific gallery"""
+    """Get analytics for a specific gallery with plan-based restrictions"""
     try:
+        # Check user's analytics level
+        features, plan_id, _ = get_user_features(user)
+        analytics_level = features.get('analytics_level', 'basic')
+        
+        # Track if user tries to access advanced analytics without plan
+        if analytics_level == 'basic' and query_params and int(query_params.get('days', 7)) > 7:
+            track_feature_violation(user, 'analytics_retention', 'Plus')
+        
         # Verify gallery ownership
         gallery_response = galleries_table.get_item(Key={
             'user_id': user['id'],
@@ -39,7 +55,7 @@ def handle_get_gallery_analytics(user, gallery_id, query_params=None):
         if 'Item' not in gallery_response:
             return create_response(404, {'error': 'Gallery not found'})
         
-        # Get date range from query parameters or use default (30 days)
+        # Get date range from query parameters or use default
         query_params = query_params or {}
         end_date_str = query_params.get('end_date')
         start_date_str = query_params.get('start_date')
@@ -51,14 +67,27 @@ def handle_get_gallery_analytics(user, gallery_id, query_params=None):
                 end_date = datetime.now(timezone.utc)
         else:
             end_date = datetime.now(timezone.utc)
-            
+        
+        # Apply retention limits based on analytics level
+        max_retention_days = {
+            'basic': 7,      # Free/Starter
+            'advanced': 30,  # Plus
+            'pro': 90        # Pro/Ultimate
+        }.get(analytics_level, 7)
+        
         if start_date_str:
             try:
                 start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+                # Enforce retention limit
+                earliest_allowed = end_date - timedelta(days=max_retention_days)
+                if start_date < earliest_allowed:
+                    start_date = earliest_allowed
             except:
-                start_date = end_date - timedelta(days=30)
+                start_date = end_date - timedelta(days=min(30, max_retention_days))
         else:
-            start_date = end_date - timedelta(days=30)
+            # Default based on plan
+            default_days = min(30, max_retention_days)
+            start_date = end_date - timedelta(days=default_days)
         
         # Get analytics events for this gallery
         response = analytics_table.query(
@@ -156,31 +185,68 @@ def handle_get_gallery_analytics(user, gallery_id, query_params=None):
         # Convert daily_stats to list for frontend
         daily_stats_list = [{'date': k, 'views': v['views'], 'downloads': v['downloads']} for k, v in sorted(daily_stats.items())]
         
-        return create_response(200, {
+        # Build response based on analytics level
+        response_data = {
             'gallery_id': gallery_id,
             'period': {
                 'start': start_date.isoformat() + 'Z',
                 'end': end_date.isoformat() + 'Z',
                 'days': num_days
             },
-            'metrics': {
+            'analytics_level': analytics_level,
+            'plan': plan_id,
+            'max_retention_days': max_retention_days
+        }
+        
+        # Basic analytics (Free/Starter): Limited metrics only
+        if analytics_level == 'basic':
+            response_data['metrics'] = {
+                'total_views': views,
+                'downloads': downloads
+            }
+            response_data['daily_stats'] = daily_stats_list
+            response_data['message'] = 'Upgrade to Plus for advanced analytics including unique visitors, photo views, and top photos.'
+        
+        # Advanced analytics (Plus): Full metrics, no exports
+        elif analytics_level == 'advanced':
+            response_data['metrics'] = {
                 'total_views': views,
                 'unique_visitors': unique_visitors,
                 'photo_views': photo_views,
                 'downloads': downloads,
                 'bulk_downloads': bulk_downloads
-            },
-            'daily_stats': daily_stats_list,
-            'top_photos': top_photos
-        })
+            }
+            response_data['daily_stats'] = daily_stats_list
+            response_data['top_photos'] = top_photos[:5]  # Top 5 only
+            response_data['message'] = 'Upgrade to Pro for extended retention (90 days) and analytics exports.'
+        
+        # Pro analytics (Pro/Ultimate): Everything + exports
+        else:  # pro
+            response_data['metrics'] = {
+                'total_views': views,
+                'unique_visitors': unique_visitors,
+                'photo_views': photo_views,
+                'downloads': downloads,
+                'bulk_downloads': bulk_downloads
+            }
+            response_data['daily_stats'] = daily_stats_list
+            response_data['top_photos'] = top_photos
+            response_data['exports_available'] = True
+        
+        return create_response(200, response_data)
     except Exception as e:
         print(f"Error getting gallery analytics: {str(e)}")
         return create_response(500, {'error': 'Failed to get analytics'})
 
 
+@rate_limit('analytics_view', 'user_id')
 def handle_get_overall_analytics(user, query_params=None):
-    """Get overall analytics for user"""
+    """Get overall analytics for user with plan-based restrictions"""
     try:
+        # Check user's analytics level
+        features, plan_id, _ = get_user_features(user)
+        analytics_level = features.get('analytics_level', 'basic')
+        
         # Get all user's galleries
         galleries_response = galleries_table.query(
             KeyConditionExpression=Key('user_id').eq(user['id'])
@@ -196,10 +262,12 @@ def handle_get_overall_analytics(user, query_params=None):
                 'total_downloads': 0,
                 'total_bulk_downloads': 0,
                 'gallery_stats': [],
-                'daily_stats': []
+                'daily_stats': [],
+                'analytics_level': analytics_level,
+                'plan': plan_id
             })
         
-        # Get date range from query parameters or use default (30 days)
+        # Get date range from query parameters
         query_params = query_params or {}
         end_date_str = query_params.get('end_date')
         start_date_str = query_params.get('start_date')
@@ -211,14 +279,27 @@ def handle_get_overall_analytics(user, query_params=None):
                 end_date = datetime.now(timezone.utc)
         else:
             end_date = datetime.now(timezone.utc)
+        
+        # Apply retention limits based on analytics level
+        max_retention_days = {
+            'basic': 7,      # Free/Starter
+            'advanced': 30,  # Plus
+            'pro': 90        # Pro/Ultimate
+        }.get(analytics_level, 7)
             
         if start_date_str:
             try:
                 start_date = datetime.fromisoformat(start_date_str.replace('Z', '+00:00'))
+                # Enforce retention limit
+                earliest_allowed = end_date - timedelta(days=max_retention_days)
+                if start_date < earliest_allowed:
+                    start_date = earliest_allowed
             except:
-                start_date = end_date - timedelta(days=30)
+                start_date = end_date - timedelta(days=min(30, max_retention_days))
         else:
-            start_date = end_date - timedelta(days=30)
+            # Default based on plan
+            default_days = min(30, max_retention_days)
+            start_date = end_date - timedelta(days=default_days)
 
         # Get analytics for all galleries
         
@@ -336,21 +417,54 @@ def handle_get_overall_analytics(user, query_params=None):
         # Convert daily_stats to list for frontend
         daily_stats_list = [{'date': k, 'views': v['views'], 'downloads': v['downloads']} for k, v in sorted(daily_stats.items())]
         
-        return create_response(200, {
+        # Build response based on analytics level
+        response_data = {
             'total_galleries': len(galleries),
-            'total_views': total_views,
-            'total_photo_views': total_photo_views,
-            'total_downloads': total_downloads,
-            'total_bulk_downloads': total_bulk_downloads,
             'period': {
                 'start': start_date.isoformat() + 'Z',
                 'end': end_date.isoformat() + 'Z',
                 'days': num_days
             },
-            'daily_stats': daily_stats_list,
-            'gallery_stats': gallery_stats[:10],  # Top 10 galleries
-            'top_photos': top_photos
-        })
+            'analytics_level': analytics_level,
+            'plan': plan_id,
+            'max_retention_days': max_retention_days,
+            'daily_stats': daily_stats_list
+        }
+        
+        # Basic analytics (Free/Starter): Limited metrics only
+        if analytics_level == 'basic':
+            response_data.update({
+                'total_views': total_views,
+                'total_downloads': total_downloads,
+                'gallery_stats': [{'gallery_id': g['gallery_id'], 'gallery_name': g['gallery_name'], 'cover_photo': g['cover_photo'], 'views': g['views']} for g in gallery_stats[:5]],
+                'message': 'Upgrade to Plus for advanced analytics including unique visitors, photo views, and detailed statistics.'
+            })
+        
+        # Advanced analytics (Plus): Full metrics, limited top lists
+        elif analytics_level == 'advanced':
+            response_data.update({
+                'total_views': total_views,
+                'total_photo_views': total_photo_views,
+                'total_downloads': total_downloads,
+                'total_bulk_downloads': total_bulk_downloads,
+                'gallery_stats': gallery_stats[:10],
+                'top_photos': top_photos[:5],
+                'message': 'Upgrade to Pro for extended retention (90 days), full top lists, and analytics exports.'
+            })
+        
+        # Pro analytics (Pro/Ultimate): Everything
+        else:  # pro
+            response_data.update({
+                'total_views': total_views,
+                'total_photo_views': total_photo_views,
+                'total_downloads': total_downloads,
+                'total_bulk_downloads': total_bulk_downloads,
+                'gallery_stats': gallery_stats[:10],
+                'top_photos': top_photos,
+                'exports_available': True
+            })
+        
+        return create_response(200, response_data)
     except Exception as e:
         print(f"Error getting overall analytics: {str(e)}")
         return create_response(500, {'error': 'Failed to get analytics'})

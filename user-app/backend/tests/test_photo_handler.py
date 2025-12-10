@@ -29,10 +29,13 @@ class TestHandleUploadPhoto:
     def test_upload_photo_success(self, sample_user, sample_gallery, mock_photo_dependencies):
         """Upload photo successfully."""
         from handlers.photo_handler import handle_upload_photo
+        from unittest.mock import patch
         
         mock_photo_dependencies['galleries'].get_item.return_value = {
             'Item': sample_gallery
         }
+        
+        mock_photo_dependencies['photos'].put_item.return_value = {}
         
         # FIX: Handler expects base64 encoded image data
         event = {
@@ -44,11 +47,21 @@ class TestHandleUploadPhoto:
             })
         }
         
-        result = handle_upload_photo('gallery_123', sample_user, event)
-        
-        assert result['statusCode'] in [200, 201]
-        body = json.loads(result['body'])
-        assert 'id' in body or 'photo_id' in body
+        # Mock enforce_storage_limit and s3_client
+        with patch('handlers.subscription_handler.enforce_storage_limit') as mock_enforce:
+            with patch('handlers.photo_handler.s3_client') as mock_s3:
+                mock_enforce.return_value = (True, None)
+                mock_s3.put_object.return_value = {}
+                
+                result = handle_upload_photo('gallery_123', sample_user, event)
+                
+                # Debug: print result if it fails
+                if result['statusCode'] not in [200, 201]:
+                    print(f"Status: {result['statusCode']}, Body: {result['body']}")
+                
+                assert result['statusCode'] in [200, 201]
+                body = json.loads(result['body'])
+                assert 'id' in body or 'photo_id' in body
     
     def test_upload_photo_gallery_not_owned(self, sample_user, sample_gallery, mock_photo_dependencies):
         """Upload photo fails when user doesn't own gallery."""

@@ -103,35 +103,59 @@ def auto_register_guest_client(email, name, photographer_id):
 
 
 def handle_add_favorite(user, body):
-    """Add a photo to client favorites"""
+    """Add a photo to client favorites - Requires Starter+ plan"""
     try:
         photo_id = body.get('photo_id')
         gallery_id = body.get('gallery_id')
         share_token = body.get('token')  # For shared link access
-        
+
         # Get client email from user session or body
         client_email = ''
         client_name = body.get('client_name', '')  # Guest user name
-        
+
         if user:
             client_email = user.get('email', '').lower()
         if not client_email:
             client_email = body.get('client_email', '').lower()
-        
+
         print(f"Adding favorite: photo_id={photo_id}, gallery_id={gallery_id}, client_email={client_email}, share_token={'***' if share_token else 'None'}")
-        
+
         if not photo_id or not gallery_id:
             return create_response(400, {'error': 'photo_id and gallery_id are required'})
-        
+
         if not client_email:
             return create_response(400, {'error': 'User email not found'})
-        
+
         # Verify photo exists and get gallery info
         try:
             photo_response = photos_table.get_item(Key={'id': photo_id})
             if 'Item' not in photo_response:
                 print(f"Photo not found: {photo_id}")
                 return create_response(404, {'error': 'Photo not found'})
+            
+            photo = photo_response['Item']
+            photographer_id = photo.get('user_id')
+            
+            # Check if photographer has client_favorites feature enabled
+            if photographer_id:
+                from handlers.subscription_handler import get_user_features
+                # Get photographer user object
+                photographer_response = users_table.scan(
+                    FilterExpression='id = :uid',
+                    ExpressionAttributeValues={':uid': photographer_id},
+                    Limit=1
+                )
+                if photographer_response.get('Items'):
+                    photographer = photographer_response['Items'][0]
+                    features, _, _ = get_user_features(photographer)
+                    
+                    if not features.get('client_favorites'):
+                        return create_response(403, {
+                            'error': 'Client favorites are not available on this photographer\'s plan',
+                            'message': 'This feature requires Starter plan or higher',
+                            'upgrade_required': True,
+                            'feature': 'client_favorites'
+                        })
             
             photo = photo_response['Item']
             if photo.get('gallery_id') != gallery_id:
@@ -161,7 +185,6 @@ def handle_add_favorite(user, body):
             
             # Check if the user trying to favorite is the photographer (owner)
             # Allow if accessing via share token (for testing), otherwise block
-            from utils.config import users_table
             photographer_check = users_table.query(
                 IndexName='UserIdIndex',
                 KeyConditionExpression=Key('id').eq(user_id)
@@ -490,26 +513,55 @@ def handle_check_favorite(user, photo_id, query_params=None):
 
 def handle_submit_favorites(user, body):
     """
-    Submit selected favorites to the photographer.
+    Submit selected favorites to the photographer - Requires Starter+ plan.
     This finalizes the selection and triggers a notification.
     """
     try:
         gallery_id = body.get('gallery_id')
-        
+
         # Get client email
         client_email = ''
         if user:
             client_email = user.get('email', '').lower()
         if not client_email:
             client_email = body.get('client_email', '').lower()
-            
+
         if not gallery_id:
             return create_response(400, {'error': 'gallery_id is required'})
-            
+
         if not client_email:
             return create_response(400, {'error': 'Client email is required'})
-            
+
         print(f"Submitting favorites for gallery: {gallery_id}, client: {client_email}")
+        
+        # Check if gallery owner has client_favorites feature
+        gallery_response = galleries_table.scan(
+            FilterExpression='id = :gid',
+            ExpressionAttributeValues={':gid': gallery_id},
+            Limit=1
+        )
+        
+        if gallery_response.get('Items'):
+            gallery = gallery_response['Items'][0]
+            photographer_id = gallery.get('user_id')
+            
+            if photographer_id:
+                from handlers.subscription_handler import get_user_features
+                photographer_response = users_table.scan(
+                    FilterExpression='id = :uid',
+                    ExpressionAttributeValues={':uid': photographer_id},
+                    Limit=1
+                )
+                if photographer_response.get('Items'):
+                    photographer = photographer_response['Items'][0]
+                    features, _, _ = get_user_features(photographer)
+                    
+                    if not features.get('client_favorites'):
+                        return create_response(403, {
+                            'error': 'Client favorites submission is not available on this photographer\'s plan',
+                            'message': 'This feature requires Starter plan or higher',
+                            'upgrade_required': True
+                        })
 
         # 1. Get all favorites for this client and gallery
         # Using scan or query on client_email then filtering by gallery_id (since we only have PK on client_email)
@@ -517,7 +569,7 @@ def handle_submit_favorites(user, body):
             KeyConditionExpression=Key('client_email').eq(client_email)
         )
         all_favorites = response.get('Items', [])
-        
+
         # Filter for this gallery
         gallery_favorites = [f for f in all_favorites if f.get('gallery_id') == gallery_id]
         
@@ -551,7 +603,6 @@ def handle_submit_favorites(user, body):
         if not photographer_id:
             # Fallback: Query gallery (inefficient if we don't have user_id, but we need it)
             # Try to query gallery by ID using GSI if needed, but we need to find user_id
-            from utils.config import galleries_table
             gallery_query = galleries_table.query(
                 IndexName='GalleryIdIndex',
                 KeyConditionExpression=Key('id').eq(gallery_id),
@@ -564,8 +615,6 @@ def handle_submit_favorites(user, body):
                 return create_response(404, {'error': 'Gallery not found'})
 
         # Now get full gallery details with photographer_id
-        from utils.config import users_table, galleries_table
-        
         gallery_response = galleries_table.get_item(Key={'user_id': photographer_id, 'id': gallery_id})
         if 'Item' not in gallery_response:
              return create_response(404, {'error': 'Gallery details not found'})

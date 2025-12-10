@@ -1,13 +1,27 @@
 """
 Dashboard and statistics handlers
+Dashboard stats filtered by plan tier
 """
+from datetime import datetime, timedelta, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table, users_table
 from utils.response import create_response
+from handlers.subscription_handler import get_user_features
 
 def handle_dashboard_stats(user):
-    """Get dashboard statistics for THIS USER ONLY"""
+    """Get dashboard statistics for THIS USER ONLY - filtered by plan"""
     try:
+        # Check user's analytics level for filtering
+        features, plan_id, _ = get_user_features(user)
+        analytics_level = features.get('analytics_level', 'basic')
+        
+        # Determine data retention based on plan
+        max_retention_days = {
+            'basic': 7,      # Free/Starter
+            'advanced': 30,  # Plus
+            'pro': 90        # Pro/Ultimate
+        }.get(analytics_level, 7)
+        
         # Query only this user's galleries
         response = galleries_table.query(
             KeyConditionExpression=Key('user_id').eq(user['id'])
@@ -80,9 +94,17 @@ def handle_dashboard_stats(user):
                     print(f"Failed to fix dashboard thumbnail: {e}")
 
         
-        # Get real analytics
+        # Get real analytics with plan-appropriate date range
         from handlers.analytics_handler import handle_get_overall_analytics
-        analytics_response = handle_get_overall_analytics(user)
+        
+        # Pass date range based on retention
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=max_retention_days)
+        
+        analytics_response = handle_get_overall_analytics(user, {
+            'start_date': start_date.isoformat() + 'Z',
+            'end_date': end_date.isoformat() + 'Z'
+        })
         analytics_data = analytics_response.get('body') if isinstance(analytics_response, dict) else {}
         if isinstance(analytics_data, str):
             import json
@@ -90,32 +112,40 @@ def handle_dashboard_stats(user):
                 analytics_data = json.loads(analytics_data)
             except:
                 analytics_data = {}
-                
-        # Override totals with real analytics data if available
-        real_total_views = analytics_data.get('total_views', total_views)
-        real_total_downloads = analytics_data.get('total_downloads', 0) + analytics_data.get('total_bulk_downloads', 0)
         
-        # If analytics views are higher (from logs), use them. If gallery counters are higher (lifetime), use them.
-        # This handles the transition period.
-        final_total_views = max(total_views, real_total_views)
-        final_total_downloads = max(total_downloads, real_total_downloads)
-        
-        return create_response(200, {
+        # Build response based on analytics level
+        response_data = {
             'stats': {
                 'total_galleries': len(user_galleries),
                 'total_photos': total_photos,
-                'total_views': final_total_views,
-                'total_downloads': final_total_downloads,
                 'storage_used_mb': round(total_storage_mb, 2),
                 'storage_used_gb': total_storage_gb,
                 'storage_limit_gb': storage_limit_gb,
                 'storage_available_gb': round(storage_available_gb, 2),
                 'storage_percent': storage_percent
             },
-            'analytics': analytics_data, # Pass full analytics including graphs
             'recent_galleries': recent_galleries,
-            'subscription': user_subscription
-        })
+            'subscription': user_subscription,
+            'analytics_level': analytics_level,
+            'retention_days': max_retention_days
+        }
+        
+        # Add analytics based on plan level
+        if analytics_level == 'basic':
+            response_data['stats']['total_views'] = analytics_data.get('total_views', 0)
+            response_data['stats']['total_downloads'] = 0
+            response_data['message'] = 'Upgrade to Plus for detailed analytics'
+        elif analytics_level == 'advanced':
+            response_data['stats']['total_views'] = analytics_data.get('total_views', 0)
+            response_data['stats']['total_downloads'] = analytics_data.get('total_downloads', 0)
+            response_data['analytics'] = analytics_data
+            response_data['message'] = 'Upgrade to Pro for extended retention and exports'
+        else:  # pro
+            response_data['stats']['total_views'] = analytics_data.get('total_views', 0)
+            response_data['stats']['total_downloads'] = analytics_data.get('total_downloads', 0) + analytics_data.get('total_bulk_downloads', 0)
+            response_data['analytics'] = analytics_data
+        
+        return create_response(200, response_data)
     except Exception as e:
         print(f"Error getting dashboard stats: {str(e)}")
         import traceback

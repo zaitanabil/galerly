@@ -1,6 +1,7 @@
 """
 Testimonials Handler
 Manages client testimonials and reviews for photographer portfolios
+Pro+ feature - requires Pro or Ultimate plan for management
 """
 import uuid
 from datetime import datetime, timezone
@@ -8,6 +9,7 @@ from decimal import Decimal
 from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb
 from utils.response import create_response
+from handlers.subscription_handler import get_user_features
 import os
 
 # Initialize DynamoDB
@@ -131,7 +133,7 @@ def handle_create_testimonial(photographer_id, body):
 
 def handle_update_testimonial(user, testimonial_id, body):
     """
-    Update testimonial (photographer only - for approval/featuring)
+    Update testimonial (photographer only - for approval/featuring) - Pro+ feature
     
     PUT /api/v1/crm/testimonials/{id}
     Body: {
@@ -140,6 +142,15 @@ def handle_update_testimonial(user, testimonial_id, body):
     }
     """
     try:
+        # Check plan permission - Pro+ feature
+        features, _, _ = get_user_features(user)
+        if not features.get('client_invoicing'):  # Testimonials bundled with CRM (Pro+)
+            return create_response(403, {
+                'error': 'Testimonial management is a Pro feature',
+                'upgrade_required': True,
+                'required_feature': 'client_invoicing'
+            })
+        
         # Get existing testimonial
         response = testimonials_table.get_item(Key={'id': testimonial_id})
         
@@ -189,8 +200,16 @@ def handle_update_testimonial(user, testimonial_id, body):
 
 
 def handle_delete_testimonial(user, testimonial_id):
-    """Delete a testimonial (photographer only)"""
+    """Delete a testimonial (photographer only) - Pro+ feature"""
     try:
+        # Check plan permission
+        features, _, _ = get_user_features(user)
+        if not features.get('client_invoicing'):
+            return create_response(403, {
+                'error': 'Testimonial management is a Pro feature',
+                'upgrade_required': True
+            })
+        
         # Get testimonial to verify ownership
         response = testimonials_table.get_item(Key={'id': testimonial_id})
         
@@ -215,7 +234,7 @@ def handle_delete_testimonial(user, testimonial_id):
 
 def handle_request_testimonial(user, body):
     """
-    Send testimonial request email to a client
+    Send testimonial request email to a client - Pro+ feature
     
     POST /api/v1/crm/testimonials/request
     Body: {
@@ -226,6 +245,14 @@ def handle_request_testimonial(user, body):
     }
     """
     try:
+        # Check plan permission
+        features, _, _ = get_user_features(user)
+        if not features.get('client_invoicing'):
+            return create_response(403, {
+                'error': 'Testimonial requests are a Pro feature',
+                'upgrade_required': True
+            })
+        
         from utils.email import send_email
         
         client_name = body.get('client_name', '').strip()

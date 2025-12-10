@@ -5,10 +5,14 @@ from unittest.mock import patch, MagicMock
 from handlers.payment_reminders_handler import handle_create_reminder_schedule, handle_process_payment_reminders
 
 class TestPaymentRemindersHandler:
-    @patch('handlers.payment_reminders_handler.payment_reminders_table')
     @patch('handlers.payment_reminders_handler.invoices_table')
-    def test_create_reminder_schedule(self, mock_invoices_table, mock_reminders_table):
+    @patch('handlers.payment_reminders_handler.payment_reminders_table')
+    @patch('handlers.payment_reminders_handler.get_user_features')
+    def test_create_reminder_schedule(self, mock_features, mock_reminders_table, mock_invoices_table):
         user = {'user_id': 'photo1', 'id': 'photo1', 'role': 'photographer'}
+        # Mock user has client_invoicing feature (Pro+)
+        mock_features.return_value = ({'client_invoicing': True}, 'pro', None)
+        
         # Mock invoice exists with proper user_id field and future due date
         future_date = (datetime.now(timezone.utc) + timedelta(days=14)).replace(tzinfo=None).isoformat() + 'Z'
         mock_invoices_table.get_item.return_value = {
@@ -20,6 +24,9 @@ class TestPaymentRemindersHandler:
                 'client_email': 'client@example.com'
             }
         }
+        # Mock put_item to return success
+        mock_reminders_table.put_item.return_value = {}
+        
         invoice_id = 'inv1'
         body = {'reminder_days': [7, 3, 1]}
         response = handle_create_reminder_schedule(user, invoice_id, body)

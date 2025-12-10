@@ -6,6 +6,7 @@ from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table, users_table, dynamodb, features_table, user_features_table
 from utils.response import create_response
 from handlers.billing_handler import PLANS
+from utils.plan_monitoring import track_storage_violation
 import os
 
 subscriptions_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_SUBSCRIPTIONS'))
@@ -412,6 +413,10 @@ def enforce_storage_limit(user, additional_mb):
     additional_gb = additional_mb / 1024
     if storage_limit['remaining_gb'] < additional_gb:
         plan_limits = get_user_plan_limits(user)
+        
+        # Track violation
+        track_storage_violation(user, additional_mb, storage_limit['limit_gb'])
+        
         return False, f"Insufficient storage. You have {storage_limit['remaining_gb']:.2f} GB remaining. Upgrade to {plan_limits['plan_name']} for more storage."
     
     return True, None

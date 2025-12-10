@@ -145,9 +145,8 @@ def validate_local_development_config():
     Should use .env files (not committed to repo)
     """
     print("\nLocal development configuration:")
-    print("  ✓ .env file (git-ignored)")
-    print("  ✓ .env.example (committed, no secrets)")
-    print("  ✓ python-dotenv for loading .env")
+    print("  ✓ .env.development and .env.production files (git-ignored)")
+    print("  ✓ python-dotenv for loading environment variables")
     
     env_example_contents = """# Environment Configuration (Example)
 # Copy to .env and fill in actual values
@@ -173,8 +172,8 @@ STRIPE_WEBHOOK_SECRET=whsec_your_secret_here
 FRONTEND_URL=http://localhost:5173
 JWT_SECRET=generate_random_secret_here
 """
-    
-    print("\n.env.example structure:")
+
+    print("\n.env file structure (development/production):")
     print(env_example_contents)
     
     return True

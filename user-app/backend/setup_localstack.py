@@ -15,7 +15,7 @@ from botocore.exceptions import ClientError
 LOCALSTACK_ENDPOINT = os.environ.get('AWS_ENDPOINT_URL')
 if not LOCALSTACK_ENDPOINT:
     print("❌ AWS_ENDPOINT_URL not set in environment")
-    print("   Please set in .env.local or export it")
+    print("   Please set in .env.development or export it")
     sys.exit(1)
 
 REGION = os.environ.get('AWS_REGION')

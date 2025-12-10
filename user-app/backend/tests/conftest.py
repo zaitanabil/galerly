@@ -83,9 +83,9 @@ def _mock_boto3_resource(service_name, **kwargs):
         return _mock_dynamodb
     return MagicMock()
 
-# FIX: Set required SMTP environment variables BEFORE any imports
+# Set required SMTP environment variables BEFORE any imports
 # This prevents ValueError when utils.email module loads
-# Values from .env.local lines 127-132 (actual production SMTP credentials)
+# Values from .env.development (actual production SMTP credentials for testing)
 # Note: Tests mock smtplib.SMTP below, so no real emails are sent
 os.environ.setdefault('SMTP_HOST', 'mail.privateemail.com')
 os.environ.setdefault('SMTP_PORT', '587')
@@ -94,7 +94,7 @@ os.environ.setdefault('SMTP_PASSWORD', 'f#@ho]7J69iqf8,kCK:.uoKA:FGKD~')
 os.environ.setdefault('FROM_EMAIL', 'noreply@galerly.com')
 os.environ.setdefault('FROM_NAME', 'Galerly')
 
-# FIX: Set application limits and configuration from .env.local
+# Set application limits and configuration from .env.development
 os.environ.setdefault('DEFAULT_PAGE_SIZE', '50')
 os.environ.setdefault('MAX_USERNAME_BASE_LENGTH', '47')
 os.environ.setdefault('SESSION_MAX_AGE', '604800')

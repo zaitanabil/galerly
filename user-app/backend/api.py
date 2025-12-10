@@ -342,33 +342,39 @@ def handler(event, context):
         
         # Authentication endpoints (with rate limiting)
         if path == '/v1/auth/request-verification' and method == 'POST':
-            is_allowed, remaining, reset_at = check_rate_limit(event, 'auth_verification')
+            # Extract IP from event for rate limiting
+            client_ip = event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'unknown')
+            is_allowed, retry_after = check_rate_limit('auth_verification', client_ip)
             if not is_allowed:
                 return create_response(429, {
                     'error': 'Too many verification requests',
-                    'retry_after': reset_at
-                })
+                    'retry_after': retry_after
+                }, headers={'Retry-After': str(retry_after)})
             return handle_request_verification_code(body)
         
         if path == '/v1/auth/verify-email' and method == 'POST':
             return handle_verify_code(body)
         
         if path == '/v1/auth/register' and method == 'POST':
-            is_allowed, remaining, reset_at = check_rate_limit(event, 'auth_register')
+            # Extract IP from event for rate limiting
+            client_ip = event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'unknown')
+            is_allowed, retry_after = check_rate_limit('auth_register', client_ip)
             if not is_allowed:
                 return create_response(429, {
                     'error': 'Too many registration attempts',
-                    'retry_after': reset_at
-                })
+                    'retry_after': retry_after
+                }, headers={'Retry-After': str(retry_after)})
             return handle_register(body)
         
         if path == '/v1/auth/login' and method == 'POST':
-            is_allowed, remaining, reset_at = check_rate_limit(event, 'auth_login')
+            # Extract IP from event for rate limiting
+            client_ip = event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'unknown')
+            is_allowed, retry_after = check_rate_limit('auth_login', client_ip)
             if not is_allowed:
                 return create_response(429, {
                     'error': 'Too many login attempts',
-                    'retry_after': reset_at
-                })
+                    'retry_after': retry_after
+                }, headers={'Retry-After': str(retry_after)})
             return handle_login(body)
         
         if path == '/v1/auth/logout' and method == 'POST':
@@ -400,12 +406,14 @@ def handler(event, context):
             return handle_get_api_key(user)
         
         if path == '/v1/auth/forgot-password' and method == 'POST':
-            is_allowed, remaining, reset_at = check_rate_limit(event, 'auth_password_reset')
+            # Extract IP from event for rate limiting
+            client_ip = event.get('requestContext', {}).get('identity', {}).get('sourceIp', 'unknown')
+            is_allowed, retry_after = check_rate_limit('auth_password_reset', client_ip)
             if not is_allowed:
                 return create_response(429, {
                     'error': 'Too many password reset requests',
-                    'retry_after': reset_at
-                })
+                    'retry_after': retry_after
+                }, headers={'Retry-After': str(retry_after)})
             return handle_request_password_reset(body)
         
         if path == '/v1/auth/reset-password' and method == 'POST':
@@ -1563,6 +1571,51 @@ def handler(event, context):
                 return handle_update_feature_request_status(event)
         
         # ================================================================
+        # ADMIN ENDPOINTS - Plan Management & Monitoring
+        # ================================================================
+        
+        # Grant feature to user
+        if path.startswith('/v1/admin/users/') and path.endswith('/features') and method == 'POST':
+            from handlers.admin_plan_handler import handle_grant_feature
+            user_id = path.split('/')[3]
+            body['user_id'] = user_id
+            return handle_grant_feature(user, body)
+        
+        # Revoke feature from user
+        if path.startswith('/v1/admin/users/') and '/features/' in path and method == 'DELETE':
+            from handlers.admin_plan_handler import handle_revoke_feature
+            parts = path.split('/')
+            user_id = parts[3]
+            feature_id = parts[5]
+            return handle_revoke_feature(user, user_id, feature_id)
+        
+        # List user feature overrides
+        if path.startswith('/v1/admin/users/') and path.endswith('/features') and method == 'GET':
+            from handlers.admin_plan_handler import handle_list_user_overrides
+            user_id = path.split('/')[3]
+            return handle_list_user_overrides(user, user_id)
+        
+        # Change user plan
+        if path.startswith('/v1/admin/users/') and path.endswith('/plan') and method == 'POST':
+            from handlers.admin_plan_handler import handle_upgrade_user_plan
+            user_id = path.split('/')[3]
+            body['user_id'] = user_id
+            return handle_upgrade_user_plan(user, body)
+        
+        # Get platform violations summary
+        if path == '/v1/admin/violations' and method == 'GET':
+            from handlers.admin_plan_handler import handle_get_plan_violations
+            query_params = event.get('queryStringParameters', {})
+            return handle_get_plan_violations(user, query_params)
+        
+        # Get user-specific violations
+        if path.startswith('/v1/admin/users/') and path.endswith('/violations') and method == 'GET':
+            from handlers.admin_plan_handler import handle_get_user_violations
+            user_id = path.split('/')[3]
+            query_params = event.get('queryStringParameters', {})
+            return handle_get_user_violations(user, user_id, query_params)
+        
+        # ================================================================
         # 404 - Endpoint not found
         # ================================================================
         return create_response(404, {
@@ -1592,10 +1645,19 @@ if __name__ == '__main__':
     from flask_cors import CORS
     from dotenv import load_dotenv
     
-    # Force load .env.local for local execution
-    # override=False ensures Docker environment variables (like AWS_ENDPOINT_URL) are preserved
-    load_dotenv('.env.local', override=False)
-    load_dotenv() # Load .env if exists
+    # Load environment variables from root-level .env files
+    # Check for ENVIRONMENT variable to determine which .env file to load
+    env = os.environ.get('ENVIRONMENT', 'development')
+    
+    if env == 'production':
+        # Load production environment from root
+        load_dotenv('../../.env.production', override=False)
+    else:
+        # Load development environment from root
+        load_dotenv('../../.env.development', override=False)
+    
+    # Fallback to any .env file in current directory
+    load_dotenv(override=False)
     
     def get_required_env(key):
         """Get required environment variable or raise error"""

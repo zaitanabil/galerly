@@ -1,11 +1,12 @@
 """
 Video playback analytics tracking
-Tracks video views, watch time, and engagement
+Only available for users with video upload capabilities
 """
 from datetime import datetime, timezone
 from decimal import Decimal
 from utils.config import video_analytics_table
 from utils.response import create_response
+from handlers.subscription_handler import get_user_features
 
 
 def handle_track_video_view(body):
@@ -54,9 +55,20 @@ def handle_track_video_view(body):
 def handle_get_video_analytics(user, photo_id):
     """
     Get analytics for a specific video
-    Photographer-only endpoint
+    Photographer-only endpoint - requires video support on plan
     """
     try:
+        # Check if user has video support
+        features, _, _ = get_user_features(user)
+        video_minutes = features.get('video_minutes', 0)
+        
+        if video_minutes == 0:
+            return create_response(403, {
+                'error': 'Video analytics require a plan with video support',
+                'upgrade_required': True,
+                'message': 'Upgrade to Starter or higher to access video features'
+            })
+        
         from boto3.dynamodb.conditions import Key, Attr
         
         # Try querying with index first

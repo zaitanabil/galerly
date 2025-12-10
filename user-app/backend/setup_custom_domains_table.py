@@ -5,8 +5,12 @@ import boto3
 import os
 from dotenv import load_dotenv
 
-# Load environment variables
-load_dotenv('.env.local')
+# Load environment variables from root-level .env files
+env = os.environ.get('ENVIRONMENT', 'development')
+if env == 'production':
+    load_dotenv('../../.env.production')
+else:
+    load_dotenv('../../.env.development')
 load_dotenv()
 
 # DynamoDB setup
