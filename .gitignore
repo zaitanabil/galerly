@@ -63,3 +63,10 @@ marketing/
 
 # localstack data
 localstack_data/
+
+# cursor files
+.cursor/
+.cursorrules
+.cursorignore
+.cursorignorerules
+.cursorignorerules
