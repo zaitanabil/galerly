@@ -14,6 +14,12 @@ from datetime import datetime, timezone
 
 from utils.config import s3_client, S3_BUCKET, S3_RENDITIONS_BUCKET
 
+# Video processing timeout configuration from environment
+# Metadata extraction timeout (60s is enough for most videos)
+VIDEO_METADATA_TIMEOUT = int(os.environ.get('VIDEO_METADATA_TIMEOUT_SECONDS', '60'))
+# Thumbnail generation timeout (60s for frame extraction)
+VIDEO_THUMBNAIL_TIMEOUT = int(os.environ.get('VIDEO_THUMBNAIL_TIMEOUT_SECONDS', '60'))
+
 
 def is_video_file(filename):
     """
@@ -73,7 +79,7 @@ def extract_video_metadata(video_data, filename):
             temp_path
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=VIDEO_METADATA_TIMEOUT)
         
         if result.returncode == 0:
             data = json.loads(result.stdout)
@@ -176,7 +182,7 @@ def generate_video_thumbnail(s3_key, video_data=None, bucket=None):
             temp_thumb_path
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=VIDEO_THUMBNAIL_TIMEOUT)
         
         if result.returncode != 0:
             print(f"⚠️ ffmpeg error: {result.stderr}")

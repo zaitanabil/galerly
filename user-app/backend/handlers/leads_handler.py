@@ -11,11 +11,23 @@ from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb, users_table
 from utils.response import create_response
 from utils.email import send_email
+from utils.plan_enforcement import require_plan, require_role
 import os
 
 # Initialize DynamoDB tables
 leads_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_LEADS'))
 followup_sequences_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_FOLLOWUP_SEQUENCES'))
+
+# Lead scoring configuration from environment
+# These weights determine how lead quality is calculated (0-100 score)
+LEAD_SCORE_MESSAGE_LONG = int(os.environ.get('LEAD_SCORE_MESSAGE_LONG', '20'))  # 200+ chars
+LEAD_SCORE_MESSAGE_MEDIUM = int(os.environ.get('LEAD_SCORE_MESSAGE_MEDIUM', '15'))  # 100-200 chars
+LEAD_SCORE_MESSAGE_SHORT = int(os.environ.get('LEAD_SCORE_MESSAGE_SHORT', '10'))  # 50-100 chars
+LEAD_SCORE_SERVICE_SPECIFIC = int(os.environ.get('LEAD_SCORE_SERVICE_SPECIFIC', '20'))  # Known service
+LEAD_SCORE_SERVICE_OTHER = int(os.environ.get('LEAD_SCORE_SERVICE_OTHER', '10'))  # Other service
+LEAD_SCORE_THRESHOLD_HIGH = int(os.environ.get('LEAD_SCORE_THRESHOLD_HIGH', '80'))  # Hot lead
+LEAD_SCORE_THRESHOLD_MEDIUM = int(os.environ.get('LEAD_SCORE_THRESHOLD_MEDIUM', '60'))  # Warm lead
+LEAD_SCORE_THRESHOLD_LOW = int(os.environ.get('LEAD_SCORE_THRESHOLD_LOW', '40'))  # Cold lead
 
 
 def validate_email(email):
@@ -52,20 +64,20 @@ def calculate_lead_score(lead_data):
     # Message quality (20 points)
     message = lead_data.get('message', '')
     if len(message) > 200:
-        score += 20
+        score += LEAD_SCORE_MESSAGE_LONG
     elif len(message) > 100:
-        score += 15
+        score += LEAD_SCORE_MESSAGE_MEDIUM
     elif len(message) > 50:
-        score += 10
+        score += LEAD_SCORE_MESSAGE_SHORT
     else:
         score += 5
     
     # Service interest specificity (20 points)
     service_type = lead_data.get('service_type', '')
     if service_type and service_type != 'other':
-        score += 20
+        score += LEAD_SCORE_SERVICE_SPECIFIC
     elif service_type:
-        score += 10
+        score += LEAD_SCORE_SERVICE_OTHER
     
     # Budget indication (20 points)
     budget = lead_data.get('budget', '')
@@ -162,12 +174,12 @@ def handle_capture_lead(photographer_id, body):
         # Calculate lead score
         lead['score'] = calculate_lead_score(lead)
         
-        # Determine quality tier
-        if lead['score'] >= 80:
+        # Determine quality tier based on configured thresholds
+        if lead['score'] >= LEAD_SCORE_THRESHOLD_HIGH:
             lead['quality'] = 'hot'
-        elif lead['score'] >= 60:
+        elif lead['score'] >= LEAD_SCORE_THRESHOLD_MEDIUM:
             lead['quality'] = 'warm'
-        elif lead['score'] >= 40:
+        elif lead['score'] >= LEAD_SCORE_THRESHOLD_LOW:
             lead['quality'] = 'cold'
         else:
             lead['quality'] = 'low'
@@ -226,6 +238,8 @@ def handle_capture_lead(photographer_id, body):
         return create_response(500, {'error': 'Failed to submit inquiry'})
 
 
+@require_plan(feature='client_invoicing')  # CRM bundled with invoicing (Pro+)
+@require_role('photographer')
 def handle_list_leads(user, query_params=None):
     """
     List leads for photographer with filtering
@@ -233,15 +247,7 @@ def handle_list_leads(user, query_params=None):
     GET /api/v1/crm/leads?status=new&quality=hot&limit=50
     """
     try:
-        # Check plan permission
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('client_invoicing'):  # CRM is bundled with invoicing (Pro+)
-            return create_response(403, {
-                'error': 'CRM features are available on Pro and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan check handled by @require_plan decorator
         
         # Get query parameters
         status = query_params.get('status') if query_params else None
@@ -287,6 +293,8 @@ def handle_list_leads(user, query_params=None):
         return create_response(500, {'error': 'Failed to retrieve leads'})
 
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_get_lead(user, lead_id):
     """Get single lead details"""
     try:
@@ -308,6 +316,8 @@ def handle_get_lead(user, lead_id):
         return create_response(500, {'error': 'Failed to retrieve lead'})
 
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_update_lead(user, lead_id, body):
     """
     Update lead status, notes, tags
@@ -558,6 +568,8 @@ def handle_process_followup_sequences(event, context):
         }
 
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_cancel_followup_sequence(user, lead_id):
     """Cancel automated follow-up sequence for a lead"""
     try:

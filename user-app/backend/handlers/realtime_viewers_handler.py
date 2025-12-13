@@ -13,14 +13,15 @@ from utils.config import analytics_table, galleries_table
 from utils.response import create_response
 from utils.geolocation import get_location_from_ip, get_ip_from_request
 from handlers.subscription_handler import get_user_features
+import os
 
 
 # In-memory store for active viewers (in production, use Redis with TTL)
 # Format: {viewer_id: {user_id, gallery_id, location, last_seen, ...}}
 active_viewers = {}
 
-# Viewer timeout in seconds (consider inactive after this time)
-VIEWER_TIMEOUT = 60
+# Configuration from environment
+VIEWER_TIMEOUT = int(os.environ.get('VIEWER_TIMEOUT_SECONDS', '60'))  # Default 60 seconds
 
 
 def cleanup_inactive_viewers():

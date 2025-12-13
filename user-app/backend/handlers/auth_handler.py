@@ -11,6 +11,7 @@ from utils.config import users_table, sessions_table
 from utils.response import create_response
 from utils.auth import hash_password, verify_password
 from utils.email import send_welcome_email, send_password_reset_email, send_verification_code_email
+from utils.plan_enforcement import require_plan, require_role
 
 def validate_email_format(email):
     """Validate email format using regex"""
@@ -716,15 +717,13 @@ def handle_delete_account(user, cookie_header=None):
         })
 
 
+@require_plan(feature='api_access')
+@require_role('photographer')
 def handle_generate_api_key(user):
     """Generate a new API key for the user"""
     try:
-        # Check if plan supports API access (Pro or Ultimate)
-        # Assuming simple check here, robust check is in billing_handler
-        plan = user.get('plan', 'free')
-        if plan not in ['pro', 'ultimate']:
-            return create_response(403, {'error': 'API access requires Pro or Ultimate plan'})
-            
+        # Plan check handled by @require_plan decorator
+        
         # Generate API key (format: galerly_live_<random>)
         # Not using 'sk_live_' prefix to avoid confusion with Stripe keys
         api_key = f"galerly_live_{secrets.token_urlsafe(24)}"
@@ -743,6 +742,7 @@ def handle_generate_api_key(user):
         print(f"Error generating API key: {str(e)}")
         return create_response(500, {'error': 'Failed to generate API key'})
 
+@require_role('photographer')
 def handle_get_api_key(user):
     """Get existing API key (masked)"""
     try:

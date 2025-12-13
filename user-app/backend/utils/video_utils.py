@@ -9,6 +9,9 @@ import os
 import boto3
 from decimal import Decimal
 
+# Video utilities timeout configuration from environment
+VIDEO_DURATION_TIMEOUT = int(os.environ.get('VIDEO_DURATION_TIMEOUT_SECONDS', '30'))  # Quick metadata check
+
 
 def extract_video_duration(file_path_or_url):
     """
@@ -39,7 +42,7 @@ def extract_video_duration(file_path_or_url):
             target_path
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=VIDEO_DURATION_TIMEOUT)
         
         # Cleanup temp file if created
         if temp_file and os.path.exists(temp_file):

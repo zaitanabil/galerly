@@ -8,8 +8,10 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from utils.config import s3_client, S3_BUCKET, galleries_table, photos_table, AWS_ENDPOINT_URL
 from utils.response import create_response
+from utils.plan_enforcement import require_role
 
 
+@require_role('photographer')
 def handle_initialize_multipart_upload(gallery_id, user, event):
     """
     Step 1-2: Initialize multipart upload for large files
@@ -133,6 +135,7 @@ def handle_initialize_multipart_upload(gallery_id, user, event):
         return create_response(500, {'error': f'Failed to initialize upload: {str(e)}'})
 
 
+@require_role('photographer')
 def handle_complete_multipart_upload(gallery_id, user, event):
     """
     Step 5: Complete multipart upload after all parts uploaded
@@ -429,6 +432,7 @@ def handle_complete_multipart_upload(gallery_id, user, event):
         return create_response(500, {'error': f'Failed to complete upload: {str(e)}'})
 
 
+@require_role('photographer')
 def handle_abort_multipart_upload(gallery_id, user, event):
     """
     Abort multipart upload (cleanup on failure)

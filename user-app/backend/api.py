@@ -34,6 +34,15 @@ from handlers.gallery_handler import (
     handle_list_layouts,
     handle_get_layout
 )
+from handlers.gallery_statistics_handler import handle_get_gallery_statistics
+from handlers.client_selection_handler import (
+    handle_create_selection_session,
+    handle_add_to_selection,
+    handle_remove_from_selection,
+    handle_get_selection_session,
+    handle_submit_selection,
+    handle_list_selection_sessions
+)
 from handlers.photo_handler import (
     handle_upload_photo,
     handle_get_photo,
@@ -200,7 +209,9 @@ from handlers.email_automation_handler import (
     handle_create_automation_rule,
     handle_list_automation_rules,
     handle_update_automation_rule,
-    handle_delete_automation_rule
+    handle_delete_automation_rule,
+    handle_get_automation_templates,
+    handle_apply_automation_template
 )
 from handlers.raw_vault_handler import (
     handle_archive_to_vault,
@@ -262,7 +273,8 @@ from handlers.onboarding_handler import (
 )
 from handlers.analytics_export_handler import (
     handle_export_analytics_csv,
-    handle_export_analytics_pdf
+    handle_export_analytics_pdf,
+    handle_export_analytics_excel
 )
 from handlers.invoice_pdf_handler import (
     handle_generate_invoice_pdf,
@@ -328,7 +340,12 @@ def handler(event, context):
                 'architecture': 'Modular',
                 'storage': 'DynamoDB (isolated per photographer)',
                 'status': 'running',
-                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+                'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+                'documentation': {
+                    'swagger_ui': '/v1/docs',
+                    'redoc_ui': '/v1/docs/redoc',
+                    'openapi_spec': '/v1/docs/openapi.json'
+                }
             })
         
         # Health check
@@ -339,6 +356,19 @@ def handler(event, context):
                 'storage': 'DynamoDB',
                 'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
             })
+        
+        # API Documentation endpoints (PUBLIC - no authentication)
+        if path == '/v1/docs' and method == 'GET':
+            from handlers.docs_handler import handle_get_swagger_ui
+            return handle_get_swagger_ui()
+        
+        if path == '/v1/docs/openapi.json' and method == 'GET':
+            from handlers.docs_handler import handle_get_openapi_spec
+            return handle_get_openapi_spec()
+        
+        if path == '/v1/docs/redoc' and method == 'GET':
+            from handlers.docs_handler import handle_get_redoc_ui
+            return handle_get_redoc_ui()
         
         # Authentication endpoints (with rate limiting)
         if path == '/v1/auth/request-verification' and method == 'POST':
@@ -437,14 +467,48 @@ def handler(event, context):
             return handle_list_photographers(query_params)
         
         if path.startswith('/v1/photographers/') and method == 'GET':
-            photographer_id = path.split('/')[-1]
-            return handle_get_photographer(photographer_id)
+            parts = path.split('/')
+            photographer_id = parts[3]
+            
+            # Check if it's a sub-resource (availability, services, etc)
+            if len(parts) > 4:
+                resource = parts[4]
+                
+                # Public availability endpoints
+                if resource == 'availability':
+                    return handle_get_availability_settings({'id': photographer_id})
+                
+                # Public slots endpoint
+                if resource == 'slots':
+                    query_params = event.get('queryStringParameters') or {}
+                    return handle_get_available_slots(photographer_id, query_params)
+                
+                # Public busy times endpoint
+                if resource == 'busy-times':
+                    query_params = event.get('queryStringParameters') or {}
+                    return handle_get_busy_times(photographer_id, query_params)
+                
+                # Public iCal feed
+                if resource == 'calendar.ics':
+                    return handle_generate_ical_feed(photographer_id)
+                
+                # Public services listing
+                if resource == 'services':
+                    return handle_list_services(photographer_id, is_public=True)
+            else:
+                # Get photographer profile
+                return handle_get_photographer(photographer_id)
         
         # Public portfolio endpoint (with customization)
         if path.startswith('/v1/portfolio/') and method == 'GET':
             photographer_id = path.split('/')[-1]
             if photographer_id != 'settings':  # Avoid conflict with settings endpoint
                 return handle_get_public_portfolio(photographer_id)
+        
+        # Lead capture from public portfolio (PUBLIC)
+        if path.startswith('/v1/photographers/') and path.endswith('/lead') and method == 'POST':
+            photographer_id = path.split('/')[3]
+            return handle_capture_lead(photographer_id, body)
         
         # Social sharing endpoints (PUBLIC - for public galleries/photos)
         if path.startswith('/v1/share/gallery/') and method == 'GET':
@@ -922,6 +986,32 @@ def handler(event, context):
             if method == 'DELETE':
                 return handle_delete_gallery(gallery_id, user)
         
+        # Gallery statistics (new endpoint)
+        if path.startswith('/v1/galleries/') and path.endswith('/statistics') and method == 'GET':
+            gallery_id = path.split('/')[-2]
+            return handle_get_gallery_statistics(user, gallery_id)
+        
+        # Client selection workflow
+        if path == '/v1/selections/sessions' and method == 'POST':
+            return handle_create_selection_session(user, body)
+        
+        if path == '/v1/selections/sessions' and method == 'GET':
+            query_params = event.get('queryStringParameters') or {}
+            return handle_list_selection_sessions(user, query_params)
+        
+        if path.startswith('/v1/selections/sessions/') and method == 'GET':
+            session_id = path.split('/')[-1]
+            return handle_get_selection_session(user, session_id)
+        
+        if path == '/v1/selections/add' and method == 'POST':
+            return handle_add_to_selection(user, body)
+        
+        if path == '/v1/selections/remove' and method == 'POST':
+            return handle_remove_from_selection(user, body)
+        
+        if path == '/v1/selections/submit' and method == 'POST':
+            return handle_submit_selection(user, body)
+        
         # Photo comments - already handled in PUBLIC section above
         # Kept here for backward compatibility if needed
         # if path.startswith('/v1/photos/') and '/comments' in path:
@@ -991,6 +1081,30 @@ def handler(event, context):
         if path == '/v1/billing/refund/status' and method == 'GET':
             return handle_get_refund_status(user)
         
+        # ================================================================
+        # LEADS & CRM (Pro/Ultimate Feature)
+        # ================================================================
+        
+        # List all leads for photographer
+        if path == '/v1/leads' and method == 'GET':
+            query_params = event.get('queryStringParameters') or {}
+            return handle_list_leads(user, query_params)
+        
+        # Get single lead details
+        if path.startswith('/v1/leads/') and method == 'GET' and '/followup' not in path:
+            lead_id = path.split('/')[-1]
+            return handle_get_lead(user, lead_id)
+        
+        # Update lead information
+        if path.startswith('/v1/leads/') and method == 'PUT':
+            lead_id = path.split('/')[-1]
+            return handle_update_lead(user, lead_id, body)
+        
+        # Cancel follow-up sequence for a lead
+        if path.startswith('/v1/leads/') and path.endswith('/followup') and method == 'DELETE':
+            lead_id = path.split('/')[3]
+            return handle_cancel_followup_sequence(user, lead_id)
+        
         # Invoice management
         if path == '/v1/invoices' and method == 'GET':
             query_params = event.get('queryStringParameters') or {}
@@ -1053,6 +1167,33 @@ def handler(event, context):
                 return handle_update_appointment(appt_id, user, body)
             if method == 'DELETE':
                 return handle_delete_appointment(appt_id, user)
+        
+        # ================================================================
+        # SERVICES MANAGEMENT (For all photographers)
+        # ================================================================
+        
+        # List photographer's services
+        if path == '/v1/services' and method == 'GET':
+            return handle_list_services(user['id'], is_public=False)
+        
+        # Create new service
+        if path == '/v1/services' and method == 'POST':
+            return handle_create_service(user, body)
+        
+        # Get service details
+        if path.startswith('/v1/services/') and method == 'GET':
+            service_id = path.split('/')[-1]
+            return handle_get_service(service_id, user['id'])
+        
+        # Update service
+        if path.startswith('/v1/services/') and method == 'PUT':
+            service_id = path.split('/')[-1]
+            return handle_update_service(user, service_id, body)
+        
+        # Delete service
+        if path.startswith('/v1/services/') and method == 'DELETE':
+            service_id = path.split('/')[-1]
+            return handle_delete_service(user, service_id)
         
         # Calendar feed routes
         if path == '/v1/calendar/feed.ics' and method == 'GET':
@@ -1156,10 +1297,15 @@ def handler(event, context):
         
         # Analytics export routes
         if path == '/v1/analytics/export/csv' and method == 'GET':
-            return handle_export_analytics_csv(event)
+            query_params = event.get('queryStringParameters') or {}
+            return handle_export_analytics_csv(user, query_params)
         
         if path == '/v1/analytics/export/pdf' and method == 'POST':
-            return handle_export_analytics_pdf(event)
+            return handle_export_analytics_pdf(user, body)
+        
+        if path == '/v1/analytics/export/excel' and method == 'GET':
+            query_params = event.get('queryStringParameters') or {}
+            return handle_export_analytics_excel(user, query_params)
         
         if path == '/v1/analytics/bulk-downloads' and method == 'GET':
             return handle_get_bulk_downloads(user)
@@ -1307,6 +1453,14 @@ def handler(event, context):
             rule_id = path.split('/')[-1]
             return handle_delete_automation_rule(user, rule_id)
         
+        # Get automation templates
+        if path == '/v1/email-automation/templates' and method == 'GET':
+            return handle_get_automation_templates(user)
+        
+        # Apply automation template
+        if path == '/v1/email-automation/templates/apply' and method == 'POST':
+            return handle_apply_automation_template(user, body)
+        
         # Manual expiry check (photographer can test expiry notifications)
         if path == '/v1/galleries/check-expiring' and method == 'POST':
             return handle_manual_expiry_check(user)
@@ -1412,14 +1566,14 @@ def handler(event, context):
         # Update package
         if path.startswith('/v1/packages/') and method == 'PUT':
             package_id = path.split('/')[-1]
-            # Note: Need to implement handle_update_package in sales_handler.py
-            return create_response(501, {'error': 'Update package endpoint pending implementation'})
+            from handlers.sales_handler import handle_update_package
+            return handle_update_package(user, package_id, body)
         
         # Delete package
         if path.startswith('/v1/packages/') and method == 'DELETE':
             package_id = path.split('/')[-1]
-            # Note: Need to implement handle_delete_package in sales_handler.py
-            return create_response(501, {'error': 'Delete package endpoint pending implementation'})
+            from handlers.sales_handler import handle_delete_package
+            return handle_delete_package(user, package_id)
         
         # Get download link (requires customer email verification)
         if path.startswith('/v1/downloads/') and method == 'GET':
@@ -1507,6 +1661,11 @@ def handler(event, context):
         # SEO Issues
         if path == '/v1/seo/issues' and method == 'GET':
             return handle_get_seo_issues(user)
+        
+        # SEO Recommendations (NEW - Enhanced)
+        if path == '/v1/seo/recommendations' and method == 'GET':
+            from handlers.seo_handler import handle_get_seo_recommendations
+            return handle_get_seo_recommendations(user)
         
         # Fix SEO Issue
         if path == '/v1/seo/fix-issue' and method == 'POST':

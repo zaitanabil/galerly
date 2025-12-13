@@ -1,139 +1,88 @@
 """
-AWS Certificate Manager (ACM) Integration
-Automates SSL/TLS certificate request and validation for custom domains
+AWS Certificate Manager (ACM) Utility
+Handles SSL certificate request and validation for custom domains
 """
 import os
 import boto3
-from datetime import datetime
+import time
+from typing import Dict, Any, List, Optional
 
-# Initialize ACM client in us-east-1 (required for CloudFront certificates)
+# Get AWS configuration from environment
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+AWS_ENDPOINT_URL = os.environ.get('AWS_ENDPOINT_URL')
+
+# ACM client (must be in us-east-1 for CloudFront)
 acm_client = boto3.client(
     'acm',
-    region_name='us-east-1',  # CloudFront requires certificates in us-east-1
-    endpoint_url=os.environ.get('AWS_ENDPOINT_URL') if os.environ.get('AWS_ENDPOINT_URL') else None,
-    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID') if os.environ.get('AWS_ENDPOINT_URL') else None,
-    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY') if os.environ.get('AWS_ENDPOINT_URL') else None
+    region_name='us-east-1',
+    endpoint_url=os.environ.get('ACM_ENDPOINT_URL') or AWS_ENDPOINT_URL
 )
 
 
-def request_certificate(domain, validation_method='DNS', subject_alternative_names=None):
+def request_certificate(domain: str, validation_method: str = 'DNS') -> Dict[str, Any]:
     """
-    Request an SSL certificate from AWS Certificate Manager
+    Request an SSL certificate from ACM
     
     Args:
-        domain: Primary domain name (e.g., gallery.yourstudio.com)
-        validation_method: 'DNS' or 'EMAIL'
-        subject_alternative_names: Optional list of additional domains (e.g., ['*.yourstudio.com'])
+        domain: Domain name for the certificate
+        validation_method: DNS or EMAIL (DNS recommended)
     
     Returns:
-        dict: {
-            'success': bool,
-            'certificate_arn': str,
-            'validation_records': list,  # DNS records needed for validation
-            'error': str (if failed)
-        }
+        Dict containing certificate_arn and validation_records
     """
+    
     try:
-        # Prepare domain validation options
-        domain_validation_options = [{
-            'DomainName': domain,
-            'ValidationDomain': domain
-        }]
-        
-        # Add SANs if provided
-        sans = [domain]
-        if subject_alternative_names:
-            sans.extend(subject_alternative_names)
-            for san in subject_alternative_names:
-                domain_validation_options.append({
-                    'DomainName': san,
-                    'ValidationDomain': san
-                })
-        
-        print(f"Requesting ACM certificate for {domain}...")
-        
         # Request certificate
         response = acm_client.request_certificate(
             DomainName=domain,
             ValidationMethod=validation_method,
-            SubjectAlternativeNames=sans if len(sans) > 1 else None,
-            DomainValidationOptions=domain_validation_options,
+            Options={
+                'CertificateTransparencyLoggingPreference': 'ENABLED'
+            },
             Tags=[
-                {'Key': 'Application', 'Value': 'Galerly'},
-                {'Key': 'Domain', 'Value': domain},
-                {'Key': 'ManagedBy', 'Value': 'Galerly-AutoSSL'}
+                {
+                    'Key': 'Service',
+                    'Value': 'Galerly'
+                },
+                {
+                    'Key': 'Domain',
+                    'Value': domain
+                }
             ]
         )
         
         certificate_arn = response['CertificateArn']
         
-        print(f"✓ Certificate requested: {certificate_arn}")
+        # Wait a moment for validation options to be populated
+        time.sleep(2)
         
-        # Get validation records (DNS records that need to be added)
-        validation_records = []
-        
-        if validation_method == 'DNS':
-            # Wait a moment for AWS to populate validation options
-            import time
-            time.sleep(2)
-            
-            try:
-                cert_details = acm_client.describe_certificate(
-                    CertificateArn=certificate_arn
-                )
-                
-                domain_validation_options = cert_details['Certificate'].get('DomainValidationOptions', [])
-                
-                for option in domain_validation_options:
-                    resource_record = option.get('ResourceRecord')
-                    if resource_record:
-                        validation_records.append({
-                            'domain': option['DomainName'],
-                            'record_type': resource_record['Type'],
-                            'record_name': resource_record['Name'],
-                            'record_value': resource_record['Value']
-                        })
-            except:
-                # Validation records might not be immediately available
-                print("Validation records not yet available, will be populated shortly")
+        # Get certificate details including validation records
+        cert_details = describe_certificate(certificate_arn)
         
         return {
-            'success': True,
             'certificate_arn': certificate_arn,
-            'validation_records': validation_records,
+            'domain': domain,
+            'status': cert_details.get('status', 'PENDING_VALIDATION'),
             'validation_method': validation_method,
-            'status': 'PENDING_VALIDATION'
+            'validation_records': cert_details.get('validation_records', [])
         }
-        
+    
     except Exception as e:
         print(f"Error requesting certificate: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {
-            'success': False,
-            'error': str(e)
-        }
+        raise
 
 
-def get_certificate_status(certificate_arn):
+def describe_certificate(certificate_arn: str) -> Dict[str, Any]:
     """
-    Get the current status of an ACM certificate
+    Get details about a certificate
     
     Args:
-        certificate_arn: ARN of the certificate
+        certificate_arn: ACM certificate ARN
     
     Returns:
-        dict: {
-            'success': bool,
-            'status': str,  # PENDING_VALIDATION, ISSUED, INACTIVE, EXPIRED, VALIDATION_TIMED_OUT, REVOKED, FAILED
-            'domain': str,
-            'subject_alternative_names': list,
-            'validation_records': list,
-            'not_before': str,
-            'not_after': str,
-            'error': str (if failed)
-        }
+        Dict containing certificate details
     """
+    
     try:
         response = acm_client.describe_certificate(
             CertificateArn=certificate_arn
@@ -143,148 +92,55 @@ def get_certificate_status(certificate_arn):
         
         # Extract validation records
         validation_records = []
-        for option in certificate.get('DomainValidationOptions', []):
-            resource_record = option.get('ResourceRecord')
-            if resource_record:
-                validation_records.append({
-                    'domain': option['DomainName'],
-                    'validation_status': option.get('ValidationStatus'),
-                    'record_type': resource_record['Type'],
-                    'record_name': resource_record['Name'],
-                    'record_value': resource_record['Value']
-                })
+        if 'DomainValidationOptions' in certificate:
+            for option in certificate['DomainValidationOptions']:
+                if 'ResourceRecord' in option:
+                    record = option['ResourceRecord']
+                    validation_records.append({
+                        'name': record['Name'],
+                        'type': record['Type'],
+                        'value': record['Value']
+                    })
         
-        result = {
-            'success': True,
-            'status': certificate['Status'],
+        return {
+            'certificate_arn': certificate['CertificateArn'],
             'domain': certificate['DomainName'],
-            'subject_alternative_names': certificate.get('SubjectAlternativeNames', []),
+            'status': certificate['Status'],
+            'issued': certificate['Status'] == 'ISSUED',
+            'validation_method': certificate.get('ValidationMethod'),
             'validation_records': validation_records,
-            'type': certificate.get('Type'),
-            'in_use_by': certificate.get('InUseBy', [])
+            'created_at': certificate.get('CreatedAt').isoformat() if certificate.get('CreatedAt') else None,
+            'issued_at': certificate.get('IssuedAt').isoformat() if certificate.get('IssuedAt') else None,
+            'not_before': certificate.get('NotBefore').isoformat() if certificate.get('NotBefore') else None,
+            'not_after': certificate.get('NotAfter').isoformat() if certificate.get('NotAfter') else None
         }
-        
-        # Add validity dates if issued
-        if certificate['Status'] == 'ISSUED':
-            result['not_before'] = certificate.get('NotBefore').isoformat() if certificate.get('NotBefore') else None
-            result['not_after'] = certificate.get('NotAfter').isoformat() if certificate.get('NotAfter') else None
-        
-        return result
-        
-    except Exception as e:
-        print(f"Error getting certificate status: {str(e)}")
+    
+    except acm_client.exceptions.ResourceNotFoundException:
         return {
-            'success': False,
-            'error': str(e)
+            'error': 'Certificate not found',
+            'exists': False
         }
+    
+    except Exception as e:
+        print(f"Error describing certificate: {str(e)}")
+        raise
 
 
-def get_certificate_validation_records(certificate_arn):
+def list_certificates(
+    statuses: Optional[List[str]] = None,
+    domain_filter: Optional[str] = None
+) -> List[Dict[str, Any]]:
     """
-    Get DNS validation records for a certificate
+    List ACM certificates
     
     Args:
-        certificate_arn: ARN of the certificate
+        statuses: Filter by status (PENDING_VALIDATION, ISSUED, INACTIVE, etc.)
+        domain_filter: Filter by domain name
     
     Returns:
-        dict: {
-            'success': bool,
-            'validation_records': list,
-            'error': str (if failed)
-        }
+        List of certificate summaries
     """
-    try:
-        response = acm_client.describe_certificate(
-            CertificateArn=certificate_arn
-        )
-        
-        certificate = response['Certificate']
-        validation_records = []
-        
-        for option in certificate.get('DomainValidationOptions', []):
-            resource_record = option.get('ResourceRecord')
-            if resource_record:
-                validation_records.append({
-                    'domain': option['DomainName'],
-                    'validation_status': option.get('ValidationStatus'),
-                    'record_type': resource_record['Type'],
-                    'record_name': resource_record['Name'],
-                    'record_value': resource_record['Value']
-                })
-        
-        return {
-            'success': True,
-            'validation_records': validation_records
-        }
-        
-    except Exception as e:
-        print(f"Error getting validation records: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-
-def delete_certificate(certificate_arn):
-    """
-    Delete an ACM certificate
-    Certificate must not be in use by any AWS resources
     
-    Args:
-        certificate_arn: ARN of the certificate
-    
-    Returns:
-        dict: {
-            'success': bool,
-            'message': str,
-            'error': str (if failed)
-        }
-    """
-    try:
-        # Check if certificate is in use
-        cert_status = get_certificate_status(certificate_arn)
-        
-        if cert_status['success'] and cert_status.get('in_use_by'):
-            return {
-                'success': False,
-                'error': f"Certificate is in use by: {', '.join(cert_status['in_use_by'])}"
-            }
-        
-        # Delete certificate
-        acm_client.delete_certificate(
-            CertificateArn=certificate_arn
-        )
-        
-        print(f"✓ Certificate deleted: {certificate_arn}")
-        
-        return {
-            'success': True,
-            'message': 'Certificate deleted successfully'
-        }
-        
-    except Exception as e:
-        print(f"Error deleting certificate: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-
-def list_certificates(statuses=None):
-    """
-    List ACM certificates with optional status filter
-    
-    Args:
-        statuses: Optional list of statuses to filter by
-                 ['PENDING_VALIDATION', 'ISSUED', 'INACTIVE', 'EXPIRED', 'VALIDATION_TIMED_OUT', 'REVOKED', 'FAILED']
-    
-    Returns:
-        dict: {
-            'success': bool,
-            'certificates': list,
-            'error': str (if failed)
-        }
-    """
     try:
         params = {}
         if statuses:
@@ -293,138 +149,145 @@ def list_certificates(statuses=None):
         response = acm_client.list_certificates(**params)
         
         certificates = []
-        for cert_summary in response.get('CertificateSummaryList', []):
+        for cert in response.get('CertificateSummaryList', []):
+            # Apply domain filter if specified
+            if domain_filter and domain_filter not in cert['DomainName']:
+                continue
+            
             certificates.append({
-                'certificate_arn': cert_summary['CertificateArn'],
-                'domain_name': cert_summary['DomainName']
+                'certificate_arn': cert['CertificateArn'],
+                'domain': cert['DomainName'],
+                'status': cert.get('Status'),
+                'type': cert.get('Type')
             })
         
-        return {
-            'success': True,
-            'certificates': certificates,
-            'count': len(certificates)
-        }
-        
+        return certificates
+    
     except Exception as e:
         print(f"Error listing certificates: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
+        raise
 
 
-def check_certificate_validation(certificate_arn, max_attempts=60, delay=10):
+def delete_certificate(certificate_arn: str) -> Dict[str, Any]:
     """
-    Poll ACM certificate validation status until validated or timeout
+    Delete an ACM certificate
     
     Args:
-        certificate_arn: ARN of the certificate to check
-        max_attempts: Maximum number of polling attempts (default 60)
-        delay: Seconds to wait between attempts (default 10)
+        certificate_arn: ACM certificate ARN
     
     Returns:
-        dict: {
-            'success': bool,
-            'validated': bool,
-            'status': str,
-            'attempts': int,
-            'error': str (if failed)
-        }
+        Dict containing deletion status
     """
-    import time
     
     try:
-        for attempt in range(max_attempts):
-            status_result = get_certificate_status(certificate_arn)
-            
-            if not status_result['success']:
-                return {
-                    'success': False,
-                    'validated': False,
-                    'error': status_result.get('error', 'Failed to get certificate status')
-                }
-            
-            status = status_result['status']
-            
-            # Check if certificate is issued (validated)
-            if status == 'ISSUED':
-                print(f"✓ Certificate validated and issued after {attempt + 1} attempts")
-                return {
-                    'success': True,
-                    'validated': True,
-                    'status': status,
-                    'attempts': attempt + 1
-                }
-            
-            # Check for failed states
-            if status in ['FAILED', 'VALIDATION_TIMED_OUT', 'REVOKED', 'EXPIRED']:
-                return {
-                    'success': False,
-                    'validated': False,
-                    'status': status,
-                    'attempts': attempt + 1,
-                    'error': f'Certificate validation failed with status: {status}'
-                }
-            
-            # Still pending, wait and retry
-            if attempt < max_attempts - 1:
-                print(f"Certificate status: {status}, attempt {attempt + 1}/{max_attempts}, waiting {delay}s...")
-                time.sleep(delay)
+        acm_client.delete_certificate(
+            CertificateArn=certificate_arn
+        )
         
-        # Timeout reached
         return {
-            'success': False,
-            'validated': False,
-            'status': 'PENDING_VALIDATION',
-            'attempts': max_attempts,
-            'error': f'Validation timeout after {max_attempts} attempts'
+            'certificate_arn': certificate_arn,
+            'deleted': True
         }
-        
+    
+    except acm_client.exceptions.ResourceInUseException:
+        return {
+            'certificate_arn': certificate_arn,
+            'deleted': False,
+            'error': 'Certificate is in use by CloudFront distribution'
+        }
+    
     except Exception as e:
-        print(f"Error checking certificate validation: {str(e)}")
-        return {
-            'success': False,
-            'validated': False,
-            'error': str(e)
-        }
+        print(f"Error deleting certificate: {str(e)}")
+        raise
 
 
-def resend_validation_emails(certificate_arn, domain=None):
+def wait_for_validation(
+    certificate_arn: str,
+    max_wait_seconds: int = 1800
+) -> bool:
     """
-    Resend validation emails for email-validated certificates
+    Wait for a certificate to be validated and issued
     
     Args:
-        certificate_arn: ARN of the certificate
-        domain: Optional specific domain to resend for (otherwise resends all)
+        certificate_arn: ACM certificate ARN
+        max_wait_seconds: Maximum time to wait (default 30 minutes)
     
     Returns:
-        dict: {
-            'success': bool,
-            'message': str,
-            'error': str (if failed)
-        }
+        True if issued, False if timeout or failure
     """
+    
+    start_time = time.time()
+    
+    while (time.time() - start_time) < max_wait_seconds:
+        cert_details = describe_certificate(certificate_arn)
+        
+        status = cert_details.get('status')
+        
+        if status == 'ISSUED':
+            return True
+        
+        if status in ['FAILED', 'VALIDATION_TIMED_OUT', 'REVOKED']:
+            return False
+        
+        # Check every 30 seconds
+        time.sleep(30)
+    
+    return False
+
+
+def check_certificate_renewal(certificate_arn: str) -> Dict[str, Any]:
+    """
+    Check if a certificate is due for renewal
+    
+    Args:
+        certificate_arn: ACM certificate ARN
+    
+    Returns:
+        Dict containing renewal status and days until expiration
+    """
+    
     try:
-        params = {
-            'CertificateArn': certificate_arn
-        }
+        cert_details = describe_certificate(certificate_arn)
         
-        if domain:
-            params['Domain'] = domain
-            params['ValidationDomain'] = domain
+        if not cert_details.get('not_after'):
+            return {
+                'needs_renewal': False,
+                'error': 'Certificate expiration date not available'
+            }
         
-        acm_client.resend_validation_email(**params)
+        from datetime import datetime
         
-        print(f"✓ Validation email resent for {certificate_arn}")
+        not_after = datetime.fromisoformat(cert_details['not_after'].replace('Z', '+00:00'))
+        now = datetime.now(not_after.tzinfo)
+        days_until_expiry = (not_after - now).days
+        
+        # ACM auto-renews DNS-validated certificates
+        # Flag if less than 30 days remaining
+        needs_renewal = days_until_expiry < 30
         
         return {
-            'success': True,
-            'message': 'Validation email resent successfully'
+            'certificate_arn': certificate_arn,
+            'days_until_expiry': days_until_expiry,
+            'needs_renewal': needs_renewal,
+            'expiry_date': cert_details['not_after'],
+            'auto_renewal_enabled': cert_details.get('validation_method') == 'DNS'
         }
-        
+    
     except Exception as e:
-        print(f"Error resending validation email: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
+        print(f"Error checking certificate renewal: {str(e)}")
+        raise
+
+
+def get_certificate_validation_records(certificate_arn: str) -> List[Dict[str, str]]:
+    """
+    Get DNS validation records for a certificate
+    
+    Args:
+        certificate_arn: ACM certificate ARN
+    
+    Returns:
+        List of DNS records needed for validation
+    """
+    
+    cert_details = describe_certificate(certificate_arn)
+    return cert_details.get('validation_records', [])

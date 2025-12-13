@@ -15,6 +15,7 @@ from utils.config import (
     s3_client, S3_BUCKET
 )
 from utils.response import create_response
+from utils.plan_enforcement import require_role
 
 
 def decimal_to_float(obj):
@@ -28,6 +29,7 @@ def decimal_to_float(obj):
     return obj
 
 
+@require_role('photographer', 'client')
 def handle_export_user_data(user):
     """
     Export all user data in machine-readable format (GDPR Article 20)
@@ -293,6 +295,7 @@ def handle_export_user_data(user):
         })
 
 
+@require_role('photographer', 'client')
 def handle_get_data_retention_info(user):
     """
     Get information about data retention policies (GDPR Article 13)

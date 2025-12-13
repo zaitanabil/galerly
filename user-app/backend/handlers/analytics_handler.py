@@ -14,6 +14,7 @@ from utils.response import create_response
 from handlers.subscription_handler import get_user_features
 from utils.rate_limiter import rate_limit
 from utils.plan_monitoring import track_feature_violation
+from utils.plan_enforcement import require_role
 
 
 def track_event(user_id, gallery_id, event_type, metadata=None):
@@ -34,6 +35,7 @@ def track_event(user_id, gallery_id, event_type, metadata=None):
         return False
 
 
+@require_role('photographer')
 @rate_limit('analytics_view', 'user_id')
 def handle_get_gallery_analytics(user, gallery_id, query_params=None):
     """Get analytics for a specific gallery with plan-based restrictions"""
@@ -239,6 +241,7 @@ def handle_get_gallery_analytics(user, gallery_id, query_params=None):
         return create_response(500, {'error': 'Failed to get analytics'})
 
 
+@require_role('photographer')
 @rate_limit('analytics_view', 'user_id')
 def handle_get_overall_analytics(user, query_params=None):
     """Get overall analytics for user with plan-based restrictions"""
@@ -856,6 +859,7 @@ def handle_track_bulk_download(gallery_id, viewer_user_id=None, metadata=None, c
         return create_response(200, {'status': 'tracked'})  # Don't fail tracking
 
 
+@require_role('photographer')
 def handle_get_bulk_downloads(user):
     """
     Get bulk download events for authenticated photographer

@@ -67,13 +67,7 @@ echo "=== Storage Limit Enforcement ==="
 echo "⚠️  Requires authenticated user token to test"
 echo ""
 
-# Test 4: Admin Endpoints (Requires admin token)
-echo "=== Admin Endpoints ==="
-echo "⚠️  Requires admin user token to test"
-test_endpoint "Admin violations endpoint" "GET" "$BASE_URL/admin/violations" "401"  # Expect 401 without token
-echo ""
-
-# Test 5: File Security
+# Test 4: File Security
 echo "=== File Upload Security ==="
 echo "ℹ️  File validation tests require actual file uploads"
 echo ""

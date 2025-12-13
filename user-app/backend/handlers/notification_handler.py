@@ -15,6 +15,7 @@ from utils.email import (
     send_payment_received_email,
     send_new_photos_added_email
 )
+from utils.plan_enforcement import require_role
 
 # DynamoDB setup
 from utils.config import dynamodb, users_table, galleries_table
@@ -221,6 +222,7 @@ def notify_payment_received(user_id, client_email, client_name, photographer_nam
 # API REQUEST HANDLERS
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+@require_role('photographer')
 def handle_get_preferences(user):
     """Get notification preferences for logged-in user"""
     try:
@@ -237,6 +239,7 @@ def handle_get_preferences(user):
         return create_response(500, {'error': 'Failed to get notification preferences'})
 
 
+@require_role('photographer')
 def handle_update_preferences(user, body):
     """Update notification preferences for logged-in user"""
     try:
@@ -260,6 +263,7 @@ def handle_update_preferences(user, body):
         return create_response(500, {'error': 'Failed to update notification preferences'})
 
 
+@require_role('photographer')
 def handle_send_custom_notification(user, body):
     """Send custom notification from photographer to client(s)"""
     try:
@@ -313,6 +317,7 @@ def handle_send_custom_notification(user, body):
         return create_response(500, {'error': 'Failed to send notification'})
 
 
+@require_role('photographer')
 def handle_send_selection_reminder(user, body):
     """Send selection reminder to gallery clients"""
     try:

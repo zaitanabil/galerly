@@ -8,12 +8,13 @@ from datetime import datetime, timedelta, time, timezone
 from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb, appointments_table, users_table
 from utils.response import create_response
-from handlers.subscription_handler import get_user_features
+from utils.plan_enforcement import require_plan, require_role
 
 # Availability settings table (stores photographer's working hours and preferences)
 availability_settings_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_AVAILABILITY_SETTINGS', 'galerly-availability-settings-local'))
 
 
+@require_plan(feature='scheduler')
 def handle_get_availability_settings(user):
     """Get photographer's availability settings"""
     try:
@@ -52,16 +53,12 @@ def handle_get_availability_settings(user):
         return create_response(500, {'error': 'Failed to get availability settings'})
 
 
+@require_plan(feature='scheduler')
+@require_role('photographer')
 def handle_update_availability_settings(user, body):
     """Update photographer's availability settings"""
     try:
-        # Check plan access
-        features, _, _ = get_user_features(user)
-        if not features.get('scheduler'):
-            return create_response(403, {
-                'error': 'Scheduling is available on the Ultimate plan.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorators
         
         settings = {
             'user_id': user['id'],
@@ -91,6 +88,7 @@ def handle_get_available_slots(photographer_id, query_params):
     """
     Get available time slots for a photographer
     Query params: date (YYYY-MM-DD), timezone (optional)
+    PUBLIC ENDPOINT - No decorator needed, checks feature internally
     """
     try:
         # Verify photographer exists and has scheduler enabled
@@ -104,7 +102,8 @@ def handle_get_available_slots(photographer_id, query_params):
         
         photographer = user_response['Items'][0]
         
-        # Check scheduler feature
+        # Check scheduler feature manually (public endpoint)
+        from handlers.subscription_handler import get_user_features
         features, _, _ = get_user_features(photographer)
         if not features.get('scheduler'):
             return create_response(403, {'error': 'Online booking not available'})

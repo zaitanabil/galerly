@@ -8,22 +8,18 @@ import os
 from datetime import datetime, timezone
 from utils.config import s3_client, S3_BUCKET, users_table
 from utils.response import create_response
-from handlers.subscription_handler import get_user_features
+from utils.plan_enforcement import require_plan, require_role
 
 
+@require_plan(feature='watermarking')
+@require_role('photographer')
 def handle_upload_watermark_logo(user, body):
     """
     Upload watermark logo image
     Plus, Pro, Ultimate plans only
     """
     try:
-        # Check plan
-        features, _, _ = get_user_features(user)
-        if not features.get('watermarking'):
-            return create_response(403, {
-                'error': 'Logo watermarking is available on Plus, Pro, and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorators
         
         # Get file data
         file_data_b64 = body.get('file_data', '')
@@ -97,18 +93,13 @@ def handle_upload_watermark_logo(user, body):
         return create_response(500, {'error': 'Failed to upload logo'})
 
 
+@require_plan(feature='watermarking')
 def handle_get_watermark_settings(user):
     """
     Get watermark configuration settings for user
     """
     try:
-        # Check plan
-        features, _, _ = get_user_features(user)
-        if not features.get('watermarking'):
-            return create_response(403, {
-                'error': 'Logo watermarking is available on Plus, Pro, and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorator
         
         # Get user data
         response = users_table.get_item(Key={'email': user['email']})
@@ -136,6 +127,7 @@ def handle_get_watermark_settings(user):
         return create_response(500, {'error': 'Failed to load watermark settings'})
 
 
+@require_plan(feature='watermarking')
 def handle_update_watermark_settings(user, body):
     """
     Update watermark configuration settings
@@ -149,13 +141,7 @@ def handle_update_watermark_settings(user, body):
     }
     """
     try:
-        # Check plan
-        features, _, _ = get_user_features(user)
-        if not features.get('watermarking'):
-            return create_response(403, {
-                'error': 'Logo watermarking is available on Plus, Pro, and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorator
         
         # Build update expression
         update_expressions = []
@@ -220,6 +206,8 @@ def handle_update_watermark_settings(user, body):
         return create_response(500, {'error': 'Failed to update watermark settings'})
 
 
+@require_plan(feature='watermarking')
+@require_role('photographer')
 def handle_batch_apply_watermark(user, body):
     """
     Apply watermark to existing photos in a gallery
@@ -231,13 +219,7 @@ def handle_batch_apply_watermark(user, body):
     }
     """
     try:
-        # Check plan
-        features, _, _ = get_user_features(user)
-        if not features.get('watermarking'):
-            return create_response(403, {
-                'error': 'Logo watermarking is available on Plus, Pro, and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorators
         
         gallery_id = body.get('gallery_id')
         photo_ids = body.get('photo_ids', [])
@@ -266,28 +248,79 @@ def handle_batch_apply_watermark(user, body):
             'size_percent': user_data.get('watermark_size_percent', 15)
         }
         
-        # Queue batch watermarking job (in production, this would be a background job)
-        # For now, return success and let background processing handle it
-        import uuid as uuid_lib
+        # Get photos from gallery
+        from utils.config import photos_table
+        from boto3.dynamodb.conditions import Key
         
-        job_id = str(uuid_lib.uuid4())
+        if photo_ids:
+            # Process specific photos
+            photos_to_process = []
+            for photo_id in photo_ids:
+                response = photos_table.get_item(
+                    Key={'id': photo_id, 'gallery_id': gallery_id}
+                )
+                if 'Item' in response:
+                    photos_to_process.append(response['Item'])
+        else:
+            # Process all photos in gallery
+            response = photos_table.query(
+                IndexName='gallery_id-created_at-index',
+                KeyConditionExpression=Key('gallery_id').eq(gallery_id)
+            )
+            photos_to_process = response.get('Items', [])
         
-        # In production, you would store this job in background_jobs_table
-        # For now, just log and return the job ID
+        if not photos_to_process:
+            return create_response(404, {'error': 'No photos found to watermark'})
         
-        print(f"Batch watermark job queued: {job_id} for gallery {gallery_id}")
+        # Apply watermark to each photo
+        from utils.image_processor import generate_renditions_with_watermark
+        
+        processed_count = 0
+        failed_count = 0
+        
+        for photo in photos_to_process:
+            try:
+                s3_key = photo.get('s3_key')
+                if not s3_key:
+                    continue
+                
+                # Regenerate renditions with watermark
+                result = generate_renditions_with_watermark(
+                    s3_key=s3_key,
+                    watermark_config=watermark_config
+                )
+                
+                if result.get('success'):
+                    processed_count += 1
+                    print(f"✓ Watermarked: {s3_key}")
+                    
+                    # Update photo record with watermarked flag
+                    photos_table.update_item(
+                        Key={'id': photo['id'], 'gallery_id': gallery_id},
+                        UpdateExpression='SET watermarked = :true, updated_at = :now',
+                        ExpressionAttributeValues={
+                            ':true': True,
+                            ':now': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+                        }
+                    )
+                else:
+                    failed_count += 1
+                    print(f"✗ Failed to watermark: {s3_key}")
+            
+            except Exception as photo_error:
+                failed_count += 1
+                print(f"Error watermarking photo {photo.get('id')}: {str(photo_error)}")
         
         return create_response(200, {
-            'message': 'Batch watermarking job queued',
-            'job_id': job_id,
-            'gallery_id': gallery_id,
-            'photo_count': len(photo_ids) if photo_ids else 'all'
+            'message': 'Batch watermarking completed',
+            'processed': processed_count,
+            'failed': failed_count,
+            'total': len(photos_to_process)
         })
         
     except Exception as e:
-        print(f"Error queueing batch watermark: {str(e)}")
+        print(f"Error in batch watermark: {str(e)}")
         import traceback
         traceback.print_exc()
-        return create_response(500, {'error': 'Failed to queue batch watermark job'})
-
+        return create_response(500, {'error': 'Failed to apply batch watermark'})
 

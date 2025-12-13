@@ -8,9 +8,9 @@ import csv
 import io
 from datetime import datetime, timedelta, timezone
 import boto3
-from utils.auth import get_user_from_token
 from utils.response import create_response
-from utils.config import get_dynamodb, get_s3_client
+from utils.config import dynamodb, s3_client
+from utils.plan_enforcement import require_plan, require_role
 
 # Import for Excel export
 try:
@@ -23,25 +23,22 @@ except ImportError:
     EXCEL_AVAILABLE = False
     print("Warning: openpyxl not available. Excel export will not work.")
 
-dynamodb = get_dynamodb()
-s3 = get_s3_client()
+s3 = s3_client
 
-def handle_export_analytics_csv(event):
+@require_plan(feature='analytics_export')
+@require_role('photographer')
+def handle_export_analytics_csv(user, query_params):
     """
     Export analytics data to CSV format
     GET /analytics/export/csv?start_date=...&end_date=...&type=...
     """
     try:
-        # Verify authentication
-        user = get_user_from_token(event)
-        if not user or user.get('role') != 'photographer':
-            return create_response(403, {'error': 'Unauthorized'})
+        # Plan enforcement handled by decorators
         
-        photographer_id = user['user_id']
-        params = event.get('queryStringParameters') or {}
+        photographer_id = user['id']
         
         # Parse parameters
-        export_type = params.get('type', 'summary')  # summary, galleries, photos, clients
+        export_type = query_params.get('type', 'summary')  # summary, galleries, photos, clients
         start_date = params.get('start_date')
         end_date = params.get('end_date', datetime.now().isoformat())
         
@@ -90,20 +87,18 @@ def handle_export_analytics_csv(event):
         return create_response(500, {'error': f'Failed to export CSV: {str(e)}'})
 
 
-def handle_export_analytics_pdf(event):
+@require_plan(feature='analytics_export')
+@require_role('photographer')
+def handle_export_analytics_pdf(user, body):
     """
     Export analytics data to PDF format
     POST /analytics/export/pdf
     """
     try:
-        # Verify authentication
-        user = get_user_from_token(event)
-        if not user or user.get('role') != 'photographer':
-            return create_response(403, {'error': 'Unauthorized'})
+        # Plan enforcement handled by decorators
         
-        photographer_id = user['user_id']
+        photographer_id = user['id']
         
-        body = json.loads(event.get('body', '{}'))
         report_type = body.get('type', 'summary')
         start_date = body.get('start_date')
         end_date = body.get('end_date', datetime.now().isoformat())
@@ -485,7 +480,9 @@ def generate_pdf_report(photographer_id, report_type, start_date, end_date):
         return f"/api/v1/analytics/reports/error"
 
 
-def handle_export_analytics_excel(event):
+@require_plan(feature='analytics_export')
+@require_role('photographer')
+def handle_export_analytics_excel(user, query_params):
     """
     Export analytics data to Excel (.xlsx) format with charts
     GET /analytics/export/excel?start_date=...&end_date=...&type=...
@@ -496,16 +493,12 @@ def handle_export_analytics_excel(event):
                 'error': 'Excel export is not available. Please install openpyxl.'
             })
         
-        # Verify authentication
-        user = get_user_from_token(event)
-        if not user or user.get('role') != 'photographer':
-            return create_response(403, {'error': 'Unauthorized'})
+        # Plan enforcement handled by decorators
         
-        photographer_id = user['user_id']
-        params = event.get('queryStringParameters') or {}
+        photographer_id = user['id']
         
         # Parse parameters
-        export_type = params.get('type', 'summary')
+        export_type = query_params.get('type', 'summary')
         start_date = params.get('start_date')
         end_date = params.get('end_date', datetime.now().isoformat())
         
@@ -759,3 +752,156 @@ def _create_top_photos_sheet(sheet, photographer_id, start_date, end_date):
     for col in range(1, 6):
         sheet.column_dimensions[get_column_letter(col)].width = 25
 
+
+
+@require_plan(feature='analytics_export')
+@require_role('photographer')
+def handle_export_analytics_excel(user, query_params):
+    """
+    Export analytics data to Excel format with charts
+    GET /analytics/export/excel?start_date=...&end_date=...&type=...
+    """
+    try:
+        # Plan enforcement handled by decorators
+        
+        if not EXCEL_AVAILABLE:
+            return create_response(500, {'error': 'Excel export not available. Please install openpyxl.'})
+        
+        photographer_id = user['id']
+        
+        # Parse parameters
+        export_type = query_params.get('type', 'summary')
+        start_date = query_params.get('start_date')
+        end_date = query_params.get('end_date', datetime.now().isoformat())
+        
+        # Default to last 30 days
+        if not start_date:
+            start_date = (datetime.now() - timedelta(days=30)).isoformat()
+        
+        # Create workbook
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active)  # Remove default sheet
+        
+        # Add summary sheet
+        summary_sheet = wb.create_sheet('Summary', 0)
+        summary_sheet.sheet_properties.tabColor = '0066CC'
+        
+        # Add title
+        summary_sheet['A1'] = 'Galerly Analytics Report'
+        summary_sheet['A1'].font = Font(size=18, bold=True, color='0066CC')
+        summary_sheet['A2'] = f'Period: {start_date[:10]} to {end_date[:10]}'
+        summary_sheet['A2'].font = Font(size=12, color='666666')
+        summary_sheet['A3'] = f'Photographer: {user.get("username", "Unknown")}'
+        
+        # Add metrics starting at row 5
+        row = 5
+        
+        # Fetch summary data
+        summary_data = generate_summary_csv(photographer_id, start_date, end_date)
+        
+        if summary_data:
+            # Headers
+            summary_sheet.append(['Metric', 'Value', 'Change'])
+            header_row = summary_sheet[row]
+            for cell in header_row:
+                cell.font = Font(bold=True, color='FFFFFF')
+                cell.fill = PatternFill(start_color='0066CC', end_color='0066CC', fill_type='solid')
+                cell.alignment = Alignment(horizontal='center')
+            
+            row += 1
+            
+            # Data rows
+            for item in summary_data:
+                summary_sheet.append([
+                    item.get('metric', ''),
+                    item.get('value', 0),
+                    item.get('change', '')
+                ])
+        
+        # Auto-adjust column widths
+        for column in summary_sheet.columns:
+            max_length = 0
+            column_letter = get_column_letter(column[0].column)
+            for cell in column:
+                try:
+                    if len(str(cell.value)) > max_length:
+                        max_length = len(str(cell.value))
+                except:
+                    pass
+            adjusted_width = min(max_length + 2, 50)
+            summary_sheet.column_dimensions[column_letter].width = adjusted_width
+        
+        # Add gallery performance sheet
+        if export_type in ['summary', 'galleries']:
+            gallery_sheet = wb.create_sheet('Gallery Performance')
+            gallery_data = generate_galleries_csv(photographer_id, start_date, end_date)
+            
+            if gallery_data:
+                # Add headers
+                headers = list(gallery_data[0].keys())
+                gallery_sheet.append(headers)
+                
+                # Style headers
+                for cell in gallery_sheet[1]:
+                    cell.font = Font(bold=True, color='FFFFFF')
+                    cell.fill = PatternFill(start_color='0066CC', end_color='0066CC', fill_type='solid')
+                
+                # Add data
+                for item in gallery_data:
+                    gallery_sheet.append([item.get(h, '') for h in headers])
+                
+                # Add chart if data exists
+                if len(gallery_data) > 0:
+                    chart = BarChart()
+                    chart.title = "Gallery Views"
+                    chart.y_axis.title = 'Views'
+                    chart.x_axis.title = 'Gallery'
+                    
+                    data = Reference(gallery_sheet, min_col=2, min_row=1, max_row=len(gallery_data) + 1)
+                    cats = Reference(gallery_sheet, min_col=1, min_row=2, max_row=len(gallery_data) + 1)
+                    chart.add_data(data, titles_from_data=True)
+                    chart.set_categories(cats)
+                    
+                    gallery_sheet.add_chart(chart, 'E5')
+        
+        # Add photos sheet
+        if export_type in ['summary', 'photos']:
+            photo_sheet = wb.create_sheet('Top Photos')
+            photo_data = generate_photos_csv(photographer_id, start_date, end_date)
+            
+            if photo_data:
+                headers = list(photo_data[0].keys())
+                photo_sheet.append(headers)
+                
+                for cell in photo_sheet[1]:
+                    cell.font = Font(bold=True, color='FFFFFF')
+                    cell.fill = PatternFill(start_color='0066CC', end_color='0066CC', fill_type='solid')
+                
+                for item in photo_data[:50]:  # Top 50 photos
+                    photo_sheet.append([item.get(h, '') for h in headers])
+        
+        # Save to bytes
+        excel_output = io.BytesIO()
+        wb.save(excel_output)
+        excel_output.seek(0)
+        
+        # Return Excel file
+        import base64
+        excel_b64 = base64.b64encode(excel_output.getvalue()).decode()
+        
+        return {
+            'statusCode': 200,
+            'headers': {
+                'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                'Content-Disposition': f'attachment; filename="analytics_{export_type}_{start_date[:10]}_to_{end_date[:10]}.xlsx"',
+                'Access-Control-Allow-Origin': '*'
+            },
+            'body': excel_b64,
+            'isBase64Encoded': True
+        }
+        
+    except Exception as e:
+        print(f"Error exporting Excel: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': f'Failed to export Excel: {str(e)}'})

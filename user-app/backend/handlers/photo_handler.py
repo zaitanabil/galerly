@@ -18,6 +18,11 @@ from utils.duplicate_detector import (
 # Image validation removed - no PIL dependency needed
 from utils.cdn_urls import get_photo_urls  # CloudFront CDN URL helper
 from utils.raw_processor import is_raw_file, extract_raw_metadata, validate_raw_file
+from utils.plan_enforcement import require_role
+import os
+
+# Photo upload configuration from environment
+MAX_FILE_SIZE_MB = int(os.environ.get('MAX_PHOTO_FILE_SIZE_MB', '100'))  # Default 100MB per photo
 
 def handle_get_photo(photo_id):
     """Get single photo details (Public for client galleries)"""
@@ -34,6 +39,7 @@ def handle_get_photo(photo_id):
         traceback.print_exc()
         return create_response(500, {'error': f'Failed to get photo: {str(e)}'})
 
+@require_role('photographer')
 def handle_check_duplicates(gallery_id, user, event):
     """
     Check if uploaded photo is a duplicate based on METADATA ONLY
@@ -132,6 +138,7 @@ def handle_check_duplicates(gallery_id, user, event):
         traceback.print_exc()
         return create_response(500, {'error': f'Duplicate check failed: {str(e)}'})
 
+@require_role('photographer')
 def handle_upload_photo(gallery_id, user, event):
     """Upload photo - VERIFY GALLERY OWNERSHIP"""
     try:
@@ -167,12 +174,11 @@ def handle_upload_photo(gallery_id, user, event):
             if len(image_data) < 50:
                 return create_response(400, {'error': 'File data too small to be valid'})
             
-            # Check file size limit (100MB per file)
-            max_file_size_mb = 100
+            # Check file size limit configured in environment
             file_size_mb = len(image_data) / (1024 * 1024)
-            if file_size_mb > max_file_size_mb:
+            if file_size_mb > MAX_FILE_SIZE_MB:
                 return create_response(400, {
-                    'error': f'File size exceeds maximum limit of {max_file_size_mb}MB',
+                    'error': f'File size exceeds maximum limit of {MAX_FILE_SIZE_MB}MB',
                     'file_size_mb': round(file_size_mb, 2)
                 })
             
@@ -785,6 +791,7 @@ def handle_delete_comment(photo_id, comment_id, user):
         traceback.print_exc()
         return create_response(500, {'error': f'Failed to delete comment: {str(e)}'})
 
+@require_role('photographer')
 def handle_search_photos(user, query_params):
     """Search photos by tags, title, description - USER'S PHOTOS ONLY"""
     try:
@@ -857,6 +864,7 @@ def handle_search_photos(user, query_params):
         traceback.print_exc()
         return create_response(500, {'error': 'Failed to search photos'})
 
+@require_role('photographer')
 def handle_delete_photos(gallery_id, user, event):
     """Delete photos (single or batch) - ONLY PHOTOGRAPHER can delete"""
     print(f"🔥 DELETE PHOTOS HANDLER CALLED: gallery_id={gallery_id}, user_id={user.get('id')}")
@@ -1043,6 +1051,7 @@ def handle_delete_photos(gallery_id, user, event):
         return create_response(500, {'error': f'Batch delete failed: {str(e)}'})
 
 
+@require_role('photographer')
 def handle_send_batch_notification(gallery_id, user):
     """
     Send ONE batch email notification to all clients about new photos

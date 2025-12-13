@@ -5,13 +5,18 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from utils.config import users_table, sessions_table
 from utils.response import create_response
+from utils.plan_enforcement import require_role
+import os
 
+# Watermark configuration from environment
+WATERMARK_SIZE_MIN = float(os.environ.get('WATERMARK_SIZE_MIN_PERCENT', '1.0'))  # Minimum 1% of image
+WATERMARK_SIZE_MAX = float(os.environ.get('WATERMARK_SIZE_MAX_PERCENT', '50.0'))  # Maximum 50% of image
+
+@require_role('photographer')
 def handle_update_profile(user, body):
     """Update photographer profile - Simple city input"""
     try:
-        # Only photographers can update profile info
-        if user.get('role') != 'photographer':
-            return create_response(403, {'error': 'Only photographers can update profile'})
+        # Role check handled by @require_role decorator
         
         # Get current user data
         response = users_table.get_item(Key={'email': user['email']})
@@ -114,7 +119,7 @@ def handle_update_profile(user, body):
             # Size as percentage of image (for logo watermarks)
             try:
                 size = float(body['watermark_size'])
-                if 1.0 <= size <= 50.0:  # 1-50% of image
+                if WATERMARK_SIZE_MIN <= size <= WATERMARK_SIZE_MAX:
                     user_data['watermark_size'] = Decimal(str(size))
             except (ValueError, TypeError):
                 pass

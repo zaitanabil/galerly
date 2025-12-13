@@ -7,6 +7,7 @@ import boto3
 from datetime import datetime, timezone
 from utils.response import create_response
 from utils.config import dynamodb, users_table, email_templates_table
+from utils.plan_enforcement import require_plan, require_role
 
 # Default template types that can be customized
 # Note: gallery_shared_with_account and gallery_shared_no_account are used in send_gallery_shared_email()
@@ -85,17 +86,13 @@ def handle_list_templates(user):
         return create_response(500, {'error': 'Failed to list templates'})
 
 
+@require_plan(feature='email_templates')
 def handle_get_template(user, template_type):
     """Get specific template (custom or default)"""
     try:
         user_id = user['id']
         
-        # Check Pro plan
-        if not check_pro_plan(user):
-            return create_response(403, {
-                'error': 'Email template editing is a Pro feature',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorator
         
         # Check if template type is valid
         if template_type not in CUSTOMIZABLE_TEMPLATES:
@@ -138,18 +135,14 @@ def handle_get_template(user, template_type):
         return create_response(500, {'error': 'Failed to get template'})
 
 
+@require_plan(feature='email_templates')
+@require_role('photographer')
 def handle_save_template(user, template_type, body):
     """Save or update custom email template"""
     try:
         user_id = user['id']
         
-        # Check Pro plan
-        if not check_pro_plan(user):
-            return create_response(403, {
-                'error': 'Email template editing is a Pro feature',
-                'upgrade_required': True,
-                'current_plan': user.get('plan')
-            })
+        # Plan enforcement handled by decorators
         
         # Validate template type
         if template_type not in CUSTOMIZABLE_TEMPLATES:
@@ -206,17 +199,14 @@ def handle_save_template(user, template_type, body):
         return create_response(500, {'error': 'Failed to save template'})
 
 
+@require_plan(feature='email_templates')
+@require_role('photographer')
 def handle_delete_template(user, template_type):
     """Delete custom template (revert to default)"""
     try:
         user_id = user['id']
         
-        # Check Pro plan
-        if not check_pro_plan(user):
-            return create_response(403, {
-                'error': 'Email template editing is a Pro feature',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorators
         
         # Validate template type
         if template_type not in CUSTOMIZABLE_TEMPLATES:
@@ -239,6 +229,7 @@ def handle_delete_template(user, template_type):
         return create_response(500, {'error': 'Failed to delete template'})
 
 
+@require_plan(feature='email_templates')
 def handle_preview_template(user, template_type, body):
     """Preview template with sample data"""
     try:

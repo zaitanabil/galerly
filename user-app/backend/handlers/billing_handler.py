@@ -10,16 +10,19 @@ from utils.response import create_response
 from utils.subscription_validator import (
     SubscriptionValidator, SubscriptionState, ValidationResult
 )
+from utils.plan_enforcement import require_role
 
 # Initialize Stripe
+# All Stripe configuration loaded from environment variables (no hardcoded keys)
 stripe = None
-STRIPE_SECRET_KEY = ''
-STRIPE_WEBHOOK_SECRET = ''
+STRIPE_SECRET_KEY = None
+STRIPE_WEBHOOK_SECRET = None
 
 try:
     import stripe
     print("Stripe module imported successfully")
     
+    # Load Stripe keys from environment (required for production)
     STRIPE_SECRET_KEY = os.environ.get('STRIPE_SECRET_KEY')
     STRIPE_WEBHOOK_SECRET = os.environ.get('STRIPE_WEBHOOK_SECRET')
     
@@ -227,6 +230,7 @@ def validate_and_execute(user, action, target_plan=None, **kwargs):
     return None  # Valid
 
 
+@require_role('photographer')
 def handle_change_plan(user, body):
     """Change subscription plan between paid plans (Plus <-> Pro)"""
     plan_id = body.get('plan')
@@ -799,6 +803,7 @@ def handle_change_plan(user, body):
         })
 
 
+@require_role('photographer')
 def handle_create_checkout_session(user, body):
     """Create Stripe checkout session for subscription"""
     plan_id = body.get('plan')
@@ -1012,6 +1017,7 @@ def handle_create_checkout_session(user, body):
             })
 
 
+@require_role('photographer')
 def handle_get_billing_history(user):
     """Get billing history for user"""
     try:
@@ -1054,6 +1060,7 @@ def handle_get_billing_history(user):
         return create_response(200, {'invoices': []})
 
 
+@require_role('photographer')
 def handle_get_invoice_pdf(user, invoice_id):
     """
     Get invoice PDF URL - either from stored DynamoDB record or fetch from Stripe.
@@ -1146,6 +1153,7 @@ def handle_get_invoice_pdf(user, invoice_id):
         return create_response(500, {'error': 'Failed to retrieve invoice PDF'})
 
 
+@require_role('photographer')
 def handle_get_subscription(user):
     """Get current subscription details"""
     try:
@@ -1285,6 +1293,7 @@ def handle_get_subscription(user):
         })
 
 
+@require_role('photographer')
 def handle_check_downgrade_limits(user, target_plan):
     """Check if user can downgrade to target plan and return what needs to be deleted"""
     from boto3.dynamodb.conditions import Key
@@ -1390,6 +1399,7 @@ def handle_check_downgrade_limits(user, target_plan):
         return create_response(500, {'error': 'Failed to check downgrade limits'})
 
 
+@require_role('photographer')
 def handle_downgrade_subscription(user, body):
     """Downgrade subscription to free plan with selective deletion"""
     from boto3.dynamodb.conditions import Key
@@ -1582,12 +1592,14 @@ def handle_downgrade_subscription(user, body):
         return create_response(500, {'error': 'Failed to downgrade subscription'})
 
 
+@require_role('photographer')
 def handle_cancel_subscription(user):
     """Cancel subscription - now redirects to downgrade check"""
     # This is kept for backward compatibility, but should use handle_downgrade_subscription
     return handle_downgrade_subscription(user, {'galleries_to_delete': []})
 
 
+@require_role('photographer')
 def handle_create_customer_portal_session(user, body):
     """
     Create a Stripe Customer Portal session for managing payment methods

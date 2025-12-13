@@ -9,7 +9,10 @@ from boto3.dynamodb.conditions import Key
 from utils.config import invoices_table, users_table
 from utils.response import create_response
 from utils.email import send_email
+from utils.plan_enforcement import require_plan, require_role
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_list_invoices(user, query_params=None):
     """List all invoices for this user"""
     try:
@@ -27,25 +30,12 @@ def handle_list_invoices(user, query_params=None):
         print(f"Error listing invoices: {str(e)}")
         return create_response(500, {'error': 'Failed to list invoices'})
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_create_invoice(user, body):
     """Create a new invoice - Photographer only"""
     try:
-        # Check user role - photographers only
-        if user.get('role') != 'photographer':
-            return create_response(403, {
-                'error': 'Only photographers can create invoices',
-                'required_role': 'photographer'
-            })
-        
-        # Check Plan Limits
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-
-        if not features.get('client_invoicing'):
-             return create_response(403, {
-                 'error': 'Client Invoicing is available on Pro and Ultimate plans.',
-                 'upgrade_required': True
-             })
+        # Plan and role enforcement handled by decorators
 
         # Validate required fields
         if 'client_email' not in body or 'items' not in body:
@@ -87,6 +77,7 @@ def handle_create_invoice(user, body):
         print(f"Error creating invoice: {str(e)}")
         return create_response(500, {'error': 'Failed to create invoice'})
 
+@require_plan(feature='client_invoicing')
 def handle_get_invoice(invoice_id, user):
     """Get single invoice"""
     try:
@@ -105,6 +96,8 @@ def handle_get_invoice(invoice_id, user):
         print(f"Error getting invoice: {str(e)}")
         return create_response(500, {'error': 'Failed to get invoice'})
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_update_invoice(invoice_id, user, body):
     """Update invoice"""
     try:
@@ -147,6 +140,8 @@ def handle_update_invoice(invoice_id, user, body):
         print(f"Error updating invoice: {str(e)}")
         return create_response(500, {'error': 'Failed to update invoice'})
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_delete_invoice(invoice_id, user):
     """Delete invoice"""
     try:
@@ -166,6 +161,8 @@ def handle_delete_invoice(invoice_id, user):
         return create_response(500, {'error': 'Failed to delete invoice'})
 
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_mark_invoice_paid(invoice_id, user, body):
     """Mark invoice as paid manually or via webhook"""
     try:
@@ -197,6 +194,8 @@ def handle_mark_invoice_paid(invoice_id, user, body):
         print(f"Error marking invoice as paid: {str(e)}")
         return create_response(500, {'error': 'Failed to update invoice'})
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_send_invoice(invoice_id, user):
     """Send invoice to client via email with Stripe payment link"""
     try:

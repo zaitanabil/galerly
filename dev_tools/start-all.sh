@@ -1,14 +1,14 @@
 #!/bin/bash
-# Galerly - Complete Development Environment Startup
-# Starts LocalStack, User App, and Admin App
+# Galerly - Development Environment Startup
+# Starts LocalStack and User App
 #
 # TESTS ARE MANDATORY - All tests must pass before services start
 # No exceptions, no optional flags
 
 set -e
 
-echo "🚀 Starting Galerly Complete Development Environment"
-echo "===================================================="
+echo "🚀 Starting Galerly Development Environment"
+echo "============================================"
 echo ""
 
 # ALWAYS run tests - mandatory, no exceptions
@@ -210,66 +210,13 @@ else
 fi
 echo ""
 
-# Start Admin App Backend
-echo "🔧 Starting Admin App Backend (Port 5002)..."
-
-# Create logs directory if it doesn't exist
-mkdir -p logs
-
-cd admin-app/backend
-source ../../user-app/backend/venv/bin/activate 2>/dev/null || python3 -m venv ../../user-app/backend/venv
-source ../../user-app/backend/venv/bin/activate
-pip install --quiet -r requirements.txt
-# Environment variables already loaded from root .env.development earlier in script
-python3 api.py > ../../logs/admin-backend.log 2>&1 &
-ADMIN_BACKEND_PID=$!
-echo "✅ Admin backend started (PID: $ADMIN_BACKEND_PID)"
-cd ../..
+echo "============================================"
+echo "✅ Galerly Development Environment Running"
+echo "============================================"
 echo ""
-
-# Wait for admin backend to be ready
-sleep 3
-if curl -s "http://localhost:5002/health" > /dev/null 2>&1; then
-    echo "✅ Admin backend is responding"
-else
-    echo "⚠️  Admin backend might not be ready yet"
-fi
-echo ""
-
-# Start Admin App Frontend
-echo "🎨 Starting Admin App Frontend (Port 3001)..."
-cd admin-app/frontend
-
-# Install dependencies if needed
-if [ ! -d "node_modules" ]; then
-    echo "📦 Installing admin frontend dependencies..."
-    npm install
-fi
-
-npm run dev > ../../logs/admin-frontend.log 2>&1 &
-ADMIN_FRONTEND_PID=$!
-echo "✅ Admin frontend started (PID: $ADMIN_FRONTEND_PID)"
-cd ../..
-echo ""
-
-# Save PIDs for cleanup
-mkdir -p logs
-echo "$ADMIN_BACKEND_PID" > logs/admin-backend.pid
-echo "$ADMIN_FRONTEND_PID" > logs/admin-frontend.pid
-
-sleep 5
-
-echo "======================================================"
-echo "✅ Galerly Complete Development Environment Running"
-echo "======================================================"
-echo ""
-echo "USER APP (Main Platform):"
+echo "GALERLY USER APP:"
 echo "  • Frontend:         http://localhost:${FRONTEND_PORT:-8000}"
 echo "  • Backend API:      http://localhost:${BACKEND_PORT:-5001}"
-echo ""
-echo "ADMIN APP (Dashboard):"
-echo "  • Frontend:         http://localhost:3001"
-echo "  • Backend API:      http://localhost:5002"
 echo ""
 echo "INFRASTRUCTURE:"
 echo "  • LocalStack:       ${AWS_ENDPOINT_URL}"
@@ -282,10 +229,8 @@ echo "  • User Backend:     galerly-backend-local"
 echo "  • User Frontend:    galerly-frontend-local"
 echo ""
 echo "LOGS:"
-echo "  • User backend:     docker-compose -f docker/docker-compose.localstack.yml logs -f backend"
-echo "  • User frontend:    docker-compose -f docker/docker-compose.localstack.yml logs -f frontend"
-echo "  • Admin backend:    tail -f logs/admin-backend.log"
-echo "  • Admin frontend:   tail -f logs/admin-frontend.log"
+echo "  • Backend:          docker-compose -f docker/docker-compose.localstack.yml logs -f backend"
+echo "  • Frontend:         docker-compose -f docker/docker-compose.localstack.yml logs -f frontend"
 echo ""
 echo "TO STOP:"
 echo "  • All services:     ./dev_tools/stop-all.sh"
@@ -293,8 +238,7 @@ echo "  • Docker only:      docker-compose -f docker/docker-compose.localstack
 echo ""
 
 echo "Next Steps:"
-echo "  1. User App:        http://localhost:${FRONTEND_PORT:-8000}"
-echo "  2. Admin Dashboard: http://localhost:3001"
+echo "  1. Open App:        http://localhost:${FRONTEND_PORT:-8000}"
 echo ""
 echo "✅ All tests passed before startup - system validated and ready!"
 echo ""

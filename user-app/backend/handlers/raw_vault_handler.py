@@ -11,8 +11,11 @@ from boto3.dynamodb.conditions import Key
 from utils.config import s3_client, S3_BUCKET, users_table, photos_table, raw_vault_table
 from utils.response import create_response
 from utils.email import send_email
+from utils.plan_enforcement import require_plan, require_role
 
 
+@require_plan(feature='raw_vault')
+@require_role('photographer')
 def handle_archive_to_vault(user, body):
     """
     Archive RAW file to Glacier Deep Archive
@@ -25,17 +28,7 @@ def handle_archive_to_vault(user, body):
     }
     """
     try:
-        # Check plan permission
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('raw_vault'):
-            return create_response(403, {
-                'error': 'RAW Vault Archival is available on the Ultimate plan only.',
-                'upgrade_required': True,
-                'required_feature': 'raw_vault'
-            })
-        
+        # Plan enforcement handled by @require_plan decorator
         photo_id = body.get('photo_id')
         gallery_id = body.get('gallery_id')
         
@@ -128,21 +121,13 @@ def handle_archive_to_vault(user, body):
         return create_response(500, {'error': 'Failed to archive file'})
 
 
+@require_plan(feature='raw_vault')
 def handle_list_vault_files(user, query_params=None):
     """
     List all RAW files in user's vault
     """
     try:
-        # Check plan permission
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('raw_vault'):
-            return create_response(403, {
-                'error': 'RAW Vault is an Ultimate plan feature',
-                'upgrade_required': True
-            })
-        
+        # Plan enforcement handled by @require_plan decorator
         response = raw_vault_table.query(
             IndexName='UserIdIndex',
             KeyConditionExpression=Key('user_id').eq(user['id'])
@@ -168,6 +153,7 @@ def handle_list_vault_files(user, query_params=None):
         return create_response(500, {'error': 'Failed to list vault files'})
 
 
+@require_plan(feature='raw_vault')
 def handle_request_retrieval(vault_id, user, body):
     """
     Request retrieval of archived RAW file from Glacier
@@ -292,6 +278,7 @@ def handle_request_retrieval(vault_id, user, body):
         return create_response(500, {'error': 'Failed to request retrieval'})
 
 
+@require_plan(feature='raw_vault')
 def handle_check_retrieval_status(vault_id, user):
     """
     Check status of Glacier retrieval
@@ -377,6 +364,7 @@ def handle_check_retrieval_status(vault_id, user):
         return create_response(500, {'error': 'Failed to check status'})
 
 
+@require_plan(feature='raw_vault')
 def handle_download_vault_file(vault_id, user):
     """
     Generate presigned URL for downloading restored RAW file
@@ -422,6 +410,7 @@ def handle_download_vault_file(vault_id, user):
         return create_response(500, {'error': 'Failed to generate download URL'})
 
 
+@require_plan(feature='raw_vault')
 def handle_delete_vault_file(vault_id, user):
     """
     Permanently delete RAW file from vault

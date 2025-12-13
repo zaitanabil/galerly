@@ -43,9 +43,15 @@ const EmailAutomationPage = lazy(() => import('./pages/EmailAutomationPage'));
 const CRMPage = lazy(() => import('./pages/CRMPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const SEOPage = lazy(() => import('./pages/SEOPage'));
+const SEODashboardPage = lazy(() => import('./pages/SEODashboardPage'));
+const ServicesPage = lazy(() => import('./pages/ServicesPage'));
+const WatermarkConfigPage = lazy(() => import('./pages/WatermarkConfigPage'));
+const AvailabilitySettingsPage = lazy(() => import('./pages/AvailabilitySettingsPage'));
+const OnboardingWorkflowsPage = lazy(() => import('./pages/OnboardingWorkflowsPage'));
 const NotificationPreferencesPage = lazy(() => import('./pages/NotificationPreferencesPage'));
 const CustomDomainHelpPage = lazy(() => import('./pages/CustomDomainHelpPage'));
 const GalleryLayoutPreview = lazy(() => import('./pages/GalleryLayoutPreview'));
+const AdvancedAnalyticsPage = lazy(() => import('./pages/AdvancedAnalyticsPage'));
 
 // Loading Fallback
 const PageLoader = () => (
@@ -193,6 +199,14 @@ function App() {
               }
             />
             <Route
+              path="/analytics/advanced"
+              element={
+                <ProtectedRoute requireRole="photographer">
+                  <AdvancedAnalyticsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/invoices"
               element={
                 <ProtectedRoute requireRole="photographer">
@@ -241,10 +255,58 @@ function App() {
               }
             />
             <Route
+              path="/services"
+              element={
+                <ProtectedRoute requireRole="photographer">
+                  <ServicesPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/watermark"
+              element={
+                <ProtectedRoute requireRole="photographer">
+                  <WatermarkConfigPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/availability"
+              element={
+                <ProtectedRoute requireRole="photographer">
+                  <AvailabilitySettingsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/onboarding"
+              element={
+                <ProtectedRoute requireRole="photographer">
+                  <OnboardingWorkflowsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/seo"
               element={
                 <ProtectedRoute requireRole="photographer">
                   <SEOPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/seo/dashboard"
+              element={
+                <ProtectedRoute requireRole="photographer">
+                  <SEODashboardPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/email-templates"
+              element={
+                <ProtectedRoute requireRole="photographer">
+                  <EmailTemplatesPage />
                 </ProtectedRoute>
               }
             />

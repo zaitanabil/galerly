@@ -11,6 +11,7 @@ from utils.config import dynamodb, users_table
 from utils.response import create_response
 from utils.email import send_email
 from handlers.subscription_handler import get_user_features
+from utils.plan_enforcement import require_plan, require_role
 import os
 
 # Initialize DynamoDB tables
@@ -18,6 +19,8 @@ invoices_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_INVOICES'))
 payment_reminders_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_PAYMENT_REMINDERS'))
 
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_create_reminder_schedule(user, invoice_id, body):
     """
     Create automated payment reminder schedule - Pro+ feature
@@ -30,14 +33,7 @@ def handle_create_reminder_schedule(user, invoice_id, body):
     }
     """
     try:
-        # Check plan permission - Pro+ feature
-        features, _, _ = get_user_features(user)
-        if not features.get('client_invoicing'):
-            return create_response(403, {
-                'error': 'Payment reminders require Pro plan',
-                'upgrade_required': True,
-                'required_feature': 'client_invoicing'
-            })
+        # Plan check handled by @require_plan decorator
         
         # Get invoice
         invoice_response = invoices_table.get_item(Key={'id': invoice_id})
@@ -241,16 +237,12 @@ def handle_process_payment_reminders(event, context):
         }
 
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_cancel_reminder_schedule(user, invoice_id):
     """Cancel payment reminder schedule - Pro+ feature"""
     try:
-        # Check plan permission
-        features, _, _ = get_user_features(user)
-        if not features.get('client_invoicing'):
-            return create_response(403, {
-                'error': 'Payment reminders require Pro plan',
-                'upgrade_required': True
-            })
+        # Plan check handled by @require_plan decorator
         
         # Find schedule for this invoice
         response = payment_reminders_table.scan(

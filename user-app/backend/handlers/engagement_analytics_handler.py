@@ -3,11 +3,16 @@ Client Engagement Analytics Handler
 Tracks photo/video engagement, client preferences, and generates insights
 """
 import uuid
-from datetime import datetime, timezone
+import os
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key, Attr
 from utils.config import analytics_table, galleries_table, photos_table
 from utils.response import create_response
+
+# Analytics time range configuration from environment
+ANALYTICS_DEFAULT_DAYS = int(os.environ.get('ANALYTICS_DEFAULT_DAYS', '30'))  # Default 30-day window
+ANALYTICS_MAX_DAYS = int(os.environ.get('ANALYTICS_MAX_DAYS', '365'))  # Maximum 1 year
 
 
 def handle_track_visit(body):
@@ -379,15 +384,15 @@ def handle_get_overall_engagement(user):
         total_comments = len(comment_events)
         total_time_spent = sum(float(e.get('duration', 0)) for e in all_events if e.get('duration'))
         
-        # Calculate daily stats (last 30 days)
+        # Calculate daily stats (last N days from config)
         from datetime import timedelta
         from collections import defaultdict
         
         end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=ANALYTICS_DEFAULT_DAYS)
         
         daily_stats = {}
-        for i in range(31):
+        for i in range(ANALYTICS_DEFAULT_DAYS + 1):
             d = (start_date + timedelta(days=i)).strftime('%Y-%m-%d')
             daily_stats[d] = {'views': 0, 'downloads': 0}
         
@@ -546,13 +551,12 @@ def handle_get_gallery_engagement_summary(user, gallery_id):
         
         print(f"[ENGAGEMENT] Gallery summary - views={total_views}, downloads={total_downloads}, favorites={total_favorites}")
         
-        # Calculate daily stats (last 30 days)
-        from datetime import timedelta
+        # Calculate daily stats (last N days from config)
         end_date = datetime.now(timezone.utc)
-        start_date = end_date - timedelta(days=30)
+        start_date = end_date - timedelta(days=ANALYTICS_DEFAULT_DAYS)
         
         daily_stats = {}
-        for i in range(31):
+        for i in range(ANALYTICS_DEFAULT_DAYS + 1):
             d = (start_date + timedelta(days=i)).strftime('%Y-%m-%d')
             daily_stats[d] = {'views': 0, 'downloads': 0}
         

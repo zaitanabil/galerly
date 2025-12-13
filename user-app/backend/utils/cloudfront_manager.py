@@ -1,340 +1,252 @@
 """
 CloudFront Distribution Manager
-Automates CloudFront distribution creation and management for custom domains
+Handles automatic CloudFront distribution creation and management for custom domains
 """
 import os
 import boto3
-import uuid
-from datetime import datetime, timezone
+import json
+import time
+from typing import Dict, Any, Optional, List
 
-# Initialize CloudFront client
+# Get AWS configuration from environment
+AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+AWS_ENDPOINT_URL = os.environ.get('AWS_ENDPOINT_URL')
+
+# CloudFront client
 cloudfront_client = boto3.client(
     'cloudfront',
-    region_name=os.environ.get('AWS_REGION', 'us-east-1'),
-    endpoint_url=os.environ.get('AWS_ENDPOINT_URL') if os.environ.get('AWS_ENDPOINT_URL') else None,
-    aws_access_key_id=os.environ.get('AWS_ACCESS_KEY_ID') if os.environ.get('AWS_ENDPOINT_URL') else None,
-    aws_secret_access_key=os.environ.get('AWS_SECRET_ACCESS_KEY') if os.environ.get('AWS_ENDPOINT_URL') else None
+    region_name=AWS_REGION,
+    endpoint_url=os.environ.get('CLOUDFRONT_ENDPOINT_URL') or AWS_ENDPOINT_URL
 )
 
-def create_custom_domain_distribution(user_id, custom_domain, acm_certificate_arn=None):
+# Origin domain for custom domain distributions
+ORIGIN_DOMAIN = os.environ.get('CLOUDFRONT_DOMAIN', 'cdn.galerly.com')
+
+
+def create_distribution(
+    domain: str,
+    certificate_arn: str,
+    user_id: str,
+    comment: Optional[str] = None
+) -> Dict[str, Any]:
     """
     Create a CloudFront distribution for a custom domain
     
     Args:
-        user_id: User ID
-        custom_domain: Custom domain name (e.g., gallery.studio.com)
-        acm_certificate_arn: Optional ACM certificate ARN for SSL
+        domain: Custom domain name
+        certificate_arn: ACM certificate ARN for SSL
+        user_id: User ID for tagging
+        comment: Optional comment for the distribution
     
     Returns:
-        dict: {
-            'success': bool,
-            'distribution_id': str,
-            'distribution_domain': str,  # CloudFront domain
-            'error': str (if failed)
-        }
+        Dict containing distribution_id, domain_name, and status
     """
-    try:
-        # Get origin from environment
-        origin_domain = os.environ.get('CLOUDFRONT_ORIGIN_DOMAIN', 'galerly.com')
-        s3_bucket = os.environ.get('S3_BUCKET', 'galerly-photos-local')
+    
+    # Generate caller reference (unique identifier)
+    caller_reference = f"galerly-{domain}-{int(time.time())}"
+    
+    # Distribution configuration
+    distribution_config = {
+        'CallerReference': caller_reference,
+        'Comment': comment or f"Galerly custom domain for {domain}",
+        'Enabled': True,
         
-        # Caller reference for idempotency
-        caller_reference = f"galerly-{user_id}-{custom_domain}-{int(datetime.now(timezone.utc).timestamp())}"
+        # Aliases (custom domain names)
+        'Aliases': {
+            'Quantity': 1,
+            'Items': [domain]
+        },
         
-        # Build distribution config
-        distribution_config = {
-            'CallerReference': caller_reference,
-            'Comment': f'Galerly custom domain for {custom_domain}',
-            'Enabled': True,
-            'Origins': {
-                'Quantity': 1,
-                'Items': [
-                    {
-                        'Id': f'galerly-origin-{user_id}',
-                        'DomainName': origin_domain,
-                        'CustomOriginConfig': {
-                            'HTTPPort': 80,
-                            'HTTPSPort': 443,
-                            'OriginProtocolPolicy': 'https-only',
-                            'OriginSslProtocols': {
-                                'Quantity': 3,
-                                'Items': ['TLSv1', 'TLSv1.1', 'TLSv1.2']
-                            }
-                        },
-                        'OriginPath': f'/portfolio/{user_id}'  # Path to user's portfolio
-                    }
-                ]
-            },
-            'DefaultCacheBehavior': {
-                'TargetOriginId': f'galerly-origin-{user_id}',
-                'ViewerProtocolPolicy': 'redirect-to-https',
-                'AllowedMethods': {
-                    'Quantity': 7,
-                    'Items': ['HEAD', 'GET', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
-                    'CachedMethods': {
-                        'Quantity': 2,
-                        'Items': ['HEAD', 'GET']
-                    }
-                },
-                'ForwardedValues': {
-                    'QueryString': True,
-                    'Cookies': {'Forward': 'all'},
-                    'Headers': {
+        # Origins - point to main Galerly CloudFront
+        'Origins': {
+            'Quantity': 1,
+            'Items': [{
+                'Id': 'galerly-origin',
+                'DomainName': ORIGIN_DOMAIN,
+                'CustomOriginConfig': {
+                    'HTTPPort': 80,
+                    'HTTPSPort': 443,
+                    'OriginProtocolPolicy': 'https-only',
+                    'OriginSslProtocols': {
                         'Quantity': 3,
-                        'Items': ['Host', 'Origin', 'Referer']
+                        'Items': ['TLSv1.2', 'TLSv1.3', 'TLSv1.1']
                     }
-                },
-                'MinTTL': 0,
-                'DefaultTTL': 86400,  # 1 day
-                'MaxTTL': 31536000,  # 1 year
-                'Compress': True,
-                'TrustedSigners': {
-                    'Enabled': False,
-                    'Quantity': 0
+                }
+            }]
+        },
+        
+        # Default cache behavior
+        'DefaultCacheBehavior': {
+            'TargetOriginId': 'galerly-origin',
+            'ViewerProtocolPolicy': 'redirect-to-https',
+            'AllowedMethods': {
+                'Quantity': 7,
+                'Items': ['GET', 'HEAD', 'OPTIONS', 'PUT', 'POST', 'PATCH', 'DELETE'],
+                'CachedMethods': {
+                    'Quantity': 2,
+                    'Items': ['GET', 'HEAD']
                 }
             },
-            'CacheBehaviors': {
-                'Quantity': 0
+            'ForwardedValues': {
+                'QueryString': True,
+                'Cookies': {
+                    'Forward': 'all'
+                },
+                'Headers': {
+                    'Quantity': 4,
+                    'Items': ['Authorization', 'Origin', 'Accept', 'Host']
+                }
             },
-            'CustomErrorResponses': {
-                'Quantity': 2,
-                'Items': [
-                    {
-                        'ErrorCode': 404,
-                        'ResponsePagePath': '/404.html',
-                        'ResponseCode': '404',
-                        'ErrorCachingMinTTL': 300
-                    },
-                    {
-                        'ErrorCode': 403,
-                        'ResponsePagePath': '/404.html',
-                        'ResponseCode': '404',
-                        'ErrorCachingMinTTL': 300
-                    }
-                ]
-            },
-            'PriceClass': 'PriceClass_100',  # US, Europe, Israel
-            'ViewerCertificate': {}
-        }
+            'MinTTL': 0,
+            'DefaultTTL': 86400,
+            'MaxTTL': 31536000,
+            'Compress': True
+        },
         
-        # Add custom domain and SSL certificate if provided
-        if acm_certificate_arn:
-            distribution_config['Aliases'] = {
-                'Quantity': 1,
-                'Items': [custom_domain]
-            }
-            distribution_config['ViewerCertificate'] = {
-                'ACMCertificateArn': acm_certificate_arn,
-                'SSLSupportMethod': 'sni-only',
-                'MinimumProtocolVersion': 'TLSv1.2_2021',
-                'Certificate': acm_certificate_arn,
-                'CertificateSource': 'acm'
-            }
-        else:
-            # Use default CloudFront certificate until custom cert is ready
-            distribution_config['ViewerCertificate'] = {
-                'CloudFrontDefaultCertificate': True,
-                'MinimumProtocolVersion': 'TLSv1'
-            }
+        # SSL/TLS configuration
+        'ViewerCertificate': {
+            'ACMCertificateArn': certificate_arn,
+            'SSLSupportMethod': 'sni-only',
+            'MinimumProtocolVersion': 'TLSv1.2_2021',
+            'Certificate': certificate_arn,
+            'CertificateSource': 'acm'
+        },
         
-        print(f"Creating CloudFront distribution for {custom_domain}...")
+        # Price class (use all edge locations)
+        'PriceClass': 'PriceClass_All',
         
-        # Create distribution
+        # HTTP version
+        'HttpVersion': 'http2and3',
+        
+        # IPv6
+        'IsIPV6Enabled': True
+    }
+    
+    try:
+        # Create the distribution
         response = cloudfront_client.create_distribution(
             DistributionConfig=distribution_config
         )
         
-        distribution_id = response['Distribution']['Id']
-        distribution_domain = response['Distribution']['DomainName']
-        
-        print(f"✓ CloudFront distribution created: {distribution_id}")
-        print(f"  Domain: {distribution_domain}")
-        
-        return {
-            'success': True,
-            'distribution_id': distribution_id,
-            'distribution_domain': distribution_domain,
-            'status': response['Distribution']['Status']
-        }
-        
-    except Exception as e:
-        print(f"Error creating CloudFront distribution: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-
-def get_distribution_status(distribution_id):
-    """
-    Get status of a CloudFront distribution
-    
-    Args:
-        distribution_id: CloudFront distribution ID
-    
-    Returns:
-        dict: {
-            'success': bool,
-            'status': str,  # InProgress, Deployed
-            'domain_name': str,
-            'enabled': bool,
-            'aliases': list,
-            'error': str (if failed)
-        }
-    """
-    try:
-        response = cloudfront_client.get_distribution(Id=distribution_id)
-        
         distribution = response['Distribution']
         
         return {
-            'success': True,
-            'status': distribution['Status'],
+            'distribution_id': distribution['Id'],
             'domain_name': distribution['DomainName'],
-            'enabled': distribution['DistributionConfig']['Enabled'],
-            'aliases': distribution['DistributionConfig'].get('Aliases', {}).get('Items', []),
-            'last_modified': distribution['LastModifiedTime'].isoformat()
+            'status': distribution['Status'],
+            'arn': distribution['ARN']
         }
-        
+    
     except Exception as e:
-        print(f"Error getting distribution status: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
+        print(f"Error creating CloudFront distribution: {str(e)}")
+        raise
 
 
-def update_distribution_certificate(distribution_id, acm_certificate_arn):
+def get_distribution_status(distribution_id: str) -> Dict[str, Any]:
     """
-    Update CloudFront distribution with SSL certificate after validation
+    Get the current status of a CloudFront distribution
     
     Args:
         distribution_id: CloudFront distribution ID
-        acm_certificate_arn: ACM certificate ARN
     
     Returns:
-        dict: {
-            'success': bool,
-            'message': str,
-            'error': str (if failed)
-        }
+        Dict containing status, domain_name, and deployed flag
     """
+    
     try:
-        # Get current distribution config
-        response = cloudfront_client.get_distribution_config(Id=distribution_id)
+        response = cloudfront_client.get_distribution(Id=distribution_id)
+        distribution = response['Distribution']
         
+        return {
+            'distribution_id': distribution['Id'],
+            'domain_name': distribution['DomainName'],
+            'status': distribution['Status'],
+            'deployed': distribution['Status'] == 'Deployed',
+            'enabled': distribution['DistributionConfig']['Enabled'],
+            'aliases': distribution['DistributionConfig']['Aliases'].get('Items', [])
+        }
+    
+    except cloudfront_client.exceptions.NoSuchDistribution:
+        return {
+            'error': 'Distribution not found',
+            'exists': False
+        }
+    
+    except Exception as e:
+        print(f"Error getting distribution status: {str(e)}")
+        raise
+
+
+def update_distribution(
+    distribution_id: str,
+    certificate_arn: Optional[str] = None,
+    enabled: Optional[bool] = None
+) -> Dict[str, Any]:
+    """
+    Update an existing CloudFront distribution
+    
+    Args:
+        distribution_id: CloudFront distribution ID
+        certificate_arn: New ACM certificate ARN (optional)
+        enabled: Enable or disable the distribution (optional)
+    
+    Returns:
+        Dict containing updated distribution info
+    """
+    
+    try:
+        # Get current configuration
+        response = cloudfront_client.get_distribution_config(Id=distribution_id)
         config = response['DistributionConfig']
         etag = response['ETag']
         
-        # Update viewer certificate configuration
-        config['ViewerCertificate'] = {
-            'ACMCertificateArn': acm_certificate_arn,
-            'SSLSupportMethod': 'sni-only',
-            'MinimumProtocolVersion': 'TLSv1.2_2021',
-            'Certificate': acm_certificate_arn,
-            'CertificateSource': 'acm'
-        }
+        # Update certificate if provided
+        if certificate_arn:
+            config['ViewerCertificate']['ACMCertificateArn'] = certificate_arn
+            config['ViewerCertificate']['Certificate'] = certificate_arn
         
-        # Update distribution
-        cloudfront_client.update_distribution(
+        # Update enabled state if provided
+        if enabled is not None:
+            config['Enabled'] = enabled
+        
+        # Apply updates
+        update_response = cloudfront_client.update_distribution(
             Id=distribution_id,
             DistributionConfig=config,
             IfMatch=etag
         )
         
-        print(f"✓ Updated distribution {distribution_id} with certificate {acm_certificate_arn}")
+        distribution = update_response['Distribution']
         
         return {
-            'success': True,
-            'message': 'Distribution updated with SSL certificate'
+            'distribution_id': distribution['Id'],
+            'status': distribution['Status'],
+            'updated': True
         }
-        
-    except Exception as e:
-        print(f"Error updating distribution certificate: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return {
-            'success': False,
-            'error': str(e)
-        }
-
-
-def invalidate_distribution_cache(distribution_id, paths=None):
-    """
-    Invalidate CloudFront cache for specific paths
     
-    Args:
-        distribution_id: CloudFront distribution ID
-        paths: List of paths to invalidate (default: ['/*'] for all)
-    
-    Returns:
-        dict: {
-            'success': bool,
-            'invalidation_id': str,
-            'error': str (if failed)
-        }
-    """
-    try:
-        if paths is None:
-            paths = ['/*']
-        
-        caller_reference = f"invalidation-{int(datetime.now(timezone.utc).timestamp())}"
-        
-        response = cloudfront_client.create_invalidation(
-            DistributionId=distribution_id,
-            InvalidationBatch={
-                'Paths': {
-                    'Quantity': len(paths),
-                    'Items': paths
-                },
-                'CallerReference': caller_reference
-            }
-        )
-        
-        invalidation_id = response['Invalidation']['Id']
-        
-        print(f"✓ Cache invalidation created: {invalidation_id}")
-        
-        return {
-            'success': True,
-            'invalidation_id': invalidation_id,
-            'status': response['Invalidation']['Status']
-        }
-        
     except Exception as e:
-        print(f"Error creating cache invalidation: {str(e)}")
-        return {
-            'success': False,
-            'error': str(e)
-        }
+        print(f"Error updating distribution: {str(e)}")
+        raise
 
 
-def delete_distribution(distribution_id):
+def delete_distribution(distribution_id: str) -> Dict[str, Any]:
     """
     Delete a CloudFront distribution
-    Must be disabled first, then wait for deployment before deletion
     
     Args:
         distribution_id: CloudFront distribution ID
     
     Returns:
-        dict: {
-            'success': bool,
-            'message': str,
-            'error': str (if failed)
-        }
+        Dict containing deletion status
     """
+    
     try:
-        # Get current config
+        # First disable the distribution
         response = cloudfront_client.get_distribution_config(Id=distribution_id)
         config = response['DistributionConfig']
         etag = response['ETag']
         
-        # Check if already disabled
         if config['Enabled']:
-            # Disable distribution first
             config['Enabled'] = False
             cloudfront_client.update_distribution(
                 Id=distribution_id,
@@ -342,39 +254,89 @@ def delete_distribution(distribution_id):
                 IfMatch=etag
             )
             
-            return {
-                'success': True,
-                'message': 'Distribution disabled. Wait for deployment before deletion.',
-                'action': 'disabled'
-            }
+            # Wait for distribution to be disabled
+            # In production, this should be done asynchronously
+            print(f"Distribution {distribution_id} disabled. Waiting for deployment...")
+            time.sleep(5)
         
-        # Check if deployed
-        dist_response = cloudfront_client.get_distribution(Id=distribution_id)
-        status = dist_response['Distribution']['Status']
+        # Get new ETag after disabling
+        response = cloudfront_client.get_distribution_config(Id=distribution_id)
+        etag = response['ETag']
         
-        if status != 'Deployed':
-            return {
-                'success': False,
-                'error': f'Distribution must be deployed before deletion. Current status: {status}'
-            }
-        
-        # Delete distribution
+        # Delete the distribution
         cloudfront_client.delete_distribution(
             Id=distribution_id,
             IfMatch=etag
         )
         
-        print(f"✓ Distribution deleted: {distribution_id}")
-        
         return {
-            'success': True,
-            'message': 'Distribution deleted successfully',
-            'action': 'deleted'
+            'distribution_id': distribution_id,
+            'deleted': True
         }
-        
+    
     except Exception as e:
         print(f"Error deleting distribution: {str(e)}")
+        raise
+
+
+def create_invalidation(distribution_id: str, paths: List[str]) -> Dict[str, Any]:
+    """
+    Create a cache invalidation for specific paths
+    
+    Args:
+        distribution_id: CloudFront distribution ID
+        paths: List of paths to invalidate (e.g., ['/*'] for all)
+    
+    Returns:
+        Dict containing invalidation ID and status
+    """
+    
+    try:
+        response = cloudfront_client.create_invalidation(
+            DistributionId=distribution_id,
+            InvalidationBatch={
+                'Paths': {
+                    'Quantity': len(paths),
+                    'Items': paths
+                },
+                'CallerReference': f"invalidation-{int(time.time())}"
+            }
+        )
+        
+        invalidation = response['Invalidation']
+        
         return {
-            'success': False,
-            'error': str(e)
+            'invalidation_id': invalidation['Id'],
+            'status': invalidation['Status'],
+            'create_time': invalidation['CreateTime'].isoformat()
         }
+    
+    except Exception as e:
+        print(f"Error creating invalidation: {str(e)}")
+        raise
+
+
+def wait_for_deployment(distribution_id: str, max_wait_seconds: int = 1800) -> bool:
+    """
+    Wait for a distribution to be fully deployed
+    
+    Args:
+        distribution_id: CloudFront distribution ID
+        max_wait_seconds: Maximum time to wait (default 30 minutes)
+    
+    Returns:
+        True if deployed, False if timeout
+    """
+    
+    start_time = time.time()
+    
+    while (time.time() - start_time) < max_wait_seconds:
+        status = get_distribution_status(distribution_id)
+        
+        if status.get('deployed'):
+            return True
+        
+        # Check every 30 seconds
+        time.sleep(30)
+    
+    return False

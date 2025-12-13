@@ -7,22 +7,44 @@ from boto3.dynamodb.conditions import Key
 from utils.config import users_table, galleries_table, dynamodb
 from utils.response import create_response
 from handlers.subscription_handler import get_user_features
-import dns.resolver
-from utils.cloudfront_manager import (
-    create_custom_domain_distribution,
-    get_distribution_status,
-    update_distribution_certificate,
-    invalidate_distribution_cache
-)
-from utils.acm_manager import (
-    request_certificate,
-    get_certificate_status,
-    get_certificate_validation_records
-)
-from utils.dns_propagation import (
-    check_dns_propagation,
-    check_cname_propagation
-)
+
+# Import custom domain utilities
+try:
+    from utils.cloudfront_manager import (
+        create_distribution,
+        get_distribution_status,
+        update_distribution,
+        delete_distribution,
+        create_invalidation,
+        wait_for_deployment
+    )
+    CLOUDFRONT_AVAILABLE = True
+except ImportError:
+    CLOUDFRONT_AVAILABLE = False
+    print("Warning: CloudFront manager not available")
+
+try:
+    from utils.acm_manager import (
+        request_certificate,
+        describe_certificate,
+        wait_for_validation,
+        get_certificate_validation_records
+    )
+    ACM_AVAILABLE = True
+except ImportError:
+    ACM_AVAILABLE = False
+    print("Warning: ACM manager not available")
+
+try:
+    from utils.dns_checker import (
+        check_propagation,
+        verify_dns_configuration,
+        check_domain_availability
+    )
+    DNS_CHECKER_AVAILABLE = True
+except ImportError:
+    DNS_CHECKER_AVAILABLE = False
+    print("Warning: DNS checker not available")
 
 # Custom domain configurations table
 custom_domains_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_CUSTOM_DOMAINS', 'galerly-custom-domains-local'))
@@ -406,6 +428,8 @@ def handle_verify_domain(user, body):
         return create_response(500, {'error': 'Failed to verify domain'})
 
 
+@require_plan(feature='custom_domain')
+@require_role('photographer')
 def handle_setup_custom_domain(user, body):
     """
     Complete custom domain setup with CloudFront and ACM integration
@@ -429,13 +453,7 @@ def handle_setup_custom_domain(user, body):
         }
     """
     try:
-        # Check plan permission
-        features, _, _ = get_user_features(user)
-        if not features.get('custom_domain', False):
-            return create_response(403, {
-                'error': 'Custom domains are available on Plus, Pro, and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorators
         
         domain = body.get('domain', '').strip().lower()
         auto_provision = body.get('auto_provision', True)
@@ -493,37 +511,48 @@ def handle_setup_custom_domain(user, body):
                 ]
             })
         
+        # Check if utilities are available
+        if not ACM_AVAILABLE or not CLOUDFRONT_AVAILABLE:
+            return create_response(500, {
+                'error': 'Custom domain automation not available. Please check server configuration.'
+            })
+        
         # Step 1: Request ACM certificate
         print(f"Requesting SSL certificate for {domain}...")
-        cert_result = request_certificate(domain, validation_method='DNS')
-        
-        if not cert_result['success']:
+        try:
+            cert_result = request_certificate(domain, validation_method='DNS')
+            certificate_arn = cert_result['certificate_arn']
+            validation_records = cert_result['validation_records']
+            
+            print(f"✓ SSL certificate requested: {certificate_arn}")
+        except Exception as e:
             return create_response(500, {
-                'error': f'Failed to request SSL certificate: {cert_result.get("error")}'
+                'error': f'Failed to request SSL certificate: {str(e)}'
             })
         
-        certificate_arn = cert_result['certificate_arn']
-        validation_records = cert_result['validation_records']
-        
-        print(f"✓ SSL certificate requested: {certificate_arn}")
-        
-        # Step 2: Create CloudFront distribution (without certificate initially)
+        # Step 2: Create CloudFront distribution with certificate placeholder
         print(f"Creating CloudFront distribution for {domain}...")
-        dist_result = create_custom_domain_distribution(
-            user_id=user['id'],
-            custom_domain=domain,
-            acm_certificate_arn=None  # Add certificate after it's validated
-        )
-        
-        if not dist_result['success']:
+        try:
+            # Note: Certificate will be added after validation
+            dist_result = create_distribution(
+                domain=domain,
+                certificate_arn=certificate_arn,
+                user_id=user['id'],
+                comment=f"Galerly portfolio for {user.get('username', user['id'])}"
+            )
+            
+            distribution_id = dist_result['distribution_id']
+            distribution_domain = dist_result['domain_name']
+            
+            print(f"✓ CloudFront distribution created: {distribution_id}")
+        except Exception as e:
+            # If distribution fails, try to clean up certificate
+            print(f"Warning: Distribution creation failed, certificate remains: {certificate_arn}")
             return create_response(500, {
-                'error': f'Failed to create CloudFront distribution: {dist_result.get("error")}'
+                'error': f'Failed to create CloudFront distribution: {str(e)}',
+                'certificate_arn': certificate_arn,
+                'note': 'SSL certificate was created but distribution failed. Contact support.'
             })
-        
-        distribution_id = dist_result['distribution_id']
-        distribution_domain = dist_result['distribution_domain']
-        
-        print(f"✓ CloudFront distribution created: {distribution_id}")
         
         # Step 3: Save configuration to database
         domain_config = {
@@ -583,6 +612,7 @@ def handle_setup_custom_domain(user, body):
         return create_response(500, {'error': 'Failed to setup custom domain'})
 
 
+@require_plan(feature='custom_domain')
 def handle_check_custom_domain_status(user, domain):
     """
     Check complete status of custom domain including CloudFront, ACM, and DNS
@@ -598,13 +628,7 @@ def handle_check_custom_domain_status(user, domain):
         }
     """
     try:
-        # Check plan permission
-        features, _, _ = get_user_features(user)
-        if not features.get('custom_domain', False):
-            return create_response(403, {
-                'error': 'Custom domain is a Plus plan feature.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorator
         
         if not domain:
             return create_response(400, {'error': 'Domain parameter required'})
@@ -637,38 +661,64 @@ def handle_check_custom_domain_status(user, domain):
         distribution_id = config.get('distribution_id')
         distribution_domain = config.get('distribution_domain')
         
+        # Check if utilities are available
+        if not ACM_AVAILABLE or not CLOUDFRONT_AVAILABLE or not DNS_CHECKER_AVAILABLE:
+            return create_response(500, {
+                'error': 'Custom domain status checking not available'
+            })
+        
         # Check certificate status
         cert_status = None
         if certificate_arn:
-            cert_result = get_certificate_status(certificate_arn)
-            if cert_result['success']:
-                cert_status = {
-                    'arn': certificate_arn,
-                    'status': cert_result['status'],
-                    'issued': cert_result['status'] == 'ISSUED',
-                    'validation_records': cert_result.get('validation_records', [])
-                }
+            try:
+                cert_details = describe_certificate(certificate_arn)
+                if not cert_details.get('error'):
+                    cert_status = {
+                        'arn': certificate_arn,
+                        'status': cert_details['status'],
+                        'issued': cert_details['issued'],
+                        'validation_records': cert_details.get('validation_records', [])
+                    }
+            except Exception as e:
+                print(f"Error checking certificate: {str(e)}")
+                cert_status = {'error': str(e)}
         
         # Check CloudFront distribution status
         dist_status = None
         if distribution_id:
-            dist_result = get_distribution_status(distribution_id)
-            if dist_result['success']:
-                dist_status = {
-                    'id': distribution_id,
-                    'domain': dist_result['domain_name'],
-                    'status': dist_result['status'],
-                    'deployed': dist_result['status'] == 'Deployed',
-                    'enabled': dist_result['enabled']
-                }
+            try:
+                dist_details = get_distribution_status(distribution_id)
+                if not dist_details.get('error'):
+                    dist_status = {
+                        'id': distribution_id,
+                        'domain': dist_details['domain_name'],
+                        'status': dist_details['status'],
+                        'deployed': dist_details['deployed'],
+                        'enabled': dist_details.get('enabled', True)
+                    }
+            except Exception as e:
+                print(f"Error checking distribution: {str(e)}")
+                dist_status = {'error': str(e)}
         
         # Check DNS propagation
-        dns_result = check_cname_propagation(
-            domain=domain,
-            expected_cname=distribution_domain or 'cdn.galerly.com'
-        )
-        
-        dns_status = {
+        dns_status = None
+        if distribution_domain:
+            try:
+                dns_result = check_propagation(
+                    domain=domain,
+                    expected_target=distribution_domain,
+                    record_type='CNAME'
+                )
+                dns_status = {
+                    'propagated': dns_result['propagated'],
+                    'percentage': dns_result['propagation_percentage'],
+                    'ready': dns_result['ready'],
+                    'servers_propagated': dns_result['servers_propagated'],
+                    'servers_checked': dns_result['servers_checked']
+                }
+            except Exception as e:
+                print(f"Error checking DNS: {str(e)}")
+                dns_status = {'error': str(e), 'propagated': False, 'ready': False}
             'propagated': dns_result.get('propagated', False),
             'percentage': dns_result.get('percentage', 0),
             'ready': dns_result.get('ready', False),
@@ -708,6 +758,8 @@ def handle_check_custom_domain_status(user, domain):
         return create_response(500, {'error': 'Failed to check domain status'})
 
 
+@require_plan(feature='custom_domain')
+@require_role('photographer')
 def handle_refresh_custom_domain_certificate(user, domain):
     """
     Check if certificate is validated and update CloudFront distribution

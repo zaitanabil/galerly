@@ -9,7 +9,10 @@ from boto3.dynamodb.conditions import Key
 from utils.config import contracts_table, s3_client, S3_BUCKET
 from utils.response import create_response
 from utils.email import send_email
+from utils.plan_enforcement import require_plan, require_role
 
+@require_plan(feature='e_signatures')
+@require_role('photographer')
 def handle_list_contracts(user, query_params=None):
     """List contracts"""
     try:
@@ -24,26 +27,12 @@ def handle_list_contracts(user, query_params=None):
         print(f"Error listing contracts: {str(e)}")
         return create_response(500, {'error': 'Failed to list contracts'})
 
+@require_plan(feature='e_signatures')
+@require_role('photographer')
 def handle_create_contract(user, body):
     """Create draft contract - Photographer only"""
     try:
-        # Check user role - photographers only
-        if user.get('role') != 'photographer':
-            return create_response(403, {
-                'error': 'Only photographers can create contracts',
-                'required_role': 'photographer'
-            })
-        
-        # Check Plan Limits
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        # Check for e_signatures feature
-        if not features.get('e_signatures'):
-             return create_response(403, {
-                 'error': 'Contracts and eSignatures are available on the Ultimate plan.',
-                 'upgrade_required': True
-             })
+        # Plan and role enforcement handled by decorators
 
         if 'client_email' not in body or 'content' not in body:
             return create_response(400, {'error': 'Missing required fields'})
@@ -69,6 +58,7 @@ def handle_create_contract(user, body):
         print(f"Error creating contract: {str(e)}")
         return create_response(500, {'error': 'Failed to create contract'})
 
+@require_plan(feature='e_signatures')
 def handle_get_contract(contract_id, user=None):
     """Get contract details (Auth user OR public if signed/sent)"""
     try:
@@ -92,6 +82,8 @@ def handle_get_contract(contract_id, user=None):
         print(f"Error getting contract: {str(e)}")
         return create_response(500, {'error': 'Failed to get contract'})
 
+@require_plan(feature='e_signatures')
+@require_role('photographer')
 def handle_update_contract(contract_id, user, body):
     """Update draft contract"""
     try:
@@ -119,6 +111,8 @@ def handle_update_contract(contract_id, user, body):
         print(f"Error updating contract: {str(e)}")
         return create_response(500, {'error': 'Failed to update contract'})
 
+@require_plan(feature='e_signatures')
+@require_role('photographer')
 def handle_delete_contract(contract_id, user):
     """Delete contract"""
     try:
@@ -135,6 +129,8 @@ def handle_delete_contract(contract_id, user):
         print(f"Error deleting contract: {str(e)}")
         return create_response(500, {'error': 'Failed to delete contract'})
 
+@require_plan(feature='e_signatures')
+@require_role('photographer')
 def handle_send_contract(contract_id, user):
     """Send contract to client"""
     try:

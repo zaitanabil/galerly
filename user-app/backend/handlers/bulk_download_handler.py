@@ -5,8 +5,10 @@ Provides fast ZIP downloads by streaming directly from S3
 from boto3.dynamodb.conditions import Key
 from utils.config import s3_client, S3_RENDITIONS_BUCKET, photos_table, galleries_table
 from utils.response import create_response
+from utils.plan_enforcement import require_role
 
 
+@require_role('photographer', 'client')
 def handle_bulk_download(gallery_id, user, event):
     """
     Return pre-generated ZIP file URL for all gallery photos

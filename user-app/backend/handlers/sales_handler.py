@@ -4,12 +4,13 @@ Stripe Payment Intents integration for selling individual photos and packages
 """
 import uuid
 import stripe
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb, users_table, photos_table, galleries_table
 from utils.response import create_response
 from utils.email import send_email
+from utils.plan_enforcement import require_plan, require_role
 import os
 
 # Initialize Stripe
@@ -50,6 +51,7 @@ def handle_list_packages(photographer_id, is_public=True):
         return create_response(500, {'error': 'Failed to retrieve packages'})
 
 
+@require_role('photographer')
 def handle_create_package(user, body):
     """
     Create a new photo package
@@ -111,6 +113,100 @@ def handle_create_package(user, body):
         import traceback
         traceback.print_exc()
         return create_response(500, {'error': 'Failed to create package'})
+
+
+def handle_update_package(user, package_id, body):
+    """
+    Update existing photo package
+    
+    PUT /api/v1/packages/{id}
+    """
+    try:
+        # Get existing package
+        package_response = packages_table.get_item(Key={'id': package_id})
+        if 'Item' not in package_response:
+            return create_response(404, {'error': 'Package not found'})
+        
+        package = package_response['Item']
+        
+        # Verify ownership
+        if package['photographer_id'] != user['id']:
+            return create_response(403, {'error': 'Access denied'})
+        
+        # Update fields
+        timestamp = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+        
+        updatable_fields = [
+            'name', 'description', 'price', 'currency', 'photo_count',
+            'includes_raw', 'includes_prints', 'gallery_id', 'photo_ids',
+            'active', 'display_order'
+        ]
+        
+        for field in updatable_fields:
+            if field in body:
+                if field == 'price':
+                    package[field] = Decimal(str(body[field]))
+                else:
+                    package[field] = body[field]
+        
+        package['updated_at'] = timestamp
+        
+        packages_table.put_item(Item=package)
+        
+        print(f"Package updated: {package_id}")
+        
+        return create_response(200, package)
+        
+    except Exception as e:
+        print(f"Error updating package: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': 'Failed to update package'})
+
+
+def handle_delete_package(user, package_id):
+    """
+    Delete photo package
+    
+    DELETE /api/v1/packages/{id}
+    """
+    try:
+        # Get existing package
+        package_response = packages_table.get_item(Key={'id': package_id})
+        if 'Item' not in package_response:
+            return create_response(404, {'error': 'Package not found'})
+        
+        package = package_response['Item']
+        
+        # Verify ownership
+        if package['photographer_id'] != user['id']:
+            return create_response(403, {'error': 'Access denied'})
+        
+        # Check if package has any sales
+        sales_response = sales_table.query(
+            IndexName='PhotographerIdIndex',
+            KeyConditionExpression=Key('photographer_id').eq(user['id']),
+            FilterExpression=Attr('items').contains({'id': package_id})
+        )
+        
+        if sales_response.get('Items'):
+            return create_response(400, {
+                'error': 'Cannot delete package with existing sales',
+                'sales_count': len(sales_response['Items'])
+            })
+        
+        # Delete package
+        packages_table.delete_item(Key={'id': package_id})
+        
+        print(f"Package deleted: {package_id}")
+        
+        return create_response(200, {'message': 'Package deleted successfully'})
+        
+    except Exception as e:
+        print(f"Error deleting package: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': 'Failed to delete package'})
 
 
 def handle_create_payment_intent(body):
@@ -430,18 +526,9 @@ def handle_get_download(download_id, customer_email):
         return create_response(500, {'error': 'Failed to generate download link'})
 
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_list_sales(user, query_params=None):
-    """List sales for photographer with revenue stats"""
-    try:
-        # Check plan permission
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('client_invoicing'):  # Sales bundled with invoicing
-            return create_response(403, {
-                'error': 'Photo sales features are available on Pro and Ultimate plans.',
-                'upgrade_required': True
-            })
         
         # Query sales
         response = sales_table.query(

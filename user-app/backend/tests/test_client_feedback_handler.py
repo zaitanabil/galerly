@@ -1,155 +1,155 @@
 """
-Tests for client_feedback_handler.py endpoints.
-Tests cover: submit feedback, get feedback, ratings, comments.
+Unit tests for client feedback handler
+Tests structured feedback collection for galleries
 """
 import pytest
 from unittest.mock import Mock, patch
-import json
+from handlers.client_feedback_handler import (
+    handle_submit_client_feedback,
+    handle_get_gallery_feedback
+)
 
-@pytest.fixture
-def mock_feedback_dependencies():
-    """Mock feedback dependencies."""
-    with patch('handlers.client_feedback_handler.client_feedback_table') as mock_feedback, \
-         patch('handlers.client_feedback_handler.galleries_table') as mock_galleries:
-        yield {
-            'feedback': mock_feedback,
-            'galleries': mock_galleries
-        }
 
-class TestSubmitFeedback:
-    """Tests for handle_submit_client_feedback endpoint."""
+class TestClientFeedbackSubmission:
+    """Test client feedback submission"""
     
-    def test_submit_feedback_success(self, sample_gallery, mock_feedback_dependencies):
-        """Submit client feedback successfully."""
-        from handlers.client_feedback_handler import handle_submit_client_feedback
-        
-        mock_feedback_dependencies['galleries'].query.return_value = {'Items': [sample_gallery]}
-        
+    @patch('handlers.client_feedback_handler.client_feedback_table')
+    @patch('handlers.client_feedback_handler.galleries_table')
+    def test_submit_feedback_success(self, mock_galleries, mock_feedback):
+        """Test successful feedback submission"""
+        gallery_id = 'gallery123'
         body = {
-            'client_name': 'John Doe',
-            'client_email': 'client@example.com',
+            'client_name': 'Jane Doe',
+            'client_email': 'jane@test.com',
             'overall_rating': 5,
             'photo_quality_rating': 5,
-            'delivery_time_rating': 5,
+            'delivery_time_rating': 4,
             'communication_rating': 5,
             'value_rating': 5,
             'would_recommend': True,
-            'comments': 'Amazing photos! Very professional.'
-        }
-        result = handle_submit_client_feedback('gallery_123', body)
-        
-        assert result['statusCode'] in [200, 201]
-    
-    def test_submit_feedback_missing_rating(self, mock_feedback_dependencies):
-        """Submit feedback without rating."""
-        from handlers.client_feedback_handler import handle_submit_client_feedback
-        
-        body = {
-            'comment': 'Great work',
-            'client_email': 'client@example.com'
-        }
-        result = handle_submit_client_feedback('gallery_123', body)
-        
-        assert result['statusCode'] == 400
-    
-    def test_submit_feedback_invalid_rating_zero(self, mock_feedback_dependencies):
-        """Submit feedback with rating of 0."""
-        from handlers.client_feedback_handler import handle_submit_client_feedback
-        
-        body = {
-            'rating': 0,
-            'comment': 'Test',
-            'client_email': 'client@example.com'
-        }
-        result = handle_submit_client_feedback('gallery_123', body)
-        
-        assert result['statusCode'] == 400
-    
-    def test_submit_feedback_invalid_rating_negative(self, mock_feedback_dependencies):
-        """Submit feedback with negative rating."""
-        from handlers.client_feedback_handler import handle_submit_client_feedback
-        
-        body = {
-            'rating': -1,
-            'comment': 'Test',
-            'client_email': 'client@example.com'
-        }
-        result = handle_submit_client_feedback('gallery_123', body)
-        
-        assert result['statusCode'] == 400
-    
-    def test_submit_feedback_invalid_rating_too_high(self, mock_feedback_dependencies):
-        """Submit feedback with rating > 5."""
-        from handlers.client_feedback_handler import handle_submit_client_feedback
-        
-        body = {
-            'rating': 10,
-            'comment': 'Test',
-            'client_email': 'client@example.com'
-        }
-        result = handle_submit_client_feedback('gallery_123', body)
-        
-        assert result['statusCode'] == 400
-    
-    def test_submit_feedback_comment_too_long(self, mock_feedback_dependencies):
-        """Submit feedback with very long comment."""
-        from handlers.client_feedback_handler import handle_submit_client_feedback
-        
-        body = {
-            'rating': 5,
-            'comment': 'A' * 10000,  # 10,000 characters
-            'client_email': 'client@example.com'
-        }
-        result = handle_submit_client_feedback('gallery_123', body)
-        
-        assert result['statusCode'] in [200, 201, 400]
-
-class TestGetFeedback:
-    """Tests for handle_get_gallery_feedback endpoint."""
-    
-    def test_get_feedback_success(self, sample_user, sample_gallery, mock_feedback_dependencies):
-        """Get gallery feedback successfully."""
-        from handlers.client_feedback_handler import handle_get_gallery_feedback
-        
-        sample_gallery['user_id'] = sample_user['id']
-        # FIX: Handler uses get_item, not query
-        mock_feedback_dependencies['galleries'].get_item.return_value = {'Item': sample_gallery}
-        mock_feedback_dependencies['feedback'].query.return_value = {
-            'Items': [
-                {'rating': 5, 'comment': 'Great!', 'client_email': 'client1@example.com'},
-                {'rating': 4, 'comment': 'Good', 'client_email': 'client2@example.com'}
+            'comments': 'Amazing photographer! Very professional.',
+            'photo_feedback': [
+                {'photo_id': 'photo1', 'rating': 5, 'comment': 'Love this shot!'}
             ]
         }
         
-        result = handle_get_gallery_feedback('gallery_123', sample_user)
+        # Mock gallery exists
+        mock_galleries.query.return_value = {
+            'Items': [{
+                'id': 'gallery123',
+                'user_id': 'photo123',
+                'name': 'Wedding Gallery'
+            }]
+        }
         
-        assert result['statusCode'] == 200
-        body = json.loads(result['body'])
-        assert 'feedback' in body or len(body) >= 0
+        mock_feedback.put_item.return_value = {}
+        
+        result = handle_submit_client_feedback(gallery_id, body)
+        assert result['statusCode'] == 201
+        assert mock_feedback.put_item.called
     
-    def test_get_feedback_not_owned(self, sample_user, sample_gallery, mock_feedback_dependencies):
-        """Get feedback fails when user doesn't own gallery."""
-        from handlers.client_feedback_handler import handle_get_gallery_feedback
+    @patch('handlers.client_feedback_handler.galleries_table')
+    def test_submit_feedback_validates_gallery_exists(self, mock_galleries):
+        """Test feedback submission validates gallery existence"""
+        gallery_id = 'nonexistent'
+        body = {
+            'client_name': 'Jane Doe',
+            'client_email': 'jane@test.com',
+            'overall_rating': 5,
+            'comments': 'Great work!'
+        }
         
-        other_gallery = {**sample_gallery, 'user_id': 'other_user'}
-        # FIX: Handler uses get_item, not query - return None for not found
-        mock_feedback_dependencies['galleries'].get_item.return_value = {}
+        # Mock gallery not found
+        mock_galleries.query.return_value = {'Items': []}
         
-        result = handle_get_gallery_feedback('gallery_123', sample_user)
-        
-        # Handler returns 404 for gallery not found
+        result = handle_submit_client_feedback(gallery_id, body)
         assert result['statusCode'] == 404
     
-    def test_get_feedback_empty(self, sample_user, sample_gallery, mock_feedback_dependencies):
-        """Get feedback when none exists."""
-        from handlers.client_feedback_handler import handle_get_gallery_feedback
+    @patch('handlers.client_feedback_handler.galleries_table')
+    def test_submit_feedback_validates_email(self, mock_galleries):
+        """Test email validation"""
+        gallery_id = 'gallery123'
+        body = {
+            'client_name': 'Jane Doe',
+            'client_email': 'invalid-email',  # Invalid format
+            'overall_rating': 5,
+            'comments': 'Great work!'
+        }
         
-        sample_gallery['user_id'] = sample_user['id']
-        # FIX: Handler uses get_item, not query
-        mock_feedback_dependencies['galleries'].get_item.return_value = {'Item': sample_gallery}
-        mock_feedback_dependencies['feedback'].query.return_value = {'Items': []}
+        mock_galleries.query.return_value = {
+            'Items': [{'id': 'gallery123', 'user_id': 'photo123'}]
+        }
         
-        result = handle_get_gallery_feedback('gallery_123', sample_user)
+        result = handle_submit_client_feedback(gallery_id, body)
+        assert result['statusCode'] == 400
+    
+    @patch('handlers.client_feedback_handler.galleries_table')
+    def test_submit_feedback_validates_rating_range(self, mock_galleries):
+        """Test rating must be 1-5"""
+        gallery_id = 'gallery123'
+        body = {
+            'client_name': 'Jane Doe',
+            'client_email': 'jane@test.com',
+            'overall_rating': 6,  # Invalid (> 5)
+            'comments': 'Great work!'
+        }
         
-        assert result['statusCode'] == 200
+        mock_galleries.query.return_value = {
+            'Items': [{'id': 'gallery123', 'user_id': 'photo123'}]
+        }
+        
+        result = handle_submit_client_feedback(gallery_id, body)
+        assert result['statusCode'] == 400
 
+
+class TestGalleryFeedbackRetrieval:
+    """Test feedback retrieval for galleries"""
+    
+    @patch('handlers.client_feedback_handler.client_feedback_table')
+    @patch('handlers.client_feedback_handler.galleries_table')
+    def test_get_gallery_feedback_photographer_access(self, mock_galleries, mock_feedback):
+        """Test photographer can view all feedback for their gallery"""
+        gallery_id = 'gallery123'
+        user = {'id': 'photo123', 'role': 'photographer'}
+        
+        # Mock gallery ownership
+        mock_galleries.query.return_value = {
+            'Items': [{
+                'id': 'gallery123',
+                'user_id': 'photo123',
+                'name': 'Test Gallery'
+            }]
+        }
+        
+        # Mock feedback
+        mock_feedback.query.return_value = {
+            'Items': [
+                {'id': 'fb1', 'overall_rating': 5, 'comments': 'Great!'},
+                {'id': 'fb2', 'overall_rating': 4, 'comments': 'Good work'}
+            ]
+        }
+        
+        result = handle_get_gallery_feedback(gallery_id, user)
+        assert result['statusCode'] == 200
+    
+    @patch('handlers.client_feedback_handler.galleries_table')
+    def test_get_gallery_feedback_blocks_non_owner(self, mock_galleries):
+        """Test non-owner cannot view feedback"""
+        gallery_id = 'gallery123'
+        user = {'id': 'photo456', 'role': 'photographer'}  # Different owner
+        
+        # Mock gallery owned by different photographer
+        mock_galleries.query.return_value = {
+            'Items': [{
+                'id': 'gallery123',
+                'user_id': 'photo123',  # Different owner
+                'name': 'Test Gallery'
+            }]
+        }
+        
+        result = handle_get_gallery_feedback(gallery_id, user)
+        assert result['statusCode'] == 403
+
+
+if __name__ == '__main__':
+    pytest.main([__file__, '-v'])

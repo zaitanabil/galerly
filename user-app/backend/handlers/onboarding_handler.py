@@ -8,6 +8,7 @@ from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb, users_table
 from utils.response import create_response
 from utils.email import send_email
+from utils.plan_enforcement import require_plan, require_role
 import os
 
 # Initialize DynamoDB tables
@@ -15,6 +16,8 @@ onboarding_workflows_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_ONBOA
 leads_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_LEADS'))
 
 
+@require_plan(feature='client_onboarding')
+@require_role('photographer')
 def handle_create_onboarding_workflow(user, body):
     """
     Create automated onboarding workflow template
@@ -212,6 +215,7 @@ def send_onboarding_email(photographer, client_email, client_name, step):
         print(f"Error sending onboarding email: {str(e)}")
 
 
+@require_plan(feature='client_onboarding')
 def handle_list_workflows(user):
     """List onboarding workflows for photographer"""
     try:
@@ -229,6 +233,8 @@ def handle_list_workflows(user):
         return create_response(500, {'error': 'Failed to retrieve workflows'})
 
 
+@require_plan(feature='client_onboarding')
+@require_role('photographer')
 def handle_update_workflow(user, workflow_id, body):
     """Update onboarding workflow"""
     try:
@@ -278,6 +284,8 @@ def handle_update_workflow(user, workflow_id, body):
         return create_response(500, {'error': 'Failed to update workflow'})
 
 
+@require_plan(feature='client_onboarding')
+@require_role('photographer')
 def handle_delete_workflow(user, workflow_id):
     """Delete onboarding workflow"""
     try:

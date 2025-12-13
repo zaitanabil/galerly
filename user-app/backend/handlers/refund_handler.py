@@ -6,7 +6,11 @@ import os
 from datetime import datetime, timedelta, timezone
 from utils.config import users_table, subscriptions_table, billing_table
 from utils.response import create_response
+from utils.plan_enforcement import require_role
 from boto3.dynamodb.conditions import Key
+
+# Configuration from environment
+REFUND_WINDOW_DAYS = int(os.environ.get('REFUND_WINDOW_DAYS', '14'))  # Default 14-day money-back guarantee
 
 # Initialize Stripe
 try:
@@ -16,8 +20,6 @@ try:
         stripe.api_key = STRIPE_SECRET_KEY
 except ImportError:
     stripe = None
-
-REFUND_WINDOW_DAYS = 14  # 14-day money-back guarantee
 
 
 def has_pending_or_approved_refund(user_id):
@@ -60,6 +62,7 @@ def has_pending_or_approved_refund(user_id):
         return False
 
 
+@require_role('photographer')
 def handle_check_refund_eligibility(user):
     """
     Check if user is eligible for a refund
@@ -134,6 +137,7 @@ def handle_check_refund_eligibility(user):
         return create_response(500, {'error': 'Failed to check refund eligibility'})
 
 
+@require_role('photographer')
 def handle_request_refund(user, body):
     """
     Request a refund
@@ -246,6 +250,7 @@ def handle_request_refund(user, body):
         return create_response(500, {'error': 'Failed to process refund'})
 
 
+@require_role('photographer')
 def handle_get_refund_status(user):
     """Get refund status for user"""
     try:

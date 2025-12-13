@@ -14,7 +14,7 @@ from utils.email import (
     send_download_reminder_email
 )
 from handlers.notification_handler import should_send_notification
-from handlers.subscription_handler import get_user_features
+from utils.plan_enforcement import require_plan, require_role
 
 # Email automation queue table
 email_queue_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_EMAIL_QUEUE', 'galerly-email-queue-local'))
@@ -23,19 +23,15 @@ email_queue_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_EMAIL_QUEUE', 
 automation_rules_table = dynamodb.Table(os.environ.get('DYNAMODB_TABLE_AUTOMATION_RULES', 'galerly-automation-rules-local'))
 
 
+@require_plan(feature='email_templates')
+@require_role('photographer')
 def handle_schedule_automated_email(user, body):
     """
     Schedule an automated email to be sent at a specific time
     Pro/Ultimate plan feature
     """
     try:
-        # Check plan
-        features, _, _ = get_user_features(user)
-        if not features.get('email_templates'):
-            return create_response(403, {
-                'error': 'Email automation is available on Pro and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorators
         
         email_type = body.get('email_type')  # 'selection_reminder', 'download_reminder', 'custom'
         gallery_id = body.get('gallery_id')
@@ -347,6 +343,8 @@ def handle_setup_gallery_automation(user, body):
         return create_response(500, {'error': 'Failed to setup automation'})
 
 
+@require_plan(feature='email_templates')
+@require_role('photographer')
 def handle_cancel_scheduled_email(user, email_id):
     """Cancel a scheduled email"""
     try:
@@ -629,3 +627,90 @@ def handle_delete_automation_rule(user, rule_id):
     except Exception as e:
         print(f"Error deleting automation rule: {str(e)}")
         return create_response(500, {'error': 'Failed to delete automation rule'})
+
+
+@require_plan(feature='email_automation')
+def handle_get_automation_templates(user):
+    """
+    Get pre-built email automation templates
+    Returns ready-to-use workflow templates for common scenarios
+    """
+    try:
+        # Plan enforcement handled by decorator
+        
+        from utils.email_automation_templates import get_automation_templates, get_templates_by_category
+        
+        templates = get_automation_templates()
+        categorized = get_templates_by_category()
+        
+        return create_response(200, {
+            'templates': templates,
+            'by_category': categorized,
+            'count': len(templates)
+        })
+        
+    except Exception as e:
+        print(f"Error getting automation templates: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': 'Failed to get automation templates'})
+
+
+@require_plan(feature='email_automation')
+def handle_apply_automation_template(user, body):
+    """
+    Apply a pre-built template to create a new automation workflow
+    
+    Request body:
+    {
+        "template_id": str,
+        "workflow_name": str (optional - uses template name if not provided),
+        "customize": bool (optional - allow customization before activation)
+    }
+    """
+    try:
+        # Plan enforcement handled by decorator
+        
+        template_id = body.get('template_id')
+        workflow_name = body.get('workflow_name')
+        customize = body.get('customize', False)
+        
+        if not template_id:
+            return create_response(400, {'error': 'template_id required'})
+        
+        from utils.email_automation_templates import get_template_by_id
+        
+        template = get_template_by_id(template_id)
+        if not template:
+            return create_response(404, {'error': 'Template not found'})
+        
+        # Create workflow from template
+        import uuid
+        workflow_id = str(uuid.uuid4())
+        
+        workflow = {
+            'id': workflow_id,
+            'user_id': user['id'],
+            'name': workflow_name or template['name'],
+            'description': template['description'],
+            'template_id': template_id,
+            'active': not customize,  # Active immediately unless customizing
+            'steps': template['steps'],
+            'created_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z',
+            'updated_at': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+        }
+        
+        # Save to database
+        onboarding_workflows_table.put_item(Item=workflow)
+        
+        return create_response(200, {
+            'success': True,
+            'workflow': workflow,
+            'message': f'Workflow "{workflow["name"]}" created from template'
+        })
+        
+    except Exception as e:
+        print(f"Error applying automation template: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': 'Failed to apply template'})

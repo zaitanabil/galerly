@@ -8,6 +8,10 @@ from utils.config import galleries_table, photos_table
 from utils.response import create_response
 from boto3.dynamodb.conditions import Key
 
+# Embed iframe configuration from environment
+EMBED_IFRAME_WIDTH = os.environ.get('EMBED_IFRAME_WIDTH', '100%')  # Default full width
+EMBED_IFRAME_HEIGHT = int(os.environ.get('EMBED_IFRAME_HEIGHT_PX', '600'))  # Default 600px height
+
 def handle_get_gallery_share_info(gallery_id, user=None):
     """Get gallery share information including share URL and embed code"""
     try:
@@ -66,8 +70,8 @@ def handle_get_gallery_share_info(gallery_id, user=None):
         safe_share_url = html.escape(share_url)
         embed_code = f'''<iframe 
     src="{safe_share_url}" 
-    width="100%" 
-    height="600" 
+    width="{EMBED_IFRAME_WIDTH}" 
+    height="{EMBED_IFRAME_HEIGHT}" 
     frameborder="0" 
     allowfullscreen>
 </iframe>'''

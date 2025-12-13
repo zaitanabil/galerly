@@ -13,6 +13,7 @@ from handlers.subscription_handler import enforce_gallery_limit
 from utils.email import send_gallery_shared_email
 from utils.gallery_layouts import get_layout, get_all_layouts, get_layouts_by_category, get_layout_categories, validate_layout_photos
 from utils.gallery_layouts import get_all_layouts, get_layout, get_layouts_by_category, get_layout_categories
+from utils.plan_enforcement import require_role
 
 def enrich_photos_with_any_favorites(photos, gallery, photographer_email=None):
     """Add is_favorite field and favorites_count to photos - TRUE if ANY client (or photographer) favorited it"""
@@ -69,6 +70,7 @@ def enrich_photos_with_any_favorites(photos, gallery, photographer_email=None):
             photo['favorites_count'] = 0
         return photos
 
+@require_role('photographer')
 def handle_list_galleries(user, query_params=None):
     """List all galleries for THIS USER ONLY with optional search and filters"""
     try:
@@ -144,12 +146,11 @@ def handle_list_galleries(user, query_params=None):
         print(f"Error listing galleries: {str(e)}")
         return create_response(200, {'galleries': [], 'total': 0})
 
+@require_role('photographer')
 def handle_create_gallery(user, body):
     """Create new gallery for THIS USER - PHOTOGRAPHERS ONLY"""
     
-    # Check if user is a photographer
-    if user.get('role') != 'photographer':
-        return create_response(403, {'error': 'Only photographers can create galleries'})
+    # Role check handled by @require_role decorator
     
     # Enforce subscription limits
     allowed, error_message = enforce_gallery_limit(user)
@@ -447,6 +448,7 @@ def handle_get_gallery(gallery_id, user=None, query_params=None):
         print(f"Error getting gallery: {str(e)}")
         return create_response(404, {'error': 'Gallery not found'})
 
+@require_role('photographer')
 def handle_update_gallery(gallery_id, user, body):
     """Update gallery - VERIFY USER OWNERSHIP"""
     try:
@@ -594,6 +596,7 @@ def handle_update_gallery(gallery_id, user, body):
         print(f"Error updating gallery: {str(e)}")
         return create_response(500, {'error': 'Failed to update gallery'})
 
+@require_role('photographer')
 def handle_duplicate_gallery(gallery_id, user, body):
     """Duplicate/clone an existing gallery - VERIFY USER OWNERSHIP"""
     try:
@@ -696,6 +699,7 @@ def handle_duplicate_gallery(gallery_id, user, body):
         traceback.print_exc()
         return create_response(500, {'error': 'Failed to duplicate gallery'})
 
+@require_role('photographer')
 def handle_archive_gallery(gallery_id, user, archive=True):
     """Archive or unarchive a gallery - VERIFY USER OWNERSHIP"""
     try:
@@ -725,6 +729,7 @@ def handle_archive_gallery(gallery_id, user, archive=True):
         print(f"Error archiving gallery: {str(e)}")
         return create_response(500, {'error': f'Failed to {"archive" if archive else "unarchive"} gallery'})
 
+@require_role('photographer')
 def handle_delete_gallery(gallery_id, user):
     """Delete gallery - VERIFY USER OWNERSHIP"""
     try:
@@ -764,23 +769,17 @@ def handle_delete_gallery(gallery_id, user):
         print(f"Error deleting gallery: {str(e)}")
         return create_response(500, {'error': 'Failed to delete gallery'})
 
+@require_plan(feature='raw_vault')
+@require_role('photographer')
 def handle_archive_originals(gallery_id, user):
     """
     Move original files (RAWs) to Glacier Vault
     Ultimate Plan Feature
     """
     try:
-        # 1. Check Plan
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-
-        if not features.get('raw_vault'):
-             return create_response(403, {
-                 'error': 'RAW Vault Archival is available on the Ultimate plan.',
-                 'upgrade_required': True
-             })
+        # Plan check handled by @require_plan decorator
         
-        # 2. Get Gallery Photos
+        # Get Gallery Photos
         photos_response = photos_table.query(
             IndexName='GalleryIdIndex',
             KeyConditionExpression=Key('gallery_id').eq(gallery_id)

@@ -8,6 +8,9 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime
 
+# SMTP timeout configuration from environment (30s is standard)
+SMTP_TIMEOUT = int(os.environ.get('SMTP_TIMEOUT_SECONDS', '30'))
+
 def get_required_env(key):
     """Get required environment variable or raise error"""
     value = os.environ.get(key)
@@ -131,7 +134,7 @@ def send_email(to_email=None, template_name=None, template_vars=None, user_id=No
         
         # Connect to SMTP server and send
         print(f"🔌 Connecting to {SMTP_HOST}:{SMTP_PORT}...")
-        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=30) as server:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
             print(f"Starting TLS...")
             server.starttls()  # Upgrade to encrypted connection
             print(f"Authenticating as {SMTP_USER}...")

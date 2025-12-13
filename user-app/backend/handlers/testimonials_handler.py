@@ -10,6 +10,7 @@ from boto3.dynamodb.conditions import Key, Attr
 from utils.config import dynamodb
 from utils.response import create_response
 from handlers.subscription_handler import get_user_features
+from utils.plan_enforcement import require_plan, require_role
 import os
 
 # Initialize DynamoDB
@@ -131,6 +132,8 @@ def handle_create_testimonial(photographer_id, body):
         return create_response(500, {'error': 'Failed to submit testimonial'})
 
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_update_testimonial(user, testimonial_id, body):
     """
     Update testimonial (photographer only - for approval/featuring) - Pro+ feature
@@ -142,14 +145,7 @@ def handle_update_testimonial(user, testimonial_id, body):
     }
     """
     try:
-        # Check plan permission - Pro+ feature
-        features, _, _ = get_user_features(user)
-        if not features.get('client_invoicing'):  # Testimonials bundled with CRM (Pro+)
-            return create_response(403, {
-                'error': 'Testimonial management is a Pro feature',
-                'upgrade_required': True,
-                'required_feature': 'client_invoicing'
-            })
+        # Plan check handled by @require_plan decorator
         
         # Get existing testimonial
         response = testimonials_table.get_item(Key={'id': testimonial_id})
@@ -199,16 +195,12 @@ def handle_update_testimonial(user, testimonial_id, body):
         return create_response(500, {'error': 'Failed to update testimonial'})
 
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_delete_testimonial(user, testimonial_id):
     """Delete a testimonial (photographer only) - Pro+ feature"""
     try:
-        # Check plan permission
-        features, _, _ = get_user_features(user)
-        if not features.get('client_invoicing'):
-            return create_response(403, {
-                'error': 'Testimonial management is a Pro feature',
-                'upgrade_required': True
-            })
+        # Plan check handled by @require_plan decorator
         
         # Get testimonial to verify ownership
         response = testimonials_table.get_item(Key={'id': testimonial_id})
@@ -232,6 +224,8 @@ def handle_delete_testimonial(user, testimonial_id):
         return create_response(500, {'error': 'Failed to delete testimonial'})
 
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_request_testimonial(user, body):
     """
     Send testimonial request email to a client - Pro+ feature
@@ -245,13 +239,7 @@ def handle_request_testimonial(user, body):
     }
     """
     try:
-        # Check plan permission
-        features, _, _ = get_user_features(user)
-        if not features.get('client_invoicing'):
-            return create_response(403, {
-                'error': 'Testimonial requests are a Pro feature',
-                'upgrade_required': True
-            })
+        # Plan check handled by @require_plan decorator
         
         from utils.email import send_email
         

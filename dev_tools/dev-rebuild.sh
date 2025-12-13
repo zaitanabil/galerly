@@ -34,19 +34,12 @@ echo "🛑 Step 2: Stopping all services..."
 echo "====================================="
 docker-compose -f docker/docker-compose.localstack.yml down
 
-# Kill admin app processes
-echo "🔧 Stopping admin app processes..."
-lsof -ti:5002 | xargs kill -9 2>/dev/null || true
-lsof -ti:3001 | xargs kill -9 2>/dev/null || true
-
 # Step 3: Clean up old build artifacts
 echo ""
 echo "🧹 Step 3: Cleaning build artifacts..."
 echo "======================================="
 rm -rf user-app/frontend/dist
 rm -rf user-app/frontend/.vite
-rm -rf admin-app/frontend/dist
-rm -rf admin-app/frontend/.vite
 
 # Step 4: Remove old Docker images
 echo ""

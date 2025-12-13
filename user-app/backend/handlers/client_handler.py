@@ -8,8 +8,8 @@ from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table, photos_table, users_table, client_favorites_table
 from utils.response import create_response
 
-# Token expiration: 7 days (Swiss law compliance)
-TOKEN_EXPIRATION_DAYS = 7
+# Configuration from environment
+TOKEN_EXPIRATION_DAYS = int(os.environ.get('CLIENT_TOKEN_EXPIRATION_DAYS', '7'))  # Default 7 days (Swiss law compliance)
 
 def is_token_expired(token_created_at):
     """Check if a share token is expired (older than 7 days)"""

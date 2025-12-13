@@ -10,26 +10,11 @@ from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table, users_table, seo_settings_table, photos_table
 from utils.response import create_response
+from utils.plan_enforcement import require_plan
 
 
+@require_plan(feature='seo_tools')
 def handle_generate_sitemap(user):
-    """
-    Generate XML sitemap for photographer's portfolio
-    Pro/Ultimate plan feature
-    
-    Returns XML sitemap content
-    """
-    try:
-        # Check plan permission
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('seo_tools'):
-            return create_response(403, {
-                'error': 'SEO Tools are available on Pro and Ultimate plans.',
-                'upgrade_required': True,
-                'required_feature': 'seo_tools'
-            })
         
         # Get user's public galleries
         galleries_response = galleries_table.query(
@@ -78,6 +63,7 @@ def handle_generate_sitemap(user):
         return create_response(500, {'error': 'Failed to generate sitemap'})
 
 
+@require_plan(feature='seo_tools')
 def handle_generate_schema_markup(user):
     """
     Generate Schema.org JSON-LD markup for photographer portfolio
@@ -86,15 +72,7 @@ def handle_generate_schema_markup(user):
     Returns JSON-LD structured data
     """
     try:
-        # Check plan permission
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('seo_tools'):
-            return create_response(403, {
-                'error': 'SEO Tools are available on Pro and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorator
         
         # Get portfolio settings
         from handlers.portfolio_handler import handle_get_portfolio_settings
@@ -168,31 +146,14 @@ def handle_generate_schema_markup(user):
         return create_response(500, {'error': 'Failed to generate schema markup'})
 
 
+@require_plan(feature='seo_tools')
 def handle_validate_og_tags(user, body):
     """
     Validate Open Graph tags for portfolio/gallery
     Pro/Ultimate plan feature
-    
-    Request body:
-    {
-        "url": "https://galerly.com/portfolio/user-id",
-        "og_title": "...",
-        "og_description": "...",
-        "og_image": "..."
-    }
-    
-    Returns validation results and recommendations
     """
     try:
-        # Check plan permission
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('seo_tools'):
-            return create_response(403, {
-                'error': 'SEO Tools are available on Pro and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorator
         
         url = body.get('url', '')
         og_title = body.get('og_title', '')
@@ -281,20 +242,13 @@ def handle_validate_og_tags(user, body):
         return create_response(500, {'error': 'Failed to validate OG tags'})
 
 
+@require_plan(feature='seo_tools')
 def handle_get_seo_settings(user):
     """
     Get saved SEO settings for user
     """
     try:
-        # Check plan permission
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('seo_tools'):
-            return create_response(403, {
-                'error': 'SEO Tools are available on Pro and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorator
         
         response = seo_settings_table.get_item(Key={'user_id': user['id']})
         
@@ -314,20 +268,13 @@ def handle_get_seo_settings(user):
         return create_response(500, {'error': 'Failed to get SEO settings'})
 
 
+@require_plan(feature='seo_tools')
 def handle_update_seo_settings(user, body):
     """
     Update SEO settings
     """
     try:
-        # Check plan permission
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('seo_tools'):
-            return create_response(403, {
-                'error': 'SEO Tools are available on Pro and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorator
         
         settings = {
             'user_id': user['id'],
@@ -374,39 +321,15 @@ def handle_get_robots_txt(user):
         }
 
 
+@require_plan(feature='seo_tools')
 def handle_one_click_optimize(user):
     """
     One-click SEO optimization
     Automatically configures optimal SEO settings for user's portfolio
     Pro/Ultimate plan feature
-    
-    Actions performed:
-    - Enable canonical URLs
-    - Enable structured data
-    - Configure optimal robots.txt
-    - Generate XML sitemap
-    - Generate Schema.org markup
-    - Validate Open Graph tags
-    
-    Returns:
-        dict: {
-            'success': bool,
-            'optimizations': list of applied optimizations,
-            'score_improvement': int,
-            'message': str
-        }
     """
     try:
-        # Check plan permission
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('seo_tools'):
-            return create_response(403, {
-                'error': 'SEO Tools are available on Pro and Ultimate plans.',
-                'upgrade_required': True,
-                'required_feature': 'seo_tools'
-            })
+        # Plan enforcement handled by decorator
         
         optimizations = []
         
@@ -479,16 +402,50 @@ def handle_one_click_optimize(user):
         
         score_improvement = len(optimizations) * 10  # Rough estimate
         
+        # Generate sitemap URL for easy submission
+        frontend_url = os.environ.get('FRONTEND_URL', 'https://galerly.com')
+        sitemap_url = f"{frontend_url}/api/v1/seo/sitemap?user_id={user['id']}"
+        
+        # Calculate estimated SEO score (0-100)
+        seo_score = min(100, 50 + (len(optimizations) * 8))
+        
         return create_response(200, {
             'success': True,
             'optimizations': optimizations,
             'count': len(optimizations),
             'score_improvement': score_improvement,
+            'seo_score': seo_score,
+            'sitemap_url': sitemap_url,
             'message': f'Portfolio optimized! Applied {len(optimizations)} optimization(s).',
             'next_steps': [
-                'Submit your sitemap to Google Search Console',
-                'Monitor your search rankings over the next few weeks',
-                'Create quality content regularly for best results'
+                {
+                    'action': 'Submit sitemap to Google Search Console',
+                    'url': 'https://search.google.com/search-console',
+                    'description': f'Add your sitemap: {sitemap_url}'
+                },
+                {
+                    'action': 'Submit sitemap to Bing Webmaster Tools',
+                    'url': 'https://www.bing.com/webmasters',
+                    'description': 'Register your site and submit sitemap'
+                },
+                {
+                    'action': 'Monitor search rankings',
+                    'description': 'Check your progress over the next 2-4 weeks'
+                },
+                {
+                    'action': 'Add alt text to images',
+                    'description': 'Describe your photos for better image search results'
+                },
+                {
+                    'action': 'Update meta descriptions',
+                    'description': 'Write compelling descriptions for each gallery'
+                }
+            ],
+            'tips': [
+                'Update your portfolio regularly to keep content fresh',
+                'Use descriptive filenames for photos before uploading',
+                'Share your portfolio on social media to build backlinks',
+                'Ensure your custom domain has proper SSL certificate'
             ]
         })
         
@@ -499,25 +456,15 @@ def handle_one_click_optimize(user):
         return create_response(500, {'error': 'Failed to optimize SEO settings'})
 
 
+@require_plan(feature='seo_tools')
 def handle_get_seo_score(user):
     """
     Calculate comprehensive SEO score for user's portfolio
     
-    Returns overall score and category breakdowns:
-    - Metadata (title, description, keywords)
-    - Content (images with alt text, quality content)
-    - Technical (sitemap, robots.txt, schema markup)
-    - Performance (page load, image optimization)
+    Returns overall score and category breakdowns
     """
     try:
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('seo_tools'):
-            return create_response(403, {
-                'error': 'SEO Tools are available on Pro and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorator
         
         # Get user data
         user_response = users_table.get_item(Key={'email': user['email']})
@@ -621,19 +568,13 @@ def handle_get_seo_score(user):
         return create_response(500, {'error': 'Failed to calculate SEO score'})
 
 
+@require_plan(feature='seo_tools')
 def handle_get_seo_issues(user):
     """
     Identify SEO issues and provide actionable recommendations
     """
     try:
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('seo_tools'):
-            return create_response(403, {
-                'error': 'SEO Tools are available on Pro and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorator
         
         issues = []
         
@@ -778,6 +719,7 @@ def handle_get_seo_issues(user):
         return create_response(500, {'error': 'Failed to get SEO issues'})
 
 
+@require_plan(feature='seo_tools')
 def handle_fix_seo_issue(user, body):
     """
     Automatically fix a specific SEO issue
@@ -839,3 +781,45 @@ def handle_get_seo_settings(user):
     except Exception as e:
         print(f"Error getting SEO settings: {str(e)}")
         return create_response(500, {'error': 'Failed to get SEO settings'})
+
+
+@require_plan(feature='seo_tools')
+def handle_get_seo_recommendations(user):
+    """
+    Get comprehensive SEO analysis with actionable recommendations
+    Pro/Ultimate plan feature
+    """
+    try:
+        # Plan enforcement handled by decorator
+        
+        # Get user data
+        user_response = users_table.get_item(Key={'email': user['email']})
+        if 'Item' not in user_response:
+            return create_response(404, {'error': 'User not found'})
+        
+        user_data = user_response['Item']
+        
+        # Get galleries
+        galleries_response = galleries_table.query(
+            KeyConditionExpression=Key('user_id').eq(user['id'])
+        )
+        galleries = galleries_response.get('Items', [])
+        
+        # Use recommendations engine
+        from utils.seo_recommendations import analyze_seo_completeness, generate_seo_checklist
+        
+        analysis = analyze_seo_completeness(user_data, galleries)
+        checklist = generate_seo_checklist(user_data)
+        
+        return create_response(200, {
+            'analysis': analysis,
+            'checklist': checklist,
+            'user_id': user['id'],
+            'timestamp': datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + 'Z'
+        })
+        
+    except Exception as e:
+        print(f"Error getting SEO recommendations: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return create_response(500, {'error': 'Failed to get SEO recommendations'})

@@ -8,14 +8,15 @@ import base64
 from datetime import datetime, timezone
 from utils.config import users_table, s3_client, S3_BUCKET
 from utils.response import create_response
+from utils.plan_enforcement import require_plan, require_role
 from handlers.subscription_handler import get_user_features
 
 
+@require_plan(feature='remove_branding')
 def handle_get_branding_settings(user):
     """Get white label branding settings for user"""
     try:
-        # Check plan access
-        features, _, _ = get_user_features(user)
+        # Plan enforcement handled by decorator
         
         # Get user data
         response = users_table.get_item(Key={'email': user['email']})
@@ -24,6 +25,9 @@ def handle_get_branding_settings(user):
             return create_response(404, {'error': 'User not found'})
         
         user_data = response['Item']
+        
+        # Check feature access for response
+        features, _, _ = get_user_features(user)
         
         # Extract branding settings
         branding_settings = {
@@ -53,18 +57,12 @@ def handle_get_branding_settings(user):
         return create_response(500, {'error': 'Failed to load branding settings'})
 
 
+@require_plan(feature='remove_branding')
+@require_role('photographer')
 def handle_update_branding_settings(user, body):
     """Update white label branding settings"""
     try:
-        # Check plan access
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('remove_branding'):
-            return create_response(403, {
-                'error': 'White label branding is available on Plus, Pro, and Ultimate plans.',
-                'upgrade_required': True,
-                'required_feature': 'remove_branding'
-            })
+        # Plan enforcement handled by decorators
         
         # Build update expression
         update_expressions = []
@@ -145,17 +143,12 @@ def handle_update_branding_settings(user, body):
         return create_response(500, {'error': 'Failed to update branding settings'})
 
 
+@require_plan(feature='remove_branding')
+@require_role('photographer')
 def handle_upload_branding_logo(user, body):
     """Upload custom branding logo"""
     try:
-        # Check plan access
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('remove_branding'):
-            return create_response(403, {
-                'error': 'Custom branding is available on Plus, Pro, and Ultimate plans.',
-                'upgrade_required': True
-            })
+        # Plan enforcement handled by decorators
         
         file_data = body.get('file_data')
         filename = body.get('filename', 'logo.png')

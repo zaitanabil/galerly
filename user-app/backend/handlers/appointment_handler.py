@@ -7,7 +7,10 @@ from boto3.dynamodb.conditions import Key
 from utils.config import appointments_table, users_table
 from utils.response import create_response
 from utils.email import send_email
+from utils.plan_enforcement import require_plan, require_role
 
+@require_plan(feature='scheduler')
+@require_role('photographer')
 def handle_list_appointments(user, query_params=None):
     """List appointments for user"""
     try:
@@ -23,18 +26,12 @@ def handle_list_appointments(user, query_params=None):
         print(f"Error listing appointments: {str(e)}")
         return create_response(500, {'error': 'Failed to list appointments'})
 
+@require_plan(feature='scheduler')
+@require_role('photographer')
 def handle_create_appointment(user, body):
     """Create new appointment (Photographer initiated - Auto Confirmed)"""
     try:
-        # Check Plan Limits
-        from handlers.subscription_handler import get_user_features
-        features, _, _ = get_user_features(user)
-        
-        if not features.get('scheduler'):
-             return create_response(403, {
-                 'error': 'Scheduling is available on the Ultimate plan.',
-                 'upgrade_required': True
-             })
+        # Plan and role enforcement handled by decorators
 
         # Validate
         required = ['client_email', 'start_time', 'end_time', 'service_type']
@@ -216,6 +213,8 @@ def handle_create_public_appointment_request(photographer_id, body):
         print(f"Error creating appointment request: {str(e)}")
         return create_response(500, {'error': 'Failed to submit booking request'})
 
+@require_plan(feature='scheduler')
+@require_role('photographer')
 def handle_update_appointment(appt_id, user, body):
     """Update appointment"""
     try:
@@ -262,6 +261,8 @@ def handle_update_appointment(appt_id, user, body):
         print(f"Error updating appointment: {str(e)}")
         return create_response(500, {'error': 'Failed to update appointment'})
 
+@require_plan(feature='scheduler')
+@require_role('photographer')
 def handle_delete_appointment(appt_id, user):
     """Delete/Cancel appointment"""
     try:

@@ -2,6 +2,10 @@
 Content Security Policy Configuration
 Implements CSP headers for frontend security
 """
+import os
+
+# HSTS configuration from environment (31536000 seconds = 1 year is standard)
+HSTS_MAX_AGE = int(os.environ.get('HSTS_MAX_AGE_SECONDS', '31536000'))
 
 # Content Security Policy directives
 CSP_DIRECTIVES = {
@@ -70,9 +74,9 @@ def generate_csp_header(environment='production'):
     
     return '; '.join(csp_parts)
 
-# Security headers configuration
+# Security headers configuration using environment variables
 SECURITY_HEADERS = {
-    'Strict-Transport-Security': 'max-age=31536000; includeSubDomains; preload',
+    'Strict-Transport-Security': f'max-age={HSTS_MAX_AGE}; includeSubDomains; preload',
     'X-Content-Type-Options': 'nosniff',
     'X-Frame-Options': 'DENY',
     'X-XSS-Protection': '1; mode=block',

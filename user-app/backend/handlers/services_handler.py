@@ -10,6 +10,7 @@ from boto3.dynamodb.conditions import Key
 from utils.config import dynamodb
 from utils.response import create_response
 from handlers.subscription_handler import get_user_features
+from utils.plan_enforcement import require_plan, require_role
 import os
 
 # Initialize DynamoDB
@@ -46,6 +47,8 @@ def handle_list_services(photographer_id, is_public=True):
         return create_response(500, {'error': 'Failed to retrieve services'})
 
 
+@require_plan(feature='client_invoicing')  # Services bundled with invoicing (Pro+)
+@require_role('photographer')
 def handle_create_service(user, body):
     """
     Create a new service offering - Pro+ feature
@@ -65,14 +68,7 @@ def handle_create_service(user, body):
     }
     """
     try:
-        # Check plan permission - Pro+ feature
-        features, _, _ = get_user_features(user)
-        if not features.get('client_invoicing'):  # Services bundled with invoicing (Pro+)
-            return create_response(403, {
-                'error': 'Services management is a Pro feature',
-                'upgrade_required': True,
-                'required_feature': 'client_invoicing'
-            })
+        # Plan check handled by @require_plan decorator
         
         # Validate required fields
         name = body.get('name', '').strip()
@@ -115,6 +111,8 @@ def handle_create_service(user, body):
         return create_response(500, {'error': 'Failed to create service'})
 
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_update_service(user, service_id, body):
     """
     Update service details - Pro+ feature
@@ -122,13 +120,7 @@ def handle_update_service(user, service_id, body):
     PUT /api/v1/services/{id}
     """
     try:
-        # Check plan permission
-        features, _, _ = get_user_features(user)
-        if not features.get('client_invoicing'):
-            return create_response(403, {
-                'error': 'Services management is a Pro feature',
-                'upgrade_required': True
-            })
+        # Plan check handled by @require_plan decorator
         
         # Get existing service
         response = services_table.get_item(Key={'id': service_id})
@@ -192,16 +184,12 @@ def handle_update_service(user, service_id, body):
         return create_response(500, {'error': 'Failed to update service'})
 
 
+@require_plan(feature='client_invoicing')
+@require_role('photographer')
 def handle_delete_service(user, service_id):
     """Delete a service - Pro+ feature"""
     try:
-        # Check plan permission
-        features, _, _ = get_user_features(user)
-        if not features.get('client_invoicing'):
-            return create_response(403, {
-                'error': 'Services management is a Pro feature',
-                'upgrade_required': True
-            })
+        # Plan check handled by @require_plan decorator
         
         # Get service to verify ownership
         response = services_table.get_item(Key={'id': service_id})

@@ -5,7 +5,8 @@ import { useGalleries, useDashboardStats, useBulkDownloads } from '../hooks/useA
 import { useActiveViewers } from '../hooks/useViewerTracking';
 import {
   Plus, Image as ImageIcon, Users, Settings, LogOut,
-  Download, Eye, HardDrive, ChevronRight, Activity, Zap
+  Download, Eye, HardDrive, ChevronRight, Activity, Zap,
+  FileText, Mail, Briefcase, Calendar, Archive, Workflow, Search
 } from 'lucide-react';
 import { getImageUrl } from '../config/env';
 import RealtimeGlobe from '../components/RealtimeGlobe';
@@ -175,6 +176,138 @@ export default function DashboardPage() {
                 totalActive={activeViewersData?.total_active || 0}
                 byCountry={activeViewersData?.by_country || {}}
               />
+            </div>
+
+            {/* Feature Discovery Section */}
+            <div className="animate-fade-in-up mb-8" style={delay(4)}>
+              <h2 className="text-xl font-medium text-[#1D1D1F] mb-4">Discover Features</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <Link
+                  to="/crm"
+                  className="group bg-white border border-gray-200 rounded-2xl p-4 hover:border-blue-500 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-blue-50 rounded-xl group-hover:bg-blue-100 transition-colors">
+                      <Users className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full font-medium">Pro</span>
+                  </div>
+                  <h3 className="text-sm font-medium text-[#1D1D1F] mb-1">Lead Management</h3>
+                  <p className="text-xs text-[#1D1D1F]/60">Track potential clients</p>
+                </Link>
+
+                <Link
+                  to="/scheduler"
+                  className="group bg-white border border-gray-200 rounded-2xl p-4 hover:border-purple-500 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-purple-50 rounded-xl group-hover:bg-purple-100 transition-colors">
+                      <Calendar className="w-4 h-4 text-purple-600" />
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full font-medium">Ultimate</span>
+                  </div>
+                  <h3 className="text-sm font-medium text-[#1D1D1F] mb-1">Scheduler</h3>
+                  <p className="text-xs text-[#1D1D1F]/60">Client bookings</p>
+                </Link>
+
+                <Link
+                  to="/services"
+                  className="group bg-white border border-gray-200 rounded-2xl p-4 hover:border-green-500 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-green-50 rounded-xl group-hover:bg-green-100 transition-colors">
+                      <Briefcase className="w-4 h-4 text-green-600" />
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full font-medium">All</span>
+                  </div>
+                  <h3 className="text-sm font-medium text-[#1D1D1F] mb-1">Services</h3>
+                  <p className="text-xs text-[#1D1D1F]/60">Showcase pricing</p>
+                </Link>
+
+                <Link
+                  to="/invoices"
+                  className="group bg-white border border-gray-200 rounded-2xl p-4 hover:border-pink-500 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-pink-50 rounded-xl group-hover:bg-pink-100 transition-colors">
+                      <FileText className="w-4 h-4 text-pink-600" />
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full font-medium">Pro</span>
+                  </div>
+                  <h3 className="text-sm font-medium text-[#1D1D1F] mb-1">Invoicing</h3>
+                  <p className="text-xs text-[#1D1D1F]/60">Professional invoices</p>
+                </Link>
+
+                <Link
+                  to="/email-templates"
+                  className="group bg-white border border-gray-200 rounded-2xl p-4 hover:border-indigo-500 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-indigo-50 rounded-xl group-hover:bg-indigo-100 transition-colors">
+                      <Mail className="w-4 h-4 text-indigo-600" />
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full font-medium">Pro</span>
+                  </div>
+                  <h3 className="text-sm font-medium text-[#1D1D1F] mb-1">Email Templates</h3>
+                  <p className="text-xs text-[#1D1D1F]/60">Custom emails</p>
+                </Link>
+
+                <Link
+                  to="/onboarding"
+                  className="group bg-white border border-gray-200 rounded-2xl p-4 hover:border-teal-500 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-teal-50 rounded-xl group-hover:bg-teal-100 transition-colors">
+                      <Workflow className="w-4 h-4 text-teal-600" />
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full font-medium">Pro</span>
+                  </div>
+                  <h3 className="text-sm font-medium text-[#1D1D1F] mb-1">Onboarding</h3>
+                  <p className="text-xs text-[#1D1D1F]/60">Client workflows</p>
+                </Link>
+
+                <Link
+                  to="/raw-vault"
+                  className="group bg-white border border-gray-200 rounded-2xl p-4 hover:border-orange-500 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-orange-50 rounded-xl group-hover:bg-orange-100 transition-colors">
+                      <Archive className="w-4 h-4 text-orange-600" />
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full font-medium">Ultimate</span>
+                  </div>
+                  <h3 className="text-sm font-medium text-[#1D1D1F] mb-1">RAW Vault</h3>
+                  <p className="text-xs text-[#1D1D1F]/60">Glacier archive</p>
+                </Link>
+
+                <Link
+                  to="/seo/dashboard"
+                  className="group bg-white border border-gray-200 rounded-2xl p-4 hover:border-cyan-500 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-cyan-50 rounded-xl group-hover:bg-cyan-100 transition-colors">
+                      <Search className="w-4 h-4 text-cyan-600" />
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full font-medium">Pro</span>
+                  </div>
+                  <h3 className="text-sm font-medium text-[#1D1D1F] mb-1">SEO Tools</h3>
+                  <p className="text-xs text-[#1D1D1F]/60">Optimize visibility</p>
+                </Link>
+
+                <Link
+                  to="/watermark"
+                  className="group bg-white border border-gray-200 rounded-2xl p-4 hover:border-amber-500 hover:shadow-md transition-all"
+                >
+                  <div className="flex items-center gap-3 mb-2">
+                    <div className="p-2 bg-amber-50 rounded-xl group-hover:bg-amber-100 transition-colors">
+                      <ImageIcon className="w-4 h-4 text-amber-600" />
+                    </div>
+                    <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">Plus</span>
+                  </div>
+                  <h3 className="text-sm font-medium text-[#1D1D1F] mb-1">Watermarking</h3>
+                  <p className="text-xs text-[#1D1D1F]/60">Protect photos</p>
+                </Link>
+              </div>
             </div>
 
             {/* Recent Galleries */}

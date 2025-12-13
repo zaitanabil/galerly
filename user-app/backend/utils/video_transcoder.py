@@ -8,6 +8,12 @@ import json
 from pathlib import Path
 from utils.video_utils import extract_video_duration
 
+# Video transcoding timeout configuration from environment
+# Quick operations (metadata, thumbnail) - 30 seconds default
+VIDEO_QUICK_TIMEOUT = int(os.environ.get('VIDEO_QUICK_TIMEOUT_SECONDS', '30'))
+# Heavy operations (transcoding, HLS generation) - 600 seconds (10 minutes) default
+VIDEO_TRANSCODE_TIMEOUT = int(os.environ.get('VIDEO_TRANSCODE_TIMEOUT_SECONDS', '600'))
+
 
 def generate_video_thumbnail(video_path, output_path, timestamp='00:00:03'):
     """
@@ -32,7 +38,7 @@ def generate_video_thumbnail(video_path, output_path, timestamp='00:00:03'):
             output_path
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=VIDEO_QUICK_TIMEOUT)
         
         if result.returncode == 0 and os.path.exists(output_path):
             print(f"Generated video thumbnail: {output_path}")
@@ -123,7 +129,7 @@ def transcode_to_h264(input_path, output_path, quality='high'):
         ]
         
         print(f"Transcoding to {quality} quality...")
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=600)  # 10min timeout
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=VIDEO_TRANSCODE_TIMEOUT)  # Heavy transcoding operation
         
         if result.returncode == 0 and os.path.exists(output_path):
             file_size_mb = os.path.getsize(output_path) / (1024 * 1024)
@@ -287,7 +293,7 @@ def extract_video_metadata(video_path):
             video_path
         ]
         
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=VIDEO_QUICK_TIMEOUT)
         
         if result.returncode != 0:
             return {

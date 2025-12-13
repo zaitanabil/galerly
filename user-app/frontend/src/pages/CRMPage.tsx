@@ -1,420 +1,264 @@
-// CRM Dashboard Page - Lead and client management
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import {
-  Users, TrendingUp, Star, Clock, Phone, Mail, Calendar,
-  Tag, Settings, LogOut, Filter, Search, Plus, MessageSquare
-} from 'lucide-react';
-import Footer from '../components/Footer';
+import { Users, Mail, Phone, Calendar, DollarSign, TrendingUp, Filter, Search, ChevronRight } from 'lucide-react';
 import { api } from '../utils/api';
-import { useAuth } from '../contexts/AuthContext';
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 
 interface Lead {
   id: string;
   name: string;
   email: string;
-  phone: string;
-  service_type: string;
-  budget: string;
-  timeline: string;
-  message: string;
-  status: string;
-  quality: 'hot' | 'warm' | 'cold' | 'low';
+  phone?: string;
+  service_type?: string;
+  budget?: string;
+  timeline?: string;
+  message?: string;
+  source: string;
   score: number;
+  quality: string;
+  status: string;
   created_at: string;
-  last_contacted_at?: string;
-  follow_up_count: number;
-  tags: string[];
-  notes: Array<{ id: string; text: string; created_at: string }>;
-}
-
-interface Stats {
-  total: number;
-  hot: number;
-  warm: number;
-  new: number;
+  last_contacted?: string;
 }
 
 export default function CRMPage() {
-  const { logout } = useAuth();
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [stats, setStats] = useState<Stats>({ total: 0, hot: 0, warm: 0, new: 0 });
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<string>('all');
-  const [search, setSearch] = useState('');
-  const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
+  const [filterStatus, setFilterStatus] = useState('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    fetchLeads();
-  }, [filter]);
+    loadLeads();
+  }, []);
 
-  const fetchLeads = async () => {
-    setLoading(true);
+  const loadLeads = async () => {
     try {
-      // Build query string for filters
-      const queryParams = new URLSearchParams({ limit: '100' });
-      
-      if (filter !== 'all') {
-        if (['hot', 'warm', 'cold'].includes(filter)) {
-          queryParams.append('quality', filter);
-        } else {
-          queryParams.append('status', filter);
-        }
-      }
-
-      const response = await api.get(`/crm/leads?${queryParams.toString()}`);
-      if (response.success) {
+      const response = await api.get('/leads');
+      if (response.success && response.data) {
         setLeads(response.data.leads || []);
-        setStats(response.data.stats || { total: 0, hot: 0, warm: 0, new: 0 });
       }
-    } catch (error) {
-      console.error('Error fetching leads:', error);
-      toast.error('Failed to load leads');
+    } catch (error: any) {
+      if (error.response?.status === 403) {
+        toast.error('Lead Management is a Pro/Ultimate feature');
+      } else {
+        toast.error('Failed to load leads');
+      }
     } finally {
       setLoading(false);
     }
   };
 
-  const getQualityColor = (quality: string) => {
-    switch (quality) {
-      case 'hot': return 'bg-red-100 text-red-700 border-red-200';
-      case 'warm': return 'bg-orange-100 text-orange-700 border-orange-200';
-      case 'cold': return 'bg-blue-100 text-blue-700 border-blue-200';
-      default: return 'bg-gray-100 text-gray-700 border-gray-200';
-    }
+  const getQualityBadge = (quality: string, score: number) => {
+    const badges = {
+      hot: { color: 'bg-red-100 text-red-800 border-red-200', label: 'Hot' },
+      warm: { color: 'bg-orange-100 text-orange-800 border-orange-200', label: 'Warm' },
+      cold: { color: 'bg-blue-100 text-blue-800 border-blue-200', label: 'Cold' }
+    };
+    
+    const badge = badges[quality as keyof typeof badges] || badges.cold;
+    
+    return (
+      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border ${badge.color}`}>
+        {badge.label} ({score})
+      </span>
+    );
   };
 
-  const filteredLeads = leads.filter(lead =>
-    search === '' ||
-    lead.name.toLowerCase().includes(search.toLowerCase()) ||
-    lead.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const getStatusBadge = (status: string) => {
+    const badges = {
+      new: { color: 'bg-purple-100 text-purple-800', label: 'New' },
+      contacted: { color: 'bg-blue-100 text-blue-800', label: 'Contacted' },
+      qualified: { color: 'bg-green-100 text-green-800', label: 'Qualified' },
+      converted: { color: 'bg-emerald-100 text-emerald-800', label: 'Converted' },
+      lost: { color: 'bg-gray-100 text-gray-800', label: 'Lost' }
+    };
+    
+    const badge = badges[status as keyof typeof badges] || badges.new;
+    
+    return (
+      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${badge.color}`}>
+        {badge.label}
+      </span>
+    );
+  };
+
+  const filteredLeads = leads.filter(lead => {
+    if (filterStatus !== 'all' && lead.status !== filterStatus) return false;
+    if (searchQuery && !lead.name.toLowerCase().includes(searchQuery.toLowerCase()) &&
+        !lead.email.toLowerCase().includes(searchQuery.toLowerCase())) return false;
+    return true;
+  });
+
+  // Statistics
+  const stats = {
+    total: leads.length,
+    hot: leads.filter(l => l.quality === 'hot').length,
+    warm: leads.filter(l => l.quality === 'warm').length,
+    converted: leads.filter(l => l.status === 'converted').length
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-[#F5F5F7] flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-12 h-12 border-4 border-[#0066CC] border-t-transparent rounded-full animate-spin mb-4 mx-auto" />
+          <p className="text-[#1D1D1F]/60">Loading leads...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[#F5F5F7]">
       {/* Header */}
-      <header className="bg-white/80 backdrop-blur-xl border-b border-gray-200 sticky top-0 z-50">
+      <header className="bg-white border-b border-gray-200">
         <div className="max-w-[1600px] mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-8">
             <Link to="/" className="text-xl font-serif font-bold text-[#1D1D1F]">
               Galerly
             </Link>
             <nav className="hidden md:flex items-center gap-6">
-              <Link to="/dashboard" className="text-sm font-medium text-[#1D1D1F]/60 hover:text-[#1D1D1F] transition-colors">Dashboard</Link>
-              <Link to="/crm" className="text-sm font-medium text-[#1D1D1F]">CRM</Link>
-              <Link to="/analytics" className="text-sm font-medium text-[#1D1D1F]/60 hover:text-[#1D1D1F] transition-colors">Analytics</Link>
-              <Link to="/billing" className="text-sm font-medium text-[#1D1D1F]/60 hover:text-[#1D1D1F] transition-colors">Billing</Link>
+              <Link to="/dashboard" className="text-sm font-medium text-[#1D1D1F]/60 hover:text-[#1D1D1F]">Dashboard</Link>
+              <Link to="/leads" className="text-sm font-medium text-[#1D1D1F]">CRM</Link>
+              <Link to="/analytics" className="text-sm font-medium text-[#1D1D1F]/60 hover:text-[#1D1D1F]">Analytics</Link>
             </nav>
-          </div>
-          <div className="flex items-center gap-4">
-            <Link to="/settings" className="p-2 text-[#1D1D1F]/60 hover:text-[#1D1D1F] hover:bg-black/5 rounded-full transition-all">
-              <Settings className="w-5 h-5" />
-            </Link>
-            <button onClick={logout} className="p-2 text-[#1D1D1F]/60 hover:text-red-600 hover:bg-red-50 rounded-full transition-all">
-              <LogOut className="w-5 h-5" />
-            </button>
           </div>
         </div>
       </header>
 
       <main className="max-w-[1600px] mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
+        {/* Page Header */}
+        <div className="flex items-center justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-medium text-[#1D1D1F] mb-2">CRM & Leads</h1>
-            <p className="text-[#1D1D1F]/60">Manage your client pipeline and relationships</p>
+            <h1 className="text-3xl font-medium text-[#1D1D1F] mb-2">Lead Management</h1>
+            <p className="text-[#1D1D1F]/60">Manage and track your photography leads</p>
           </div>
-          <button className="flex items-center gap-2 px-5 py-2.5 bg-[#1D1D1F] text-white rounded-full hover:bg-black transition-all">
-            <Plus className="w-4 h-4" />
-            Request Testimonial
-          </button>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-          <div className="glass-panel p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center">
-                <Users className="w-5 h-5 text-[#0066CC]" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {[
+            { label: 'Total Leads', value: stats.total, icon: Users, color: 'text-blue-600', bg: 'bg-blue-50' },
+            { label: 'Hot Leads', value: stats.hot, icon: TrendingUp, color: 'text-red-600', bg: 'bg-red-50' },
+            { label: 'Warm Leads', value: stats.warm, icon: Mail, color: 'text-orange-600', bg: 'bg-orange-50' },
+            { label: 'Converted', value: stats.converted, icon: DollarSign, color: 'text-green-600', bg: 'bg-green-50' }
+          ].map((stat, i) => (
+            <div key={i} className="bg-white p-5 rounded-3xl border border-gray-200 shadow-sm">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-semibold text-[#1D1D1F]/40 uppercase tracking-wider">{stat.label}</span>
+                <div className={`p-2 rounded-xl ${stat.bg}`}>
+                  <stat.icon className={`w-4 h-4 ${stat.color}`} />
+                </div>
               </div>
-              <span className="text-2xl font-bold text-[#1D1D1F]">{stats.total}</span>
+              <div className="text-3xl font-medium text-[#1D1D1F]">{stat.value}</div>
             </div>
-            <p className="text-sm text-[#1D1D1F]/60">Total Leads</p>
-          </div>
-
-          <div className="glass-panel p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center">
-                <TrendingUp className="w-5 h-5 text-red-600" />
-              </div>
-              <span className="text-2xl font-bold text-[#1D1D1F]">{stats.hot}</span>
-            </div>
-            <p className="text-sm text-[#1D1D1F]/60">Hot Leads</p>
-          </div>
-
-          <div className="glass-panel p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 bg-orange-50 rounded-xl flex items-center justify-center">
-                <Star className="w-5 h-5 text-orange-600" />
-              </div>
-              <span className="text-2xl font-bold text-[#1D1D1F]">{stats.warm}</span>
-            </div>
-            <p className="text-sm text-[#1D1D1F]/60">Warm Leads</p>
-          </div>
-
-          <div className="glass-panel p-6">
-            <div className="flex items-center justify-between mb-4">
-              <div className="w-10 h-10 bg-green-50 rounded-xl flex items-center justify-center">
-                <Clock className="w-5 h-5 text-green-600" />
-              </div>
-              <span className="text-2xl font-bold text-[#1D1D1F]">{stats.new}</span>
-            </div>
-            <p className="text-sm text-[#1D1D1F]/60">New This Week</p>
-          </div>
+          ))}
         </div>
 
-        {/* Filters and Search */}
-        <div className="glass-panel p-4 mb-6">
-          <div className="flex flex-col md:flex-row gap-4">
+        {/* Filters */}
+        <div className="bg-white rounded-3xl border border-gray-200 p-6 mb-6">
+          <div className="flex flex-col sm:flex-row gap-4">
             <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#1D1D1F]/40" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
                 placeholder="Search leads by name or email..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-white/50 border border-gray-200 rounded-xl text-[#1D1D1F] placeholder-[#1D1D1F]/40 focus:outline-none focus:ring-2 focus:ring-[#0066CC]/20"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+            
             <div className="flex items-center gap-2">
-              <Filter className="w-5 h-5 text-[#1D1D1F]/60" />
+              <Filter className="w-5 h-5 text-gray-400" />
               <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="px-4 py-3 bg-white/50 border border-gray-200 rounded-xl text-[#1D1D1F] focus:outline-none focus:ring-2 focus:ring-[#0066CC]/20"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                <option value="all">All Leads</option>
-                <option value="hot">Hot</option>
-                <option value="warm">Warm</option>
-                <option value="cold">Cold</option>
+                <option value="all">All Status</option>
                 <option value="new">New</option>
                 <option value="contacted">Contacted</option>
                 <option value="qualified">Qualified</option>
+                <option value="converted">Converted</option>
+                <option value="lost">Lost</option>
               </select>
             </div>
           </div>
         </div>
 
-        {/* Leads Table */}
-        <div className="glass-panel p-6">
-          {loading ? (
-            <div className="text-center py-12">
-              <div className="w-12 h-12 border-4 border-[#0066CC] border-t-transparent rounded-full animate-spin mx-auto mb-4" />
-              <p className="text-sm text-[#1D1D1F]/60">Loading leads...</p>
-            </div>
-          ) : filteredLeads.length === 0 ? (
-            <div className="text-center py-12">
-              <Users className="w-12 h-12 text-[#1D1D1F]/20 mx-auto mb-4" />
-              <p className="text-[#1D1D1F]/60">No leads found</p>
+        {/* Leads List */}
+        <div className="bg-white rounded-3xl border border-gray-200 overflow-hidden">
+          {filteredLeads.length === 0 ? (
+            <div className="p-12 text-center">
+              <Users className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-xl font-medium text-[#1D1D1F] mb-2">No leads yet</h3>
+              <p className="text-[#1D1D1F]/60">Leads from your portfolio and booking requests will appear here.</p>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#1D1D1F]/40 uppercase">Lead</th>
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#1D1D1F]/40 uppercase">Service</th>
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#1D1D1F]/40 uppercase">Quality</th>
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#1D1D1F]/40 uppercase">Score</th>
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#1D1D1F]/40 uppercase">Status</th>
-                    <th className="text-left py-3 px-4 text-xs font-semibold text-[#1D1D1F]/40 uppercase">Created</th>
-                    <th className="text-right py-3 px-4 text-xs font-semibold text-[#1D1D1F]/40 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredLeads.map((lead) => (
-                    <tr
-                      key={lead.id}
-                      className="border-b border-gray-50 hover:bg-blue-50/20 transition-colors cursor-pointer"
-                      onClick={() => setSelectedLead(lead)}
-                    >
-                      <td className="py-4 px-4">
-                        <div>
-                          <p className="font-medium text-[#1D1D1F]">{lead.name}</p>
-                          <div className="flex items-center gap-3 mt-1">
-                            <span className="text-xs text-[#1D1D1F]/60 flex items-center gap-1">
-                              <Mail className="w-3 h-3" />
-                              {lead.email}
-                            </span>
-                            {lead.phone && (
-                              <span className="text-xs text-[#1D1D1F]/60 flex items-center gap-1">
-                                <Phone className="w-3 h-3" />
-                                {lead.phone}
-                              </span>
-                            )}
-                          </div>
+            <div className="divide-y divide-gray-100">
+              {filteredLeads.map((lead) => (
+                <div key={lead.id} className="p-6 hover:bg-gray-50 transition-colors group">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <h3 className="text-lg font-medium text-[#1D1D1F] group-hover:text-[#0066CC]">
+                          {lead.name}
+                        </h3>
+                        {getQualityBadge(lead.quality, lead.score)}
+                        {getStatusBadge(lead.status)}
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm text-[#1D1D1F]/60 mb-3">
+                        <div className="flex items-center gap-1.5">
+                          <Mail className="w-4 h-4" />
+                          {lead.email}
                         </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className="text-sm text-[#1D1D1F] capitalize">{lead.service_type || 'Not specified'}</span>
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getQualityColor(lead.quality)}`}>
-                          {lead.quality.toUpperCase()}
-                        </span>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-2">
-                          <div className="w-16 bg-gray-100 rounded-full h-2">
-                            <div
-                              className="h-full rounded-full bg-gradient-to-r from-blue-500 to-purple-600"
-                              style={{ width: `${lead.score}%` }}
-                            />
+                        {lead.phone && (
+                          <div className="flex items-center gap-1.5">
+                            <Phone className="w-4 h-4" />
+                            {lead.phone}
                           </div>
-                          <span className="text-xs font-medium text-[#1D1D1F]">{lead.score}</span>
-                        </div>
-                      </td>
-                      <td className="py-4 px-4">
-                        <span className="text-sm text-[#1D1D1F] capitalize">{lead.status}</span>
-                      </td>
-                      <td className="py-4 px-4">
-                        <div className="flex items-center gap-1 text-xs text-[#1D1D1F]/60">
-                          <Calendar className="w-3 h-3" />
+                        )}
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="w-4 h-4" />
                           {new Date(lead.created_at).toLocaleDateString()}
                         </div>
-                      </td>
-                      <td className="py-4 px-4 text-right">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedLead(lead);
-                          }}
-                          className="text-[#0066CC] hover:text-[#0052A3] text-sm font-medium"
-                        >
-                          View
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                      </div>
+                      
+                      {lead.message && (
+                        <p className="text-sm text-[#1D1D1F]/70 line-clamp-2 mb-3">{lead.message}</p>
+                      )}
+                      
+                      <div className="flex gap-2">
+                        {lead.service_type && (
+                          <span className="px-2.5 py-1 bg-gray-100 text-gray-700 rounded-full text-xs font-medium">
+                            {lead.service_type}
+                          </span>
+                        )}
+                        {lead.budget && (
+                          <span className="px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-xs font-medium">
+                            {lead.budget}
+                          </span>
+                        )}
+                        {lead.timeline && (
+                          <span className="px-2.5 py-1 bg-blue-50 text-blue-700 rounded-full text-xs font-medium">
+                            {lead.timeline}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <button className="p-2 text-[#1D1D1F]/40 hover:text-[#0066CC] hover:bg-blue-50 rounded-full transition-all opacity-0 group-hover:opacity-100">
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
-
-        {/* Lead Detail Modal */}
-        {selectedLead && (
-          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6 border-b border-gray-100">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <h2 className="text-2xl font-medium text-[#1D1D1F]">{selectedLead.name}</h2>
-                    <div className="flex items-center gap-4 mt-2">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium border ${getQualityColor(selectedLead.quality)}`}>
-                        {selectedLead.quality.toUpperCase()} - Score: {selectedLead.score}/100
-                      </span>
-                      <span className="text-sm text-[#1D1D1F]/60 capitalize">{selectedLead.status}</span>
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setSelectedLead(null)}
-                    className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-
-              <div className="p-6 space-y-6">
-                <div>
-                  <h3 className="text-sm font-semibold text-[#1D1D1F]/40 uppercase mb-3">Contact Information</h3>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <Mail className="w-4 h-4 text-[#1D1D1F]/40" />
-                      <span className="text-[#1D1D1F]">{selectedLead.email}</span>
-                    </div>
-                    {selectedLead.phone && (
-                      <div className="flex items-center gap-2">
-                        <Phone className="w-4 h-4 text-[#1D1D1F]/40" />
-                        <span className="text-[#1D1D1F]">{selectedLead.phone}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold text-[#1D1D1F]/40 uppercase mb-3">Inquiry Details</h3>
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-[#1D1D1F]/60 mb-1">Service Type</p>
-                      <p className="text-[#1D1D1F] capitalize">{selectedLead.service_type || 'Not specified'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[#1D1D1F]/60 mb-1">Budget</p>
-                      <p className="text-[#1D1D1F]">{selectedLead.budget || 'Not specified'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[#1D1D1F]/60 mb-1">Timeline</p>
-                      <p className="text-[#1D1D1F] capitalize">{selectedLead.timeline?.replace('_', ' ') || 'Not specified'}</p>
-                    </div>
-                    <div>
-                      <p className="text-[#1D1D1F]/60 mb-1">Follow-ups</p>
-                      <p className="text-[#1D1D1F]">{selectedLead.follow_up_count || 0} sent</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <h3 className="text-sm font-semibold text-[#1D1D1F]/40 uppercase mb-3">Message</h3>
-                  <p className="text-[#1D1D1F] leading-relaxed">{selectedLead.message}</p>
-                </div>
-
-                {selectedLead.tags && selectedLead.tags.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#1D1D1F]/40 uppercase mb-3">Tags</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {selectedLead.tags.map((tag, idx) => (
-                        <span key={idx} className="inline-flex items-center gap-1 px-3 py-1 bg-blue-50 text-blue-700 rounded-full text-xs">
-                          <Tag className="w-3 h-3" />
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {selectedLead.notes && selectedLead.notes.length > 0 && (
-                  <div>
-                    <h3 className="text-sm font-semibold text-[#1D1D1F]/40 uppercase mb-3">Notes</h3>
-                    <div className="space-y-3">
-                      {selectedLead.notes.map((note) => (
-                        <div key={note.id} className="bg-gray-50 rounded-xl p-4">
-                          <p className="text-[#1D1D1F] text-sm mb-2">{note.text}</p>
-                          <p className="text-xs text-[#1D1D1F]/40">{new Date(note.created_at).toLocaleString()}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <div className="flex gap-3 pt-4 border-t border-gray-100">
-                  <button className="flex-1 py-3 bg-[#0066CC] text-white rounded-xl font-medium hover:bg-[#0052A3] transition-all flex items-center justify-center gap-2">
-                    <MessageSquare className="w-4 h-4" />
-                    Send Follow-up
-                  </button>
-                  <button className="px-6 py-3 border border-gray-200 text-[#1D1D1F] rounded-xl font-medium hover:bg-gray-50 transition-all">
-                    Add Note
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </main>
-
-      <Footer />
     </div>
   );
 }

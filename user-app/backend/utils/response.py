@@ -4,6 +4,10 @@ API Response utilities
 import json
 import os
 
+# Security configuration from environment
+# HSTS max-age in seconds (31536000 = 1 year is standard)
+HSTS_MAX_AGE = int(os.environ.get('HSTS_MAX_AGE_SECONDS', '31536000'))
+
 def get_required_env(key):
     """Get required environment variable or raise error"""
     value = os.environ.get(key)
@@ -34,7 +38,7 @@ def create_response(status_code, body, headers=None):
         'X-Content-Type-Options': 'nosniff',  # Prevent MIME-type sniffing
         'X-Frame-Options': 'DENY',  # Prevent clickjacking
         'X-XSS-Protection': '1; mode=block',  # Enable XSS filter
-        'Strict-Transport-Security': 'max-age=31536000; includeSubDomains'  # Force HTTPS
+        'Strict-Transport-Security': f'max-age={HSTS_MAX_AGE}; includeSubDomains'  # Force HTTPS
     }
     
     # Merge custom headers if provided
