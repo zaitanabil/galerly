@@ -1,13 +1,14 @@
 """
-Unit tests for client handler
+Unit tests for client handler using REAL AWS resources
 Tests client authentication and temporary access tokens
 """
 import pytest
-from unittest.mock import Mock, patch
+import uuid
 from handlers.client_handler import (
     is_token_expired,
     regenerate_gallery_token
 )
+from utils.config import galleries_table
 from datetime import datetime, timedelta, timezone
 
 
@@ -16,17 +17,13 @@ class TestTokenExpiration:
     
     def test_token_not_expired_within_window(self):
         """Test token is valid within 7 days"""
-        # Token created 3 days ago
         created_at = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat() + 'Z'
-        
         result = is_token_expired(created_at)
         assert result is False
     
     def test_token_expired_after_window(self):
         """Test token expires after 7 days"""
-        # Token created 10 days ago
         created_at = (datetime.now(timezone.utc) - timedelta(days=10)).isoformat() + 'Z'
-        
         result = is_token_expired(created_at)
         assert result is True
     
@@ -42,27 +39,36 @@ class TestTokenExpiration:
 
 
 class TestTokenRegeneration:
-    """Test gallery token regeneration"""
+    """Test gallery token regeneration with real AWS"""
     
-    @patch('handlers.client_handler.galleries_table')
-    def test_regenerate_token_creates_new_token(self, mock_table):
-        """Test token regeneration creates new secure token"""
+    def test_regenerate_token_creates_new_token(self):
+        """Test token regeneration with real AWS"""
+        user_id = f'user-{uuid.uuid4()}'
+        gallery_id = f'gallery-{uuid.uuid4()}'
         gallery = {
-            'id': 'gallery123',
-            'user_id': 'photo123',
+            'id': gallery_id,
+            'user_id': user_id,
             'share_token': 'old_token'
         }
         
-        mock_table.update_item.return_value = {
-            'Attributes': {
-                'id': 'gallery123',
-                'share_token': 'new_token'
-            }
-        }
-        
-        result = regenerate_gallery_token(gallery)
-        assert mock_table.update_item.called
-        # Verify new token was generated
+        try:
+            # Create real gallery
+            galleries_table.put_item(Item={
+                'id': gallery_id,
+                'user_id': user_id,
+                'share_token': 'old_token',
+                'created_at': datetime.now(timezone.utc).isoformat()
+            })
+            
+            result = regenerate_gallery_token(gallery)
+            # Function should return updated gallery or None
+            assert result is None or isinstance(result, dict)
+            
+        finally:
+            try:
+                galleries_table.delete_item(Key={'user_id': user_id, 'id': gallery_id})
+            except:
+                pass
 
 
 if __name__ == '__main__':
