@@ -265,11 +265,11 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
           
-      # Backup current Lambda version before deployment
+      # Backup current Lambda version before deployment (skip if function doesn't exist)
       - name: Backup current Lambda version
         id: backup-lambda
         run: |
-          CURRENT_VERSION=$(aws lambda get-function --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} --query 'Configuration.Version' --output text)
+          CURRENT_VERSION=$(aws lambda get-function --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} --query 'Configuration.Version' --output text 2>/dev/null || echo "none")
           echo "previous-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
           echo "Backed up Lambda version: $CURRENT_VERSION"
           
@@ -300,10 +300,26 @@ jobs:
       - name: Deploy Lambda function
         id: deploy-lambda
         run: |
-          aws lambda update-function-code \
-            --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
-            --zip-file fileb://lambda-package/deployment-${{ github.sha }}.zip \
-            --publish
+          # Check if Lambda function exists
+          if aws lambda get-function --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} 2>/dev/null; then
+            # Update existing function
+            aws lambda update-function-code \
+              --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
+              --zip-file fileb://lambda-package/deployment-${{ github.sha }}.zip \
+              --publish
+          else
+            # Create new function
+            aws lambda create-function \
+              --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
+              --runtime python3.11 \
+              --role arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/galerly-lambda-execution-role \
+              --handler api.handler \
+              --zip-file fileb://lambda-package/deployment-${{ github.sha }}.zip \
+              --timeout 30 \
+              --memory-size 512 \
+              --publish \
+              --environment "Variables={$(env | grep -E '^(DYNAMODB_|S3_|AWS_REGION|STRIPE_|JWT_|SMTP_|FROM_|FRONTEND_URL|API_)' | tr '\n' ',' | sed 's/,$//')}"
+          fi
           
           NEW_VERSION=$(aws lambda get-function --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} --query 'Configuration.Version' --output text)
           echo "deployed=true" >> $GITHUB_OUTPUT
