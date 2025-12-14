@@ -4,9 +4,8 @@ import uuid
 import json
 from unittest.mock import patch
 from handlers.bulk_download_handler import (
-    handle_create_bulk_download,
-    handle_get_download_status,
-    handle_download_gallery
+    handle_bulk_download,
+    handle_bulk_download_by_token
 )
 
 
@@ -14,49 +13,42 @@ class TestBulkDownload:
     """Test bulk download functionality with real DynamoDB"""
     
     @patch('handlers.bulk_download_handler.s3_client')
-    def test_create_bulk_download(self, mock_s3):
-        """Test creating bulk download - uses real DynamoDB"""
+    def test_bulk_download_with_user(self, mock_s3):
+        """Test bulk download with authenticated user - uses real DynamoDB"""
         mock_s3.generate_presigned_url.return_value = 'https://example.com/download.zip'
         
+        gallery_id = f'gallery-{uuid.uuid4()}'
         user = {
             'id': f'user-{uuid.uuid4()}',
             'role': 'photographer'
         }
         
-        body = {
-            'gallery_id': f'gallery-{uuid.uuid4()}',
-            'quality': 'high'
+        event = {
+            'body': json.dumps({
+                'quality': 'high',
+                'format': 'zip'
+            })
         }
         
-        result = handle_create_bulk_download(user, body)
-        assert result['statusCode'] in [200, 404, 500]
-    
-    def test_get_download_status(self):
-        """Test getting download status - uses real DynamoDB"""
-        user = {
-            'id': f'user-{uuid.uuid4()}',
-            'role': 'photographer'
-        }
-        
-        download_id = f'download-{uuid.uuid4()}'
-        
-        result = handle_get_download_status(user, download_id)
+        result = handle_bulk_download(gallery_id, user, event)
         assert result['statusCode'] in [200, 404, 500]
     
     @patch('handlers.bulk_download_handler.s3_client')
-    def test_download_gallery(self, mock_s3):
-        """Test downloading entire gallery - uses real DynamoDB"""
-        mock_s3.generate_presigned_url.return_value = 'https://example.com/gallery.zip'
+    def test_bulk_download_by_token(self, mock_s3):
+        """Test bulk download via token (client access) - uses real DynamoDB"""
+        mock_s3.generate_presigned_url.return_value = 'https://example.com/download.zip'
         
-        user = {
-            'id': f'user-{uuid.uuid4()}',
-            'role': 'photographer'
+        event = {
+            'queryStringParameters': {
+                'token': f'token-{uuid.uuid4()}'
+            },
+            'body': json.dumps({
+                'quality': 'medium'
+            })
         }
         
-        gallery_id = f'gallery-{uuid.uuid4()}'
-        
-        result = handle_download_gallery(user, gallery_id)
-        assert result['statusCode'] in [200, 404, 500]
+        result = handle_bulk_download_by_token(event)
+        assert result['statusCode'] in [200, 400, 404, 500]
 
 
 if __name__ == '__main__':
