@@ -264,9 +264,8 @@ class TestEdgeCases:
         assert 'error' in body
     
     @patch("handlers.subscription_handler.get_user_features")
-    @patch('handlers.branding_handler.users_table')
     @patch('handlers.branding_handler.s3_client')
-    def test_upload_logo_handles_s3_errors(self, mock_s3, mock_table, mock_get_features, mock_user):
+    def test_upload_logo_handles_s3_errors(self, mock_s3, mock_get_features, mock_user):
         """Test handling of S3 upload errors"""
         mock_get_features.return_value = ({'remove_branding': True}, None, None)
         mock_s3.put_object.side_effect = Exception('S3 error')
