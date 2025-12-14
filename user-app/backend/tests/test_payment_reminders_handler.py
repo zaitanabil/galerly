@@ -16,7 +16,7 @@ class TestReminderScheduleCreation:
     
     @patch('handlers.payment_reminders_handler.payment_reminders_table')
     @patch('handlers.payment_reminders_handler.invoices_table')
-    @patch('handlers.payment_reminders_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     def test_create_reminder_schedule_success(self, mock_features, mock_invoices, mock_reminders):
         """Test successful reminder schedule creation"""
         user = {'id': 'user123', 'role': 'photographer', 'email': 'user@test.com'}
@@ -49,10 +49,10 @@ class TestReminderScheduleCreation:
         assert mock_reminders.put_item.called
     
     @patch('handlers.payment_reminders_handler.invoices_table')
-    @patch('handlers.payment_reminders_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     def test_create_reminder_verifies_invoice_ownership(self, mock_features, mock_invoices):
         """Test reminder creation verifies invoice ownership"""
-        user = {'id': 'user123', 'role': 'photographer'}
+        user = {'id': 'user123', 'role': 'photographer', 'plan': 'pro'}
         invoice_id = 'inv123'
         body = {'reminder_days': [7, 3, 1]}
         
@@ -71,10 +71,10 @@ class TestReminderScheduleCreation:
         assert result['statusCode'] == 403
     
     @patch('handlers.payment_reminders_handler.invoices_table')
-    @patch('handlers.payment_reminders_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     def test_create_reminder_validates_paid_invoice(self, mock_features, mock_invoices):
         """Test reminder creation blocked for already paid invoices"""
-        user = {'id': 'user123', 'role': 'photographer'}
+        user = {'id': 'user123', 'role': 'photographer', 'plan': 'pro'}
         invoice_id = 'inv123'
         body = {'reminder_days': [7]}
         
@@ -98,10 +98,10 @@ class TestReminderScheduleCancellation:
     """Test payment reminder schedule cancellation"""
     
     @patch('handlers.payment_reminders_handler.payment_reminders_table')
-    @patch('handlers.payment_reminders_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     def test_cancel_reminder_schedule_success(self, mock_features, mock_reminders):
         """Test successful reminder schedule cancellation"""
-        user = {'id': 'user123', 'role': 'photographer'}
+        user = {'id': 'user123', 'role': 'photographer', 'plan': 'pro'}
         invoice_id = 'inv123'
         
         mock_features.return_value = ({'client_invoicing': True}, {}, 'pro')
@@ -125,10 +125,10 @@ class TestReminderScheduleCancellation:
         assert mock_reminders.update_item.called
     
     @patch('handlers.payment_reminders_handler.payment_reminders_table')
-    @patch('handlers.payment_reminders_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     def test_cancel_reminder_handles_no_schedules(self, mock_features, mock_reminders):
         """Test cancellation handles case with no active schedules"""
-        user = {'id': 'user123', 'role': 'photographer'}
+        user = {'id': 'user123', 'role': 'photographer', 'plan': 'pro'}
         invoice_id = 'inv123'
         
         mock_features.return_value = ({'client_invoicing': True}, {}, 'pro')
@@ -144,10 +144,10 @@ class TestReminderConfiguration:
     """Test reminder configuration validation"""
     
     @patch('handlers.payment_reminders_handler.invoices_table')
-    @patch('handlers.payment_reminders_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     def test_validates_reminder_days_format(self, mock_features, mock_invoices):
         """Test validation of reminder_days array"""
-        user = {'id': 'user123', 'role': 'photographer'}
+        user = {'id': 'user123', 'role': 'photographer', 'plan': 'pro'}
         invoice_id = 'inv123'
         body = {
             'reminder_days': 'invalid'  # Should be array
