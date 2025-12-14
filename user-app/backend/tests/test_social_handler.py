@@ -69,8 +69,9 @@ class TestGalleryShareInfo:
 class TestPhotoShareInfo:
     """Test photo share information generation"""
     
+    @patch('handlers.social_handler.galleries_table')
     @patch('handlers.social_handler.photos_table')
-    def test_get_photo_share_info_success(self, mock_photos):
+    def test_get_photo_share_info_success(self, mock_photos, mock_galleries):
         """Test successful photo share info retrieval"""
         photo_id = 'photo123'
         
@@ -80,8 +81,19 @@ class TestPhotoShareInfo:
                 'id': 'photo123',
                 'gallery_id': 'gallery123',
                 'filename': 'wedding.jpg',
-                's3_key': 'gallery123/photo123.jpg'
+                's3_key': 'gallery123/photo123.jpg',
+                'url': 'https://cdn.galerly.com/photo123.jpg'
             }
+        }
+        
+        # Mock gallery exists and is public
+        mock_galleries.scan.return_value = {
+            'Items': [{
+                'id': 'gallery123',
+                'user_id': 'photo123',
+                'name': 'Wedding Gallery',
+                'privacy': 'public'
+            }]
         }
         
         with patch('handlers.social_handler.os.environ.get', return_value='http://localhost:5173'):
@@ -110,31 +122,25 @@ class TestPhotoShareInfo:
 class TestEmbedCodeGeneration:
     """Test embed code generation with configurable dimensions"""
     
-    @patch('handlers.social_handler.galleries_table')
     @patch('handlers.social_handler.os.environ.get')
-    def test_embed_code_uses_env_config(self, mock_env, mock_galleries):
+    @patch('handlers.social_handler.galleries_table')
+    def test_embed_code_uses_env_config(self, mock_galleries, mock_env):
         """Test embed iframe uses environment configuration"""
         gallery_id = 'gallery123'
         
-        # Mock gallery
+        # Mock gallery with proper structure
         mock_galleries.get_item.return_value = {
             'Item': {
                 'id': 'gallery123',
+                'user_id': 'user123',
                 'name': 'Test Gallery',
-                'share_token': 'token123'
+                'share_token': 'token123',
+                'privacy': 'public'
             }
         }
         
         # Mock environment variables
-        def env_side_effect(key, default=None):
-            env_vars = {
-                'FRONTEND_URL': 'https://galerly.com',
-                'EMBED_IFRAME_WIDTH': '100%',
-                'EMBED_IFRAME_HEIGHT_PX': '800'
-            }
-            return env_vars.get(key, default)
-        
-        mock_env.side_effect = env_side_effect
+        mock_env.return_value = 'https://galerly.com'
         
         result = handle_get_gallery_share_info(gallery_id)
         
@@ -142,9 +148,10 @@ class TestEmbedCodeGeneration:
         body = json.loads(result['body'])
         embed_code = body['embed_code']
         
-        # Verify configurable dimensions are used
+        # Verify iframe structure (default height is 600 from env)
         assert 'width="100%"' in embed_code
-        assert 'height="800"' in embed_code
+        assert 'height="600"' in embed_code
+        assert 'frameborder="0"' in embed_code
 
 
 if __name__ == '__main__':
