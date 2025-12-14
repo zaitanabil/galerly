@@ -6,7 +6,6 @@ import json
 import uuid
 from unittest.mock import patch
 from handlers.leads_handler import handle_capture_lead, handle_list_leads, calculate_lead_score
-from utils.config import leads_table, users_table
 
 
 class TestLeadsHandler:
@@ -28,13 +27,18 @@ class TestLeadsHandler:
         """Test capturing a lead with real AWS"""
         photographer_id = f'photographer-{uuid.uuid4()}'
         
-        try:
-            users_table.put_item(Item={
-                'id': photographer_id,
-                'email': f'{photographer_id}@example.com',
-                'name': 'Test Photographer',
-                'role': 'photographer'
-            })
+        with patch('handlers.leads_handler.users_table') as mock_users, \
+             patch('handlers.leads_handler.leads_table') as mock_leads, \
+             patch('handlers.leads_handler.send_email'), \
+             patch('handlers.leads_handler.handle_trigger_followup_sequence'):
+            
+            mock_users.get_item.return_value = {
+                'Item': {
+                    'id': photographer_id,
+                    'email': f'{photographer_id}@example.com',
+                    'name': 'Test Photographer'
+                }
+            }
             
             body = {
                 'name': 'Test Client',
@@ -43,16 +47,8 @@ class TestLeadsHandler:
                 'source': 'portfolio_contact'
             }
             
-            with patch('handlers.leads_handler.send_email'), \
-                 patch('handlers.leads_handler.handle_trigger_followup_sequence'):
-                response = handle_capture_lead(photographer_id, body)
-                assert response['statusCode'] in [200, 400, 404, 500]
-            
-        finally:
-            try:
-                users_table.delete_item(Key={'email': f'{photographer_id}@example.com'})
-            except:
-                pass
+            response = handle_capture_lead(photographer_id, body)
+            assert response['statusCode'] in [200, 400, 404, 500]
     
     def test_list_leads(self):
         """Test listing leads with real AWS"""
@@ -65,8 +61,11 @@ class TestLeadsHandler:
             'plan': 'pro'
         }
         
-        with patch('handlers.subscription_handler.get_user_features') as mock_features:
+        with patch('handlers.subscription_handler.get_user_features') as mock_features, \
+             patch('handlers.leads_handler.leads_table') as mock_leads:
+            
             mock_features.return_value = ({'client_invoicing': True}, 'pro', 'Pro Plan')
+            mock_leads.query.return_value = {'Items': []}
             
             response = handle_list_leads(user, query_params={})
             assert response['statusCode'] in [200, 403, 500]
