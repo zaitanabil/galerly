@@ -52,7 +52,7 @@ class TestReminderScheduleCreation:
     @patch('handlers.subscription_handler.get_user_features')
     def test_create_reminder_verifies_invoice_ownership(self, mock_features, mock_invoices):
         """Test reminder creation verifies invoice ownership"""
-        user = {'id': 'user123', 'role': 'photographer', 'plan': 'pro'}
+        user = {'id': 'user123', 'email': 'user@test.com', 'role': 'photographer', 'plan': 'pro'}
         invoice_id = 'inv123'
         body = {'reminder_days': [7, 3, 1]}
         
@@ -74,7 +74,7 @@ class TestReminderScheduleCreation:
     @patch('handlers.subscription_handler.get_user_features')
     def test_create_reminder_validates_paid_invoice(self, mock_features, mock_invoices):
         """Test reminder creation blocked for already paid invoices"""
-        user = {'id': 'user123', 'role': 'photographer', 'plan': 'pro'}
+        user = {'id': 'user123', 'email': 'user@test.com', 'role': 'photographer', 'plan': 'pro'}
         invoice_id = 'inv123'
         body = {'reminder_days': [7]}
         
@@ -101,7 +101,7 @@ class TestReminderScheduleCancellation:
     @patch('handlers.subscription_handler.get_user_features')
     def test_cancel_reminder_schedule_success(self, mock_features, mock_reminders):
         """Test successful reminder schedule cancellation"""
-        user = {'id': 'user123', 'role': 'photographer', 'plan': 'pro'}
+        user = {'id': 'user123', 'email': 'user@test.com', 'role': 'photographer', 'plan': 'pro'}
         invoice_id = 'inv123'
         
         mock_features.return_value = ({'client_invoicing': True}, {}, 'pro')
@@ -128,7 +128,7 @@ class TestReminderScheduleCancellation:
     @patch('handlers.subscription_handler.get_user_features')
     def test_cancel_reminder_handles_no_schedules(self, mock_features, mock_reminders):
         """Test cancellation handles case with no active schedules"""
-        user = {'id': 'user123', 'role': 'photographer', 'plan': 'pro'}
+        user = {'id': 'user123', 'email': 'user@test.com', 'role': 'photographer', 'plan': 'pro'}
         invoice_id = 'inv123'
         
         mock_features.return_value = ({'client_invoicing': True}, {}, 'pro')
@@ -147,7 +147,7 @@ class TestReminderConfiguration:
     @patch('handlers.subscription_handler.get_user_features')
     def test_validates_reminder_days_format(self, mock_features, mock_invoices):
         """Test validation of reminder_days array"""
-        user = {'id': 'user123', 'role': 'photographer', 'plan': 'pro'}
+        user = {'id': 'user123', 'email': 'user@test.com', 'role': 'photographer', 'plan': 'pro'}
         invoice_id = 'inv123'
         body = {
             'reminder_days': 'invalid'  # Should be array
