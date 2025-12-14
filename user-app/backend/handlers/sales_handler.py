@@ -529,7 +529,8 @@ def handle_get_download(download_id, customer_email):
 @require_plan(feature='client_invoicing')
 @require_role('photographer')
 def handle_list_sales(user, query_params=None):
-        
+    """List all sales for a photographer with revenue statistics"""
+    try:
         # Query sales
         response = sales_table.query(
             IndexName='PhotographerIdIndex',

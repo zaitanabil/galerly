@@ -15,7 +15,8 @@ from utils.plan_enforcement import require_plan
 
 @require_plan(feature='seo_tools')
 def handle_generate_sitemap(user):
-        
+    """Generate XML sitemap for user's public galleries"""
+    try:
         # Get user's public galleries
         galleries_response = galleries_table.query(
             KeyConditionExpression=Key('user_id').eq(user['id'])
