@@ -16,7 +16,7 @@ class TestDecoratorIntegration:
         """Test invoice creation succeeds with Pro plan"""
         from handlers.invoice_handler import handle_create_invoice
         
-        user = {'id': 'user123', 'role': 'photographer', 'plan': 'pro'}
+        user = {'id': 'user123', 'email': 'user@test.com', 'role': 'photographer', 'plan': 'pro'}
         body = {
             'client_name': 'Test Client',
             'client_email': 'client@test.com',
@@ -37,7 +37,7 @@ class TestDecoratorIntegration:
         """Test RAW vault blocked without Ultimate plan"""
         from handlers.raw_vault_handler import handle_archive_raw_file
         
-        user = {'id': 'user123', 'role': 'photographer', 'plan': 'pro'}
+        user = {'id': 'user123', 'email': 'test@example.com', 'role': 'photographer', 'plan': 'pro'}
         body = {'photo_id': 'photo123', 'filename': 'test.raw'}
         
         # Mock Pro plan without raw_vault feature
@@ -64,7 +64,7 @@ class TestDecoratorIntegration:
         """Test email template management requires Pro plan"""
         from handlers.email_template_handler import handle_save_template  # Changed from handle_create_template
         
-        user = {'id': 'user123', 'role': 'photographer', 'plan': 'starter'}
+        user = {'id': 'user123', 'email': 'test@example.com', 'role': 'photographer', 'plan': 'starter'}
         body = {
             'template_type': 'gallery_shared',
             'subject': 'Welcome!',
@@ -88,7 +88,7 @@ class TestMultipleDecoratorStacking:
         from handlers.testimonials_handler import handle_update_testimonial
         
         # Test with correct plan and role
-        user = {'id': 'photo123', 'role': 'photographer', 'plan': 'pro'}
+        user = {'id': 'photo123', 'email': 'test@example.com', 'role': 'photographer', 'plan': 'pro'}
         testimonial_id = 'test123'
         body = {'approved': True}
         
