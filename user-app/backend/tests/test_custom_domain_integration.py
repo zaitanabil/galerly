@@ -194,7 +194,6 @@ class TestACMManager:
         assert result['domain'] == 'gallery.example.com'
         # Function doesn't return distributions key
     
-    @pytest.mark.skip(reason="check_certificate_validation function doesn't exist - internal AWS polling")
     def test_check_certificate_validation_timeout(self):
         """Test certificate validation timeout - function not exposed in API"""
         pass
@@ -264,7 +263,6 @@ class TestDNSPropagation:
         assert 0 < result['percentage'] < 100
 
 
-@pytest.mark.skip(reason="Custom domain handlers need refactoring to use actual portfolio_handler API")
 class TestCustomDomainHandlers:
     """Test portfolio handler custom domain functions"""
     

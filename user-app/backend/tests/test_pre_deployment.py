@@ -230,7 +230,6 @@ class TestCodeQuality:
 class TestFileStructure:
     """Test that all required files exist"""
     
-    @pytest.mark.skip(reason="Some handlers intentionally don't have dedicated test files (covered in integration tests)")
     def test_all_handlers_have_tests(self):
         """Each handler MUST have a corresponding test file - NO EXCEPTIONS"""
         handlers_dir = Path(__file__).parent.parent / 'handlers'

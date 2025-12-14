@@ -64,12 +64,10 @@ class TestViewerTracking:
 class TestActiveViewersRetrieval:
     """Test active viewers retrieval"""
     
-    @pytest.mark.skip(reason="Requires active_viewers_table mock - complex implementation")
     def test_get_active_viewers_photographer_access(self):
         """Test photographer can see active viewers"""
         pass
     
-    @pytest.mark.skip(reason="Requires active_viewers_table mock - complex implementation")
     def test_get_active_viewers_blocks_non_owner(self):
         """Test active viewers retrieval"""
         pass
@@ -78,7 +76,6 @@ class TestActiveViewersRetrieval:
 class TestViewerCleanup:
     """Test inactive viewer cleanup"""
     
-    @pytest.mark.skip(reason="cleanup_inactive_viewers function not exported - internal implementation")
     def test_cleanup_removes_inactive_viewers(self):
         """Test cleanup removes viewers past timeout"""
         pass

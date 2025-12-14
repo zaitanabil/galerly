@@ -13,7 +13,6 @@ from handlers.gallery_statistics_handler import (
 )
 
 
-@pytest.mark.skip(reason="Requires gallery_views_table and analytics implementation")
 class TestGalleryStatistics:
     """Test gallery statistics functionality"""
     
@@ -369,7 +368,6 @@ class TestGalleryStatisticsMetrics:
         assert score == 100
 
 
-@pytest.mark.skip(reason="Requires gallery_views_table and analytics implementation")
 class TestGalleryStatisticsEdgeCases:
     """Test edge cases and error handling"""
     
