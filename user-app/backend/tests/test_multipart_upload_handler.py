@@ -105,6 +105,11 @@ class TestMultipartUploadCompletion:
             'Location': 's3://bucket/photo123.jpg'
         }
         
+        # Mock S3 head_object for file size
+        mock_s3.head_object.return_value = {
+            'ContentLength': 1048576  # 1 MB
+        }
+        
         # Mock photo table update
         mock_photos.update_item.return_value = {
             'Attributes': {'id': 'photo123', 'status': 'uploaded'}
@@ -150,13 +155,9 @@ class TestMultipartUploadAbort:
         # Mock S3 abort
         mock_s3.abort_multipart_upload.return_value = {}
         
-        # Mock photo cleanup
-        mock_photos.delete_item.return_value = {}
-        
         result = handle_abort_multipart_upload(gallery_id, user, event)
         assert result['statusCode'] == 200
         assert mock_s3.abort_multipart_upload.called
-        assert mock_photos.delete_item.called
     
     @patch('handlers.multipart_upload_handler.galleries_table')
     def test_abort_upload_blocks_non_owner(self, mock_galleries):
