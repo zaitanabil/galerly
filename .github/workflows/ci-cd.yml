@@ -342,16 +342,22 @@ jobs:
           }
           EOF
           
-          # Check if Lambda function exists (lambda already exists from setup script)
-          echo "Updating existing Lambda function..."
+          # Upload package to S3 (bypass 70MB direct upload limit)
+          S3_KEY="lambda-deployments/galerly-api-${{ github.sha }}.zip"
+          aws s3 cp lambda-package/deployment-${{ github.sha }}.zip s3://${{ vars.S3_BUCKET }}/$S3_KEY --region ${{ vars.AWS_REGION }}
+          
+          # Update Lambda function code from S3
+          echo "Updating Lambda function from S3..."
           aws lambda update-function-code \
             --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
-            --zip-file fileb://lambda-package/deployment-${{ github.sha }}.zip \
+            --s3-bucket ${{ vars.S3_BUCKET }} \
+            --s3-key $S3_KEY \
             --region ${{ vars.AWS_REGION }} \
             --publish
           
           # Wait for update to complete
-          sleep 5
+          echo "Waiting for Lambda update to complete..."
+          sleep 10
           
           # Update environment variables from JSON file
           aws lambda update-function-configuration \
