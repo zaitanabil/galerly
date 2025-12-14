@@ -178,9 +178,19 @@ class TestGetAvailableSlots:
         assert isinstance(body['available_slots'], list)
     
     @patch('handlers.availability_handler.users_table')
-    def test_get_available_slots_requires_date_param(self, mock_users):
+    @patch('handlers.subscription_handler.get_user_features')
+    def test_get_available_slots_requires_date_param(self, mock_get_features, mock_users):
         """Test that date parameter is required"""
-        mock_users.query.return_value = {'Items': [{'id': 'photographer-123'}]}
+        mock_users.query.return_value = {
+            'Items': [{
+                'id': 'photographer-123',
+                'email': 'photo@test.com',
+                'role': 'photographer',
+                'plan': 'pro'
+            }]
+        }
+        # Mock photographer has scheduler feature
+        mock_get_features.return_value = ({'scheduler': True}, 'pro', 'Pro Plan')
         
         query_params = {}
         

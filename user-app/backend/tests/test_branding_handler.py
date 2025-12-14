@@ -248,12 +248,18 @@ class TestUploadBrandingLogo:
 class TestGetPublicBranding:
     """Test public branding retrieval (for client galleries)"""
     
-    @patch("handlers.subscription_handler.get_user_features")
+    @patch('handlers.branding_handler.get_user_features')
     @patch('handlers.branding_handler.users_table')
     def test_get_public_branding_success(self, mock_table, mock_get_features, mock_branding_settings):
         """Test successful public branding retrieval"""
-        mock_get_features.return_value = ({'remove_branding': True}, None, None)
-        photographer_data = {'id': 'photographer-123', 'name': 'Test Photographer'}
+        mock_get_features.return_value = ({'remove_branding': True}, 'plus', 'Plus Plan')
+        photographer_data = {
+            'id': 'photographer-123',
+            'name': 'Test Photographer',
+            'email': 'photo@test.com',
+            'role': 'photographer',
+            'plan': 'plus'
+        }
         photographer_data.update(mock_branding_settings)
         mock_table.query.return_value = {'Items': [photographer_data]}
         
