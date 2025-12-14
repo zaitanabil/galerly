@@ -4,42 +4,38 @@ Tests for scheduled handler using REAL AWS resources
 import pytest
 import uuid
 import json
-from handlers.scheduled_handler import handle_process_scheduled_tasks
-from utils.config import users_table
+from handlers.scheduled_handler import (
+    handle_gallery_expiration_reminders,
+    handle_expire_galleries
+)
 
 
-class TestScheduledTasks:
-    """Test scheduled task processing with real AWS"""
+class TestGalleryExpirationReminders:
+    """Test gallery expiration reminder scheduling"""
     
-    def test_process_scheduled_tasks(self):
-        """Test processing scheduled tasks"""
+    def test_expiration_reminders_disabled(self):
+        """Expiration reminders are disabled - galleries never expire"""
         event = {}
-        context = None
+        context = {}
+        result = handle_gallery_expiration_reminders(event, context)
         
-        # Should run without errors
-        result = handle_process_scheduled_tasks(event, context)
-        assert result is None or isinstance(result, dict)
+        assert result['statusCode'] == 200
+        body = json.loads(result['body'])
+        assert body['message'] == 'Gallery expiration feature is disabled'
+
+
+class TestCleanupExpiredGalleries:
+    """Test expired gallery cleanup"""
     
-    def test_scheduled_tasks_with_users(self):
-        """Test scheduled tasks with real users"""
-        user_id = f'user-{uuid.uuid4()}'
+    def test_expire_galleries_disabled(self):
+        """Gallery expiration is disabled - galleries never expire"""
+        event = {}
+        context = {}
+        result = handle_expire_galleries(event, context)
         
-        try:
-            users_table.put_item(Item={
-                'id': user_id,
-                'email': f'{user_id}@test.com',
-                'role': 'photographer',
-                'plan': 'free'
-            })
-            
-            result = handle_process_scheduled_tasks({}, None)
-            assert result is None or isinstance(result, dict)
-            
-        finally:
-            try:
-                users_table.delete_item(Key={'email': f'{user_id}@test.com'})
-            except:
-                pass
+        assert result['statusCode'] == 200
+        body = json.loads(result['body'])
+        assert body['message'] == 'Gallery expiration feature is disabled'
 
 
 if __name__ == '__main__':
