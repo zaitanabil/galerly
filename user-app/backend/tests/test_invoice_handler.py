@@ -87,6 +87,9 @@ class TestCreateInvoice:
     @patch('handlers.subscription_handler.get_user_features')
     def test_create_invoice_requires_pro_plan(self, mock_get_features, mock_user):
         """Test that invoicing requires Pro/Ultimate plan and photographer role"""
+        # Mock features for the user
+        mock_get_features.return_value = ({'client_invoicing': True}, 'pro', 'Pro Plan')
+        
         # Test 1: Non-photographer role
         client_user = {
             'id': 'client-123',

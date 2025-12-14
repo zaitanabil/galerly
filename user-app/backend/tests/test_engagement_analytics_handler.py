@@ -75,8 +75,9 @@ class TestEngagementAnalytics:
         
         import json
         body = json.loads(result['body'])
-        assert 'total_views' in body
-        assert 'total_downloads' in body
+        assert 'metrics' in body
+        assert 'total_views' in body['metrics']
+        assert 'total_downloads' in body['metrics']
         assert 'daily_stats' in body
 
 

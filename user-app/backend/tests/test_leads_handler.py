@@ -27,8 +27,8 @@ class TestLeadsHandler:
     @patch('handlers.leads_handler.leads_table')
     def test_list_leads(self, mock_leads_table, mock_get_features):
         # Mock Pro plan features
-        mock_get_features.return_value = ({'client_invoicing': True}, None, None)
-        user = {'user_id': 'photo1', 'id': 'photo1', 'role': 'photographer'}
+        mock_get_features.return_value = ({'client_invoicing': True}, 'pro', 'Pro Plan')
+        user = {'user_id': 'photo1', 'id': 'photo1', 'email': 'photo@test.com', 'role': 'photographer', 'plan': 'pro'}
         mock_leads_table.query.return_value = {'Items': [{'id': 'lead1', 'name': 'Client 1', 'score': 85}]}
         response = handle_list_leads(user, query_params={})
         assert response['statusCode'] == 200
