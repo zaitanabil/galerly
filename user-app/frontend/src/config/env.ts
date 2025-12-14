@@ -69,13 +69,25 @@ export const config = {
 };
 
 // Computed URLs - matches old JS frontend pattern
+// Handle CloudFront distribution URLs by extracting the real domain
+const getRealHostname = (hostname: string): string => {
+  // If accessing via CloudFront distribution URL (e.g., d12345.cloudfront.net),
+  // use the production domain instead
+  if (hostname.includes('cloudfront.net')) {
+    return 'galerly.com';
+  }
+  return hostname;
+};
+
+const realHostname = getRealHostname(hostname);
+
 export const apiBaseUrl = isLocalstack
   ? `${config.backend.protocol}://${config.backend.host}:${config.backend.port}/v1`
-  : `https://api.${hostname.replace(/^www\./, '')}/xb667e3fa92f9776468017a9758f31ba4/v1`;
+  : `https://api.${realHostname.replace(/^www\./, '')}/xb667e3fa92f9776468017a9758f31ba4/v1`;
 
 export const cdnBaseUrl = isLocalstack
   ? `${config.backend.protocol}://${config.localstack.host}:${config.localstack.port}/${config.localstack.bucket}`
-  : `https://cdn.${hostname.replace(/^www\./, '')}`;
+  : `https://cdn.${realHostname.replace(/^www\./, '')}`;
 
 // Helper to get full image URL with CDN
 export function getImageUrl(path: string): string {
@@ -136,4 +148,3 @@ if (import.meta.env.DEV) {
   console.log('   CDN:', cdnBaseUrl);
   console.log('   LocalStack:', isLocalstack);
 }
-
