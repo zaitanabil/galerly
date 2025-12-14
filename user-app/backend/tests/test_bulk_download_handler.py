@@ -22,7 +22,9 @@ def mock_gallery():
 def mock_user():
     return {
         'id': 'user-456',
-        'email': 'photographer@example.com'
+        'email': 'photographer@example.com',
+        'role': 'photographer',
+        'plan': 'pro'
     }
 
 
