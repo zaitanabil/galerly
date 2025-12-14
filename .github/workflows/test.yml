@@ -69,6 +69,9 @@ jobs:
         AWS_ENDPOINT_URL: http://localhost:4566
         LOCALSTACK_ENDPOINT: http://localhost:4566
         ENVIRONMENT: test
+        S3_PHOTOS_BUCKET: galerly-images-storage-test
+        STRIPE_SECRET_KEY: sk_test_dummy
+        FRONTEND_URL: http://localhost:5173
         PYTHONPATH: ${{ github.workspace }}/user-app/backend
       run: |
         cd user-app/backend
@@ -86,6 +89,9 @@ jobs:
         AWS_ENDPOINT_URL: http://localhost:4566
         LOCALSTACK_ENDPOINT: http://localhost:4566
         ENVIRONMENT: test
+        S3_PHOTOS_BUCKET: galerly-images-storage-test
+        STRIPE_SECRET_KEY: sk_test_dummy
+        FRONTEND_URL: http://localhost:5173
         PYTHONPATH: ${{ github.workspace }}/user-app/backend
       run: |
         cd user-app/backend
