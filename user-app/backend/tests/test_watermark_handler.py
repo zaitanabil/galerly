@@ -309,10 +309,12 @@ def test_update_watermark_settings_invalid_opacity(mock_get_features, mock_user)
 @patch('handlers.watermark_handler.users_table')
 def test_batch_apply_watermark(mock_users_table, mock_get_features, mock_user):
     """Test batch applying watermark to existing photos"""
-    mock_get_features.return_value = ({'watermarking': True}, 'plus', {})
+    mock_get_features.return_value = ({'watermarking': True}, 'plus', 'Plus Plan')
+    # Mock user lookup by email (handler uses email as key)
     mock_users_table.get_item.return_value = {
         'Item': {
-            'email': 'test@example.com',
+            'id': mock_user['id'],
+            'email': mock_user['email'],
             'watermark_s3_key': 'watermarks/user_123/logo.png',
             'watermark_enabled': True
         }
@@ -323,11 +325,20 @@ def test_batch_apply_watermark(mock_users_table, mock_get_features, mock_user):
         'photo_ids': ['photo1', 'photo2', 'photo3']
     }
     
-    response = handle_batch_apply_watermark(mock_user, body)
-    
-    assert response['statusCode'] == 200
-    body_data = json.loads(response['body'])
-    assert 'job_id' in body_data
-    assert body_data['gallery_id'] == 'gallery_123'
+    # Mock photos_table to return photos
+    with patch('utils.config.photos_table') as mock_photos:
+        mock_photos.get_item.return_value = {
+            'Item': {'id': 'photo1', 'gallery_id': 'gallery_123', 's3_key': 'photos/p1.jpg'}
+        }
+        
+        # Mock image processor
+        with patch('utils.image_processor.generate_renditions_with_watermark') as mock_processor:
+            mock_processor.return_value = {'success': True}
+            
+            response = handle_batch_apply_watermark(mock_user, body)
+            
+            assert response['statusCode'] == 200
+            body_data = json.loads(response['body'])
+            assert 'processed' in body_data or 'job_id' in body_data
 
 

@@ -15,9 +15,9 @@ class TestServicesHandler:
     @patch('handlers.services_handler.services_table')
     @patch('handlers.services_handler.get_user_features')
     def test_create_service(self, mock_features, mock_table):
-        user = {'user_id': 'photo1', 'id': 'photo1', 'role': 'photographer'}
+        user = {'user_id': 'photo1', 'id': 'photo1', 'email': 'photo@test.com', 'role': 'photographer', 'plan': 'pro'}
         # Mock user has client_invoicing feature (Pro+)
-        mock_features.return_value = ({'client_invoicing': True}, 'pro', None)
+        mock_features.return_value = ({'client_invoicing': True}, 'pro', 'Pro Plan')
         
         # Mock put_item to return success
         mock_table.put_item.return_value = {}
