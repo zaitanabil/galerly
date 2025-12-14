@@ -312,11 +312,10 @@ jobs:
       - name: Deploy Lambda function
         id: deploy-lambda
         run: |
-          # Create environment config JSON file
+          # Create environment config JSON file (exclude AWS_REGION - it's reserved)
           cat > /tmp/lambda-env.json <<EOF
           {
             "Variables": {
-              "AWS_REGION": "${{ vars.AWS_REGION }}",
               "DYNAMODB_TABLE_USERS": "${{ vars.DYNAMODB_TABLE_USERS }}",
               "DYNAMODB_TABLE_GALLERIES": "${{ vars.DYNAMODB_TABLE_GALLERIES }}",
               "DYNAMODB_TABLE_PHOTOS": "${{ vars.DYNAMODB_TABLE_PHOTOS }}",
