@@ -358,9 +358,10 @@ jobs:
           echo "Waiting for Lambda update to complete..."
           sleep 10
           
-          # Update environment variables from JSON file
+          # Update environment variables and handler from JSON file
           aws lambda update-function-configuration \
             --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
+            --handler api.handler \
             --environment file:///tmp/lambda-env.json \
             --region ${{ vars.AWS_REGION }}
           
