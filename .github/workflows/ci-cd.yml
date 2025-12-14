@@ -323,6 +323,7 @@ jobs:
           cat > /tmp/lambda-env.json <<EOF
           {
             "Variables": {
+              "ENVIRONMENT": "production",
               "DYNAMODB_TABLE_USERS": "${{ vars.DYNAMODB_TABLE_USERS }}",
               "DYNAMODB_TABLE_GALLERIES": "${{ vars.DYNAMODB_TABLE_GALLERIES }}",
               "DYNAMODB_TABLE_PHOTOS": "${{ vars.DYNAMODB_TABLE_PHOTOS }}",
