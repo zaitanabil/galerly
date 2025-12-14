@@ -44,6 +44,7 @@ def mock_user():
     return {
         'id': 'user-123',
         'email': 'photographer@test.com',
+        'role': 'photographer',
         'plan': 'plus',
         'storage_used_mb': 50.0,
         'storage_limit_mb': 102400.0  # 100 GB
