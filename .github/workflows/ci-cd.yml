@@ -182,9 +182,15 @@ jobs:
         working-directory: user-app/backend
         run: |
           pip install -r requirements.txt -t package/
-          cd package && zip -r ../deployment-${{ github.sha }}.zip . && cd ..
+          find package/ -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
+          find package/ -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+          find package/ -name "*.pyc" -delete
+          find package/ -name "*.pyo" -delete
+          find package/ -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+          cd package && zip -r9 ../deployment-${{ github.sha }}.zip . && cd ..
           zip -g deployment-${{ github.sha }}.zip *.py
           zip -rg deployment-${{ github.sha }}.zip handlers/ utils/
+          ls -lh deployment-${{ github.sha }}.zip
           echo "version=${{ github.sha }}" >> $GITHUB_OUTPUT
           
       - name: Upload Lambda package artifact
