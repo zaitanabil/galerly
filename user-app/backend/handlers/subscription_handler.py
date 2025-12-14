@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import galleries_table, users_table, dynamodb, features_table, user_features_table
 from utils.response import create_response
-from handlers.billing_handler import PLANS
+from utils.plans_config import PLANS  # Import from shared config to prevent circular dependency
 from utils.plan_monitoring import track_storage_violation
 import os
 

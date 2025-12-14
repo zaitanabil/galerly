@@ -4,8 +4,16 @@ Provides reusable decorators and utilities for consistent plan enforcement
 """
 from functools import wraps
 from utils.response import create_response
-from handlers.subscription_handler import get_user_features
 from utils.plan_monitoring import track_feature_violation, track_role_violation
+
+
+def get_user_features(user):
+    """
+    Lazy import to prevent circular dependency.
+    Import get_user_features from subscription_handler when needed.
+    """
+    from handlers.subscription_handler import get_user_features as _get_user_features
+    return _get_user_features(user)
 
 
 def require_plan(min_plan=None, feature=None):

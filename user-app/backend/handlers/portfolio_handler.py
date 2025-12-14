@@ -719,12 +719,6 @@ def handle_check_custom_domain_status(user, domain):
             except Exception as e:
                 print(f"Error checking DNS: {str(e)}")
                 dns_status = {'error': str(e), 'propagated': False, 'ready': False}
-            'propagated': dns_result.get('propagated', False),
-            'percentage': dns_result.get('percentage', 0),
-            'ready': dns_result.get('ready', False),
-            'servers_propagated': dns_result.get('servers_propagated', 0),
-            'servers_checked': dns_result.get('servers_checked', 0)
-        }
         
         # Determine overall status
         cert_ready = cert_status and cert_status['issued']
