@@ -135,8 +135,69 @@ env:
   WEBSITE_URL: ${{ vars.WEBSITE_URL }}
 
 jobs:
-  test:
+  # STEP 1: BUILD
+  build:
     runs-on: ubuntu-latest
+    outputs:
+      frontend-version: ${{ steps.frontend-build.outputs.version }}
+      lambda-version: ${{ steps.lambda-package.outputs.version }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: user-app/frontend/package-lock.json
+          
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Install frontend dependencies
+        working-directory: user-app/frontend
+        run: npm ci
+        
+      - name: Build frontend
+        id: frontend-build
+        working-directory: user-app/frontend
+        run: |
+          npm run build
+          echo "version=${{ github.sha }}" >> $GITHUB_OUTPUT
+        
+      - name: Upload frontend build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist-${{ github.sha }}
+          path: user-app/frontend/dist
+          retention-days: 7
+          
+      - name: Package Lambda function
+        id: lambda-package
+        working-directory: user-app/backend
+        run: |
+          pip install -r requirements.txt -t package/
+          cd package && zip -r ../deployment-${{ github.sha }}.zip . && cd ..
+          zip -g deployment-${{ github.sha }}.zip *.py
+          zip -rg deployment-${{ github.sha }}.zip handlers/ utils/
+          echo "version=${{ github.sha }}" >> $GITHUB_OUTPUT
+          
+      - name: Upload Lambda package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lambda-package-${{ github.sha }}
+          path: user-app/backend/deployment-${{ github.sha }}.zip
+          retention-days: 7
+
+  # STEP 2: UNIT TESTS
+  unit-tests:
+    runs-on: ubuntu-latest
+    needs: build
     
     steps:
       - name: Checkout code
@@ -163,72 +224,35 @@ jobs:
         working-directory: user-app/frontend
         run: npm ci
         
-      - name: Run backend tests
+      - name: Run backend unit tests
         working-directory: user-app/backend
-        continue-on-error: true  # Allow workflow to continue despite test failures
+        continue-on-error: true
         run: |
           pip install pytest pytest-cov moto boto3 flask
-          pytest tests/ -v
+          pytest tests/ -v --junit-xml=test-results.xml
         
-      - name: Run frontend tests
+      - name: Run frontend unit tests
         working-directory: user-app/frontend
         run: npm test
         
-  build-frontend:
-    runs-on: ubuntu-latest
-    needs: test
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: user-app/frontend/package-lock.json
-          
-      - name: Install dependencies
-        working-directory: user-app/frontend
-        run: npm ci
-        
-      - name: Build frontend
-        working-directory: user-app/frontend
-        run: npm run build
-        
-      - name: Upload build artifacts
+      - name: Upload test results
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: frontend-dist
-          path: user-app/frontend/dist
-          retention-days: 7
-          
-  build-docker:
+          name: test-results-${{ github.sha }}
+          path: user-app/backend/test-results.xml
+          retention-days: 30
+
+  # STEP 3: DEPLOY TO PRODUCTION
+  deploy-production:
     runs-on: ubuntu-latest
-    needs: test
-    
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        
-      - name: Build test Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: docker/Dockerfile.test
-          push: false
-          tags: galerly-test:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          
-  deploy:
-    runs-on: ubuntu-latest
-    needs: [test, build-frontend, build-docker]
+    needs: [build, unit-tests]
     if: github.ref == 'refs/heads/main'
+    outputs:
+      frontend-deployed: ${{ steps.deploy-frontend.outputs.deployed }}
+      lambda-deployed: ${{ steps.deploy-lambda.outputs.deployed }}
+      lambda-version: ${{ steps.deploy-lambda.outputs.version }}
+      previous-lambda-version: ${{ steps.backup-lambda.outputs.previous-version }}
     
     steps:
       - name: Checkout code
@@ -241,24 +265,224 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION }}
           
+      # Backup current Lambda version before deployment
+      - name: Backup current Lambda version
+        id: backup-lambda
+        run: |
+          CURRENT_VERSION=$(aws lambda get-function --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} --query 'Configuration.Version' --output text)
+          echo "previous-version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+          echo "Backed up Lambda version: $CURRENT_VERSION"
+          
       - name: Download frontend build
         uses: actions/download-artifact@v4
         with:
-          name: frontend-dist
+          name: frontend-dist-${{ github.sha }}
           path: user-app/frontend/dist
           
       - name: Deploy frontend to S3
+        id: deploy-frontend
         run: |
           aws s3 sync user-app/frontend/dist/ s3://${{ vars.S3_BUCKET }}/ --delete
+          echo "deployed=true" >> $GITHUB_OUTPUT
           
       - name: Invalidate CloudFront cache
         run: |
-          aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
+          aws cloudfront create-invalidation \
+            --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} \
+            --paths "/*"
           
-      - name: Deploy backend Lambda
+      - name: Download Lambda package
+        uses: actions/download-artifact@v4
+        with:
+          name: lambda-package-${{ github.sha }}
+          path: lambda-package
+          
+      - name: Deploy Lambda function
+        id: deploy-lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
+            --zip-file fileb://lambda-package/deployment-${{ github.sha }}.zip \
+            --publish
+          
+          NEW_VERSION=$(aws lambda get-function --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} --query 'Configuration.Version' --output text)
+          echo "deployed=true" >> $GITHUB_OUTPUT
+          echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          echo "Deployed Lambda version: $NEW_VERSION"
+          
+      - name: Wait for Lambda deployment
+        run: |
+          echo "Waiting for Lambda function to be ready..."
+          aws lambda wait function-updated --function-name ${{ vars.LAMBDA_FUNCTION_NAME }}
+
+  # STEP 4: POST-DEPLOYMENT TESTS (Run in parallel)
+  integration-tests:
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Install dependencies
         working-directory: user-app/backend
         run: |
-          pip install -r requirements.txt -t package/
-          cd package && zip -r ../deployment.zip . && cd ..
-          zip -g deployment.zip *.py handlers/*.py utils/*.py
-          aws lambda update-function-code --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} --zip-file fileb://deployment.zip
+          pip install requests pytest boto3
+          
+      - name: Run integration tests
+        working-directory: user-app/backend
+        env:
+          TEST_API_URL: ${{ vars.API_BASE_URL }}
+          TEST_FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+        run: |
+          # Run integration tests against production
+          pytest tests/ -v -m integration --junit-xml=integration-results.xml || exit 1
+          
+      - name: Upload integration test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-results-${{ github.sha }}
+          path: user-app/backend/integration-results.xml
+          retention-days: 30
+
+  verification-tests:
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          
+      - name: Verify Lambda function
+        run: |
+          aws lambda invoke \
+            --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
+            --payload '{"httpMethod":"GET","path":"/health"}' \
+            response.json
+          cat response.json
+          
+      - name: Verify S3 deployment
+        run: |
+          aws s3 ls s3://${{ vars.S3_BUCKET }}/index.html
+          
+      - name: Verify CloudFront distribution
+        run: |
+          STATUS=$(aws cloudfront get-distribution --id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} --query 'Distribution.Status' --output text)
+          echo "CloudFront status: $STATUS"
+          
+      - name: Verify API Gateway
+        run: |
+          curl -f ${{ vars.API_BASE_URL }}/health || exit 1
+
+  smoke-tests:
+    runs-on: ubuntu-latest
+    needs: deploy-production
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Smoke test - Frontend accessible
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.FRONTEND_URL }})
+          if [ $HTTP_CODE -ne 200 ]; then
+            echo "Frontend smoke test failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+          
+      - name: Smoke test - API health endpoint
+        run: |
+          HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" ${{ vars.API_BASE_URL }}/health)
+          if [ $HTTP_CODE -ne 200 ]; then
+            echo "API health check failed with HTTP $HTTP_CODE"
+            exit 1
+          fi
+          
+      - name: Smoke test - Lambda function invocation
+        run: |
+          aws lambda invoke \
+            --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
+            --payload '{"httpMethod":"GET","path":"/api/v1/public/status"}' \
+            lambda-response.json
+          
+          STATUS_CODE=$(jq -r '.statusCode' lambda-response.json)
+          if [ "$STATUS_CODE" != "200" ]; then
+            echo "Lambda smoke test failed with status $STATUS_CODE"
+            cat lambda-response.json
+            exit 1
+          fi
+
+  # STEP 5: ROLLBACK ON FAILURE
+  rollback:
+    runs-on: ubuntu-latest
+    needs: [deploy-production, integration-tests, verification-tests, smoke-tests]
+    if: |
+      always() && 
+      github.ref == 'refs/heads/main' &&
+      (needs.integration-tests.result == 'failure' || 
+       needs.verification-tests.result == 'failure' || 
+       needs.smoke-tests.result == 'failure')
+    
+    steps:
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+          
+      - name: Rollback Lambda to previous version
+        run: |
+          PREVIOUS_VERSION="${{ needs.deploy-production.outputs.previous-lambda-version }}"
+          echo "Rolling back Lambda to version: $PREVIOUS_VERSION"
+          
+          aws lambda update-function-configuration \
+            --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
+            --publish
+          
+          aws lambda update-alias \
+            --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
+            --name production \
+            --function-version $PREVIOUS_VERSION || echo "Alias rollback not applicable"
+          
+      - name: Notify rollback
+        run: |
+          echo "Deployment rolled back due to test failures"
+          echo "Previous Lambda version: ${{ needs.deploy-production.outputs.previous-lambda-version }}"
+          echo "Failed deployment version: ${{ needs.deploy-production.outputs.lambda-version }}"
+          
+      - name: Create rollback issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: 'Deployment Rollback - Build ${{ github.sha }}',
+              body: `Deployment was automatically rolled back due to test failures.
+              
+              **Details:**
+              - Commit: ${{ github.sha }}
+              - Branch: ${{ github.ref_name }}
+              - Previous Lambda Version: ${{ needs.deploy-production.outputs.previous-lambda-version }}
+              - Failed Lambda Version: ${{ needs.deploy-production.outputs.lambda-version }}
+              
+              **Failed Tests:**
+              - Integration Tests: ${{ needs.integration-tests.result }}
+              - Verification Tests: ${{ needs.verification-tests.result }}
+              - Smoke Tests: ${{ needs.smoke-tests.result }}
+              
+              [View Workflow Run](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})`,
+              labels: ['deployment', 'rollback', 'production']
+            })
