@@ -56,9 +56,9 @@ class TestCreateInvoice:
     
     @patch('handlers.subscription_handler.get_user_features')
     @patch('handlers.invoice_handler.invoices_table')
-    def test_create_invoice_success(self, mock_table, mock_features, mock_user):
+    def test_create_invoice_success(self, mock_table, mock_get_features, mock_user):
         """Test successful invoice creation"""
-        mock_features.return_value = ({'client_invoicing': True}, None, None)
+        mock_get_features.return_value = ({'client_invoicing': True}, 'pro', 'Pro')
         
         body = {
             'client_email': 'client@test.com',
@@ -85,7 +85,7 @@ class TestCreateInvoice:
         mock_table.put_item.assert_called_once()
     
     @patch('handlers.subscription_handler.get_user_features')
-    def test_create_invoice_requires_pro_plan(self, mock_features, mock_user):
+    def test_create_invoice_requires_pro_plan(self, mock_get_features, mock_user):
         """Test that invoicing requires Pro/Ultimate plan and photographer role"""
         # Test 1: Non-photographer role
         client_user = {
@@ -108,7 +108,7 @@ class TestCreateInvoice:
         assert body_data['required_role'] == 'photographer'
         
         # Test 2: Photographer without Pro plan
-        mock_features.return_value = ({'client_invoicing': False}, None, None)
+        mock_get_features.return_value = ({'client_invoicing': False}, 'starter', 'Starter')
         
         response = handle_create_invoice(mock_user, body)
         
@@ -117,9 +117,9 @@ class TestCreateInvoice:
         assert 'upgrade_required' in body_data
     
     @patch('handlers.subscription_handler.get_user_features')
-    def test_create_invoice_validates_required_fields(self, mock_features, mock_user):
+    def test_create_invoice_validates_required_fields(self, mock_get_features, mock_user):
         """Test validation of required fields"""
-        mock_features.return_value = ({'client_invoicing': True}, None, None)
+        mock_get_features.return_value = ({'client_invoicing': True}, 'pro', 'Pro')
         
         body = {'client_email': 'client@test.com'}  # Missing items
         
@@ -129,9 +129,9 @@ class TestCreateInvoice:
     
     @patch('handlers.subscription_handler.get_user_features')
     @patch('handlers.invoice_handler.invoices_table')
-    def test_create_invoice_calculates_total(self, mock_table, mock_features, mock_user):
+    def test_create_invoice_calculates_total(self, mock_table, mock_get_features, mock_user):
         """Test total amount calculation"""
-        mock_features.return_value = ({'client_invoicing': True}, None, None)
+        mock_get_features.return_value = ({'client_invoicing': True}, 'pro', 'Pro')
         
         body = {
             'client_email': 'client@test.com',
