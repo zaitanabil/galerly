@@ -376,7 +376,7 @@ class TestGalleryStatisticsEdgeCases:
     @patch('handlers.gallery_statistics_handler.photos_table')
     def test_empty_gallery(
         self, mock_photos_table, mock_gallery_views_table,
-        mock_galleries_table, mock_user
+        mock_galleries_table
     ):
         """Test statistics for gallery with no photos or views"""
         gallery = {
@@ -390,7 +390,7 @@ class TestGalleryStatisticsEdgeCases:
         mock_gallery_views_table.query.return_value = {'Items': []}
         mock_photos_table.query.return_value = {'Items': []}
         
-        response = handle_get_gallery_statistics({'id': 'user123'}, 'empty_gallery')
+        response = handle_get_gallery_statistics({'id': 'user123', 'email': 'test@test.com', 'role': 'photographer', 'plan': 'pro'}, 'empty_gallery')
         
         assert response['statusCode'] == 200
         body = response['body'] if isinstance(response['body'], dict) else eval(response['body'])

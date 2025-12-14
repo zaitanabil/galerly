@@ -43,15 +43,15 @@ class TestGDPRDataExport:
         mock_galleries.query.return_value = {'Items': [{'id': 'gal1', 'name': 'Gallery 1'}]}
         mock_photos.query.return_value = {'Items': [{'id': 'photo1', 'filename': 'test.jpg'}]}
         mock_sessions.query.return_value = {'Items': []}
-        mock_billing.query.return_value = {'Items': []}
-        mock_subs.query.return_value = {'Items': [{'plan': 'pro', 'status': 'active'}]}
-        mock_analytics.query.return_value = {'Items': []}
-        mock_favorites.query.return_value = {'Items': []}
-        mock_feedback.query.return_value = {'Items': []}
-        mock_invoices.query.return_value = {'Items': []}
-        mock_appointments.query.return_value = {'Items': []}
-        mock_contracts.query.return_value = {'Items': []}
-        mock_seo.get_item.return_value = {}
+        mock_billing.scan.return_value = {'Items': []}
+        mock_subs.scan.return_value = {'Items': [{'plan': 'pro', 'status': 'active'}]}
+        mock_analytics.scan.return_value = {'Items': []}
+        mock_favorites.scan.return_value = {'Items': []}
+        mock_feedback.scan.return_value = {'Items': []}
+        mock_invoices.scan.return_value = {'Items': []}
+        mock_appointments.scan.return_value = {'Items': []}
+        mock_contracts.scan.return_value = {'Items': []}
+        mock_seo.get_item.return_value = {'Item': {}}
         mock_s3.put_object.return_value = {}
         mock_s3.generate_presigned_url.return_value = 'https://example.com/download'
         
@@ -71,7 +71,7 @@ class TestGDPRDataExport:
         }
         
         # Mock client-specific data
-        mock_favorites.query.return_value = {
+        mock_favorites.scan.return_value = {
             'Items': [{'photo_id': 'photo1', 'created_at': '2025-01-01T00:00:00Z'}]
         }
         mock_feedback.scan.return_value = {
@@ -94,13 +94,13 @@ class TestGDPRDataExport:
             mock_gal.query.return_value = {'Items': []}
             mock_photos.query.return_value = {'Items': []}
             mock_sessions.query.return_value = {'Items': []}
-            mock_billing.query.return_value = {'Items': []}
-            mock_subs.query.return_value = {'Items': []}
-            mock_analytics.query.return_value = {'Items': []}
-            mock_inv.query.return_value = {'Items': []}
-            mock_appt.query.return_value = {'Items': []}
-            mock_cont.query.return_value = {'Items': []}
-            mock_seo.get_item.return_value = {}
+            mock_billing.scan.return_value = {'Items': []}
+            mock_subs.scan.return_value = {'Items': []}
+            mock_analytics.scan.return_value = {'Items': []}
+            mock_inv.scan.return_value = {'Items': []}
+            mock_appt.scan.return_value = {'Items': []}
+            mock_cont.scan.return_value = {'Items': []}
+            mock_seo.get_item.return_value = {'Item': {}}
             mock_s3.put_object.return_value = {}
             mock_s3.generate_presigned_url.return_value = 'https://example.com/download'
             
