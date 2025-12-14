@@ -317,30 +317,7 @@ jobs:
             # Update environment variables separately
             aws lambda update-function-configuration \
               --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
-              --environment "Variables={
-                AWS_REGION=${{ vars.AWS_REGION }},
-                DYNAMODB_TABLE_USERS=${{ vars.DYNAMODB_TABLE_USERS }},
-                DYNAMODB_TABLE_GALLERIES=${{ vars.DYNAMODB_TABLE_GALLERIES }},
-                DYNAMODB_TABLE_PHOTOS=${{ vars.DYNAMODB_TABLE_PHOTOS }},
-                DYNAMODB_TABLE_SUBSCRIPTIONS=${{ vars.DYNAMODB_TABLE_SUBSCRIPTIONS }},
-                DYNAMODB_TABLE_BILLING=${{ vars.DYNAMODB_TABLE_BILLING }},
-                DYNAMODB_TABLE_ANALYTICS=${{ vars.DYNAMODB_TABLE_ANALYTICS }},
-                S3_BUCKET=${{ vars.S3_BUCKET }},
-                S3_PHOTOS_BUCKET=${{ vars.S3_PHOTOS_BUCKET }},
-                S3_RENDITIONS_BUCKET=${{ vars.S3_RENDITIONS_BUCKET }},
-                FRONTEND_URL=${{ vars.FRONTEND_URL }},
-                API_BASE_URL=${{ vars.API_BASE_URL }},
-                STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }},
-                STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }},
-                STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }},
-                JWT_SECRET=${{ secrets.JWT_SECRET }},
-                SMTP_HOST=${{ secrets.SMTP_HOST }},
-                SMTP_PORT=${{ secrets.SMTP_PORT }},
-                SMTP_USER=${{ secrets.SMTP_USER }},
-                SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }},
-                FROM_EMAIL=${{ vars.FROM_EMAIL }},
-                FROM_NAME=${{ vars.FROM_NAME }}
-              }"
+              --environment "Variables={AWS_REGION=${{ vars.AWS_REGION }},DYNAMODB_TABLE_USERS=${{ vars.DYNAMODB_TABLE_USERS }},DYNAMODB_TABLE_GALLERIES=${{ vars.DYNAMODB_TABLE_GALLERIES }},DYNAMODB_TABLE_PHOTOS=${{ vars.DYNAMODB_TABLE_PHOTOS }},DYNAMODB_TABLE_SUBSCRIPTIONS=${{ vars.DYNAMODB_TABLE_SUBSCRIPTIONS }},DYNAMODB_TABLE_BILLING=${{ vars.DYNAMODB_TABLE_BILLING }},DYNAMODB_TABLE_ANALYTICS=${{ vars.DYNAMODB_TABLE_ANALYTICS }},S3_BUCKET=${{ vars.S3_BUCKET }},S3_PHOTOS_BUCKET=${{ vars.S3_PHOTOS_BUCKET }},S3_RENDITIONS_BUCKET=${{ vars.S3_RENDITIONS_BUCKET }},FRONTEND_URL=${{ vars.FRONTEND_URL }},API_BASE_URL=${{ vars.API_BASE_URL }},STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }},STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }},STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }},JWT_SECRET=${{ secrets.JWT_SECRET }},SMTP_HOST=${{ secrets.SMTP_HOST }},SMTP_PORT=${{ secrets.SMTP_PORT }},SMTP_USER=${{ secrets.SMTP_USER }},SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }},FROM_EMAIL=${{ vars.FROM_EMAIL }},FROM_NAME=${{ vars.FROM_NAME }}}"
           else
             # Create new function with basic config
             aws lambda create-function \
@@ -352,30 +329,7 @@ jobs:
               --timeout 30 \
               --memory-size 512 \
               --publish \
-              --environment "Variables={
-                AWS_REGION=${{ vars.AWS_REGION }},
-                DYNAMODB_TABLE_USERS=${{ vars.DYNAMODB_TABLE_USERS }},
-                DYNAMODB_TABLE_GALLERIES=${{ vars.DYNAMODB_TABLE_GALLERIES }},
-                DYNAMODB_TABLE_PHOTOS=${{ vars.DYNAMODB_TABLE_PHOTOS }},
-                DYNAMODB_TABLE_SUBSCRIPTIONS=${{ vars.DYNAMODB_TABLE_SUBSCRIPTIONS }},
-                DYNAMODB_TABLE_BILLING=${{ vars.DYNAMODB_TABLE_BILLING }},
-                DYNAMODB_TABLE_ANALYTICS=${{ vars.DYNAMODB_TABLE_ANALYTICS }},
-                S3_BUCKET=${{ vars.S3_BUCKET }},
-                S3_PHOTOS_BUCKET=${{ vars.S3_PHOTOS_BUCKET }},
-                S3_RENDITIONS_BUCKET=${{ vars.S3_RENDITIONS_BUCKET }},
-                FRONTEND_URL=${{ vars.FRONTEND_URL }},
-                API_BASE_URL=${{ vars.API_BASE_URL }},
-                STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }},
-                STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }},
-                STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }},
-                JWT_SECRET=${{ secrets.JWT_SECRET }},
-                SMTP_HOST=${{ secrets.SMTP_HOST }},
-                SMTP_PORT=${{ secrets.SMTP_PORT }},
-                SMTP_USER=${{ secrets.SMTP_USER }},
-                SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }},
-                FROM_EMAIL=${{ vars.FROM_EMAIL }},
-                FROM_NAME=${{ vars.FROM_NAME }}
-              }"
+              --environment "Variables={AWS_REGION=${{ vars.AWS_REGION }},DYNAMODB_TABLE_USERS=${{ vars.DYNAMODB_TABLE_USERS }},DYNAMODB_TABLE_GALLERIES=${{ vars.DYNAMODB_TABLE_GALLERIES }},DYNAMODB_TABLE_PHOTOS=${{ vars.DYNAMODB_TABLE_PHOTOS }},DYNAMODB_TABLE_SUBSCRIPTIONS=${{ vars.DYNAMODB_TABLE_SUBSCRIPTIONS }},DYNAMODB_TABLE_BILLING=${{ vars.DYNAMODB_TABLE_BILLING }},DYNAMODB_TABLE_ANALYTICS=${{ vars.DYNAMODB_TABLE_ANALYTICS }},S3_BUCKET=${{ vars.S3_BUCKET }},S3_PHOTOS_BUCKET=${{ vars.S3_PHOTOS_BUCKET }},S3_RENDITIONS_BUCKET=${{ vars.S3_RENDITIONS_BUCKET }},FRONTEND_URL=${{ vars.FRONTEND_URL }},API_BASE_URL=${{ vars.API_BASE_URL }},STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }},STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }},STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }},JWT_SECRET=${{ secrets.JWT_SECRET }},SMTP_HOST=${{ secrets.SMTP_HOST }},SMTP_PORT=${{ secrets.SMTP_PORT }},SMTP_USER=${{ secrets.SMTP_USER }},SMTP_PASSWORD=${{ secrets.SMTP_PASSWORD }},FROM_EMAIL=${{ vars.FROM_EMAIL }},FROM_NAME=${{ vars.FROM_NAME }}}"
           fi
           
           NEW_VERSION=$(aws lambda get-function --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} --query 'Configuration.Version' --output text)
