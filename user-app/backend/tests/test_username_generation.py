@@ -248,7 +248,7 @@ def test_profile_update_username_uniqueness():
     global_mock_table.scan.return_value = {'Items': [{'username': 'user1', 'email': 'other@example.com'}]}
     
     # User 2 tries to change username to user1 (already taken)
-    user = {'email': 'user2@example.com', 'role': 'photographer', 'plan': 'pro'}
+    user = {'id': 'user2', 'email': 'user2@example.com', 'role': 'photographer', 'plan': 'pro'}
     body = {'username': 'user1'}
     
     response = handle_update_profile(user, body)
@@ -286,7 +286,7 @@ def test_profile_update_username_own_username():
     global_mock_table.update_item.return_value = {'Attributes': user_data}
     
     # User updates profile with same username (should work)
-    user = {'email': 'user@example.com', 'role': 'photographer', 'plan': 'pro'}
+    user = {'id': 'user123', 'email': 'user@example.com', 'role': 'photographer', 'plan': 'pro'}
     body = {'username': 'myusername', 'bio': 'New bio'}
     
     response = handle_update_profile(user, body)
@@ -326,7 +326,7 @@ def test_profile_update_username_new_unique():
     global_mock_table.update_item.return_value = {'Attributes': updated_user_data}
     
     # Change to new unique username
-    user = {'email': 'user@example.com', 'role': 'photographer', 'plan': 'pro'}
+    user = {'id': 'user123', 'email': 'user@example.com', 'role': 'photographer', 'plan': 'pro'}
     body = {'username': 'newunique'}
     
     response = handle_update_profile(user, body)
