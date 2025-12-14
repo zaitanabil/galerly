@@ -81,9 +81,10 @@ const getRealHostname = (hostname: string): string => {
 
 const realHostname = getRealHostname(hostname);
 
+// Use AWS API Gateway URL directly (no custom domain yet)
 export const apiBaseUrl = isLocalstack
   ? `${config.backend.protocol}://${config.backend.host}:${config.backend.port}/v1`
-  : `https://api.${realHostname.replace(/^www\./, '')}/xb667e3fa92f9776468017a9758f31ba4/v1`;
+  : 'https://k4z6imb03i.execute-api.eu-central-1.amazonaws.com/v1';
 
 export const cdnBaseUrl = isLocalstack
   ? `${config.backend.protocol}://${config.localstack.host}:${config.localstack.port}/${config.localstack.bucket}`
