@@ -1,0 +1,21 @@
+# Test Coverage Configuration
+
+[run]
+source = handlers
+omit = 
+    */tests/*
+    */venv/*
+    */__pycache__/*
+    */migrations/*
+
+[report]
+precision = 2
+show_missing = True
+skip_covered = False
+
+[html]
+directory = htmlcov
+title = Galerly Test Coverage Report
+
+[xml]
+output = coverage.xml
