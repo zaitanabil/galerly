@@ -5,10 +5,12 @@ Comprehensive statistics and insights for individual galleries
 import os
 from datetime import datetime, timedelta, timezone
 from boto3.dynamodb.conditions import Key, Attr
-from utils.config import galleries_table, photos_table, gallery_views_table, photo_views_table
+from utils.config import galleries_table, photos_table
 from utils.response import create_response
 from utils.plan_enforcement import require_role
 from decimal import Decimal
+
+# Note: gallery_views and photo_views tracking uses visitor_tracking_table and analytics_table
 
 
 def convert_decimals(obj):

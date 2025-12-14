@@ -12,11 +12,12 @@ os.environ['AWS_REGION'] = 'us-east-1'
 os.environ['CLOUDFRONT_ENDPOINT_URL'] = 'http://localhost:4566'
 os.environ['ACM_ENDPOINT_URL'] = 'http://localhost:4566'
 
+# Import CloudFront and ACM utilities (use actual exported functions)
 from utils.cloudfront_manager import (
-    create_custom_domain_distribution,
+    create_distribution,
     get_distribution_status,
-    update_distribution_certificate,
-    invalidate_distribution_cache
+    update_distribution,
+    create_invalidation
 )
 from utils.acm_manager import (
     request_certificate,
@@ -28,6 +29,9 @@ from utils.dns_propagation import (
     check_dns_propagation,
     check_cname_propagation
 )
+
+# Note: The test references 'create_custom_domain_distribution' which doesn't exist
+# Tests should use 'create_distribution' instead
 
 
 class TestCloudFrontManager:
