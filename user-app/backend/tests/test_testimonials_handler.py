@@ -103,11 +103,11 @@ class TestTestimonialCreation:
 class TestTestimonialUpdate:
     """Test testimonial update operations"""
     
-    @patch('handlers.testimonials_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     @patch('handlers.testimonials_handler.testimonials_table')
     def test_update_testimonial_approval_status(self, mock_table, mock_features):
         """Test photographer can approve testimonials"""
-        user = {'id': 'photo123', 'role': 'photographer'}
+        user = {'id': 'photo123', 'role': 'photographer', 'plan': 'pro'}
         testimonial_id = 'test123'
         body = {'approved': True, 'featured': True}
         
@@ -134,7 +134,7 @@ class TestTestimonialUpdate:
     @patch('handlers.testimonials_handler.testimonials_table')
     def test_update_testimonial_verifies_ownership(self, mock_table):
         """Test update blocked when not owner"""
-        user = {'id': 'photo123', 'role': 'photographer'}
+        user = {'id': 'photo123', 'role': 'photographer', 'plan': 'pro'}
         testimonial_id = 'test123'
         body = {'approved': True}
         
@@ -156,11 +156,11 @@ class TestTestimonialUpdate:
 class TestTestimonialDeletion:
     """Test testimonial deletion"""
     
-    @patch('handlers.testimonials_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     @patch('handlers.testimonials_handler.testimonials_table')
     def test_delete_testimonial_success(self, mock_table, mock_features):
         """Test successful testimonial deletion"""
-        user = {'id': 'photo123', 'role': 'photographer'}
+        user = {'id': 'photo123', 'role': 'photographer', 'plan': 'pro'}
         testimonial_id = 'test123'
         
         mock_features.return_value = ({'client_invoicing': True}, {}, 'pro')
@@ -183,7 +183,7 @@ class TestTestimonialRequest:
     """Test testimonial request email sending"""
     
     @patch('handlers.testimonials_handler.send_email')
-    @patch('handlers.testimonials_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     def test_request_testimonial_sends_email(self, mock_features, mock_send_email):
         """Test testimonial request email is sent"""
         user = {
@@ -206,10 +206,10 @@ class TestTestimonialRequest:
         assert result['statusCode'] == 200
         assert mock_send_email.called
     
-    @patch('handlers.testimonials_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     def test_request_testimonial_validates_email(self, mock_features):
         """Test email validation in testimonial request"""
-        user = {'id': 'photo123', 'role': 'photographer'}
+        user = {'id': 'photo123', 'role': 'photographer', 'plan': 'pro'}
         body = {
             'client_name': 'Jane Client',
             'client_email': '',  # Missing email
