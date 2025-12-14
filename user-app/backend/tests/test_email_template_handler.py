@@ -25,6 +25,7 @@ def sample_pro_user():
         'id': 'user_pro',
         'email': 'pro@example.com',
         'name': 'Pro User',
+        'role': 'photographer',
         'plan': 'pro'
     }
 
@@ -35,6 +36,7 @@ def sample_free_user():
         'id': 'user_free',
         'email': 'free@example.com',
         'name': 'Free User',
+        'role': 'photographer',
         'plan': 'free'
     }
 
