@@ -22,6 +22,7 @@ def mock_user():
         'id': 'test-user-123',
         'email': 'photographer@test.com',
         'name': 'Test Photographer',
+        'role': 'photographer',
         'plan': 'plus'
     }
 
@@ -45,11 +46,11 @@ def mock_branding_settings():
 class TestGetBrandingSettings:
     """Test branding settings retrieval"""
     
-    @patch('handlers.branding_handler.get_user_features')
+    @patch("handlers.subscription_handler.get_user_features")
     @patch('handlers.branding_handler.users_table')
-    def test_get_branding_settings_success(self, mock_table, mock_features, mock_user, mock_branding_settings):
+    def test_get_branding_settings_success(self, mock_table, mock_get_features, mock_user, mock_branding_settings):
         """Test successful retrieval of branding settings"""
-        mock_features.return_value = ({'remove_branding': True}, None, None)
+        mock_get_features.return_value = ({'remove_branding': True}, None, None)
         user_data = {'email': mock_user['email']}
         user_data.update(mock_branding_settings)
         mock_table.get_item.return_value = {'Item': user_data}
@@ -64,11 +65,11 @@ class TestGetBrandingSettings:
         assert body['theme_customization']['primary_color'] == '#FF5733'
         assert body['has_access'] is True
     
-    @patch('handlers.branding_handler.get_user_features')
+    @patch("handlers.subscription_handler.get_user_features")
     @patch('handlers.branding_handler.users_table')
-    def test_get_branding_settings_returns_defaults(self, mock_table, mock_features, mock_user):
+    def test_get_branding_settings_returns_defaults(self, mock_table, mock_get_features, mock_user):
         """Test returning default settings when none exist"""
-        mock_features.return_value = ({'remove_branding': True}, None, None)
+        mock_get_features.return_value = ({'remove_branding': True}, None, None)
         mock_table.get_item.return_value = {'Item': {'email': mock_user['email']}}
         
         response = handle_get_branding_settings(mock_user)
@@ -92,11 +93,11 @@ class TestGetBrandingSettings:
 class TestUpdateBrandingSettings:
     """Test branding settings updates"""
     
-    @patch('handlers.branding_handler.get_user_features')
+    @patch('handlers.subscription_handler.get_user_features')
     @patch('handlers.branding_handler.users_table')
-    def test_update_branding_settings_success(self, mock_table, mock_features, mock_user):
+    def test_update_branding_settings_success(self, mock_table, mock_get_features, mock_user):
         """Test successful branding settings update"""
-        mock_features.return_value = ({'remove_branding': True}, None, None)
+        mock_get_features.return_value = ({'remove_branding': True}, 'plus', 'Plus')
         
         body = {
             'hide_galerly_branding': True,
@@ -120,10 +121,10 @@ class TestUpdateBrandingSettings:
         call_args = mock_table.update_item.call_args
         assert 'hide_galerly_branding' in str(call_args)
     
-    @patch('handlers.branding_handler.get_user_features')
-    def test_update_branding_requires_plus_plan(self, mock_features, mock_user):
+    @patch('handlers.subscription_handler.get_user_features')
+    def test_update_branding_requires_plus_plan(self, mock_get_features, mock_user):
         """Test that branding customization requires Plus or higher plan"""
-        mock_features.return_value = ({'remove_branding': False}, None, None)
+        mock_get_features.return_value = ({'remove_branding': False}, 'starter', 'Starter')
         
         body = {'hide_galerly_branding': True}
         
@@ -133,11 +134,11 @@ class TestUpdateBrandingSettings:
         body_data = json.loads(response['body'])
         assert 'upgrade_required' in body_data
     
-    @patch('handlers.branding_handler.get_user_features')
+    @patch("handlers.subscription_handler.get_user_features")
     @patch('handlers.branding_handler.users_table')
-    def test_update_branding_partial_update(self, mock_table, mock_features, mock_user):
+    def test_update_branding_partial_update(self, mock_table, mock_get_features, mock_user):
         """Test partial branding settings update"""
-        mock_features.return_value = ({'remove_branding': True}, None, None)
+        mock_get_features.return_value = ({'remove_branding': True}, None, None)
         
         body = {
             'hide_galerly_branding': True
@@ -153,12 +154,12 @@ class TestUpdateBrandingSettings:
 class TestUploadBrandingLogo:
     """Test branding logo upload"""
     
-    @patch('handlers.branding_handler.get_user_features')
+    @patch("handlers.subscription_handler.get_user_features")
     @patch('handlers.branding_handler.users_table')
     @patch('handlers.branding_handler.s3_client')
-    def test_upload_branding_logo_success(self, mock_s3, mock_table, mock_features, mock_user):
+    def test_upload_branding_logo_success(self, mock_s3, mock_table, mock_get_features, mock_user):
         """Test successful logo upload"""
-        mock_features.return_value = ({'remove_branding': True}, None, None)
+        mock_get_features.return_value = ({'remove_branding': True}, None, None)
         
         # Create a simple base64 encoded image
         image_data = b'fake-image-data'
@@ -179,10 +180,10 @@ class TestUploadBrandingLogo:
         mock_s3.put_object.assert_called_once()
         mock_table.update_item.assert_called_once()
     
-    @patch('handlers.branding_handler.get_user_features')
-    def test_upload_branding_logo_requires_plus_plan(self, mock_features, mock_user):
+    @patch("handlers.subscription_handler.get_user_features")
+    def test_upload_branding_logo_requires_plus_plan(self, mock_get_features, mock_user):
         """Test that logo upload requires Plus or higher plan"""
-        mock_features.return_value = ({'remove_branding': False}, None, None)
+        mock_get_features.return_value = ({'remove_branding': False}, None, None)
         
         body = {
             'file_data': 'data:image/png;base64,fake-data',
@@ -193,10 +194,10 @@ class TestUploadBrandingLogo:
         
         assert response['statusCode'] == 403
     
-    @patch('handlers.branding_handler.get_user_features')
-    def test_upload_branding_logo_validates_file_data(self, mock_features, mock_user):
+    @patch("handlers.subscription_handler.get_user_features")
+    def test_upload_branding_logo_validates_file_data(self, mock_get_features, mock_user):
         """Test validation of file data"""
-        mock_features.return_value = ({'remove_branding': True}, None, None)
+        mock_get_features.return_value = ({'remove_branding': True}, None, None)
         
         body = {
             'filename': 'logo.png'
@@ -209,10 +210,10 @@ class TestUploadBrandingLogo:
         body_data = json.loads(response['body'])
         assert 'required' in body_data['error'].lower()
     
-    @patch('handlers.branding_handler.get_user_features')
-    def test_upload_branding_logo_rejects_oversized_files(self, mock_features, mock_user):
+    @patch("handlers.subscription_handler.get_user_features")
+    def test_upload_branding_logo_rejects_oversized_files(self, mock_get_features, mock_user):
         """Test rejection of files over 2MB"""
-        mock_features.return_value = ({'remove_branding': True}, None, None)
+        mock_get_features.return_value = ({'remove_branding': True}, None, None)
         
         # Create data larger than 2MB
         large_image_data = b'x' * (3 * 1024 * 1024)  # 3MB
@@ -229,10 +230,10 @@ class TestUploadBrandingLogo:
         body_data = json.loads(response['body'])
         assert '2mb' in body_data['error'].lower()
     
-    @patch('handlers.branding_handler.get_user_features')
-    def test_upload_branding_logo_handles_invalid_base64(self, mock_features, mock_user):
+    @patch("handlers.subscription_handler.get_user_features")
+    def test_upload_branding_logo_handles_invalid_base64(self, mock_get_features, mock_user):
         """Test handling of invalid base64 data"""
-        mock_features.return_value = ({'remove_branding': True}, None, None)
+        mock_get_features.return_value = ({'remove_branding': True}, None, None)
         
         body = {
             'file_data': 'invalid-base64-data!!!',
@@ -247,11 +248,11 @@ class TestUploadBrandingLogo:
 class TestGetPublicBranding:
     """Test public branding retrieval (for client galleries)"""
     
-    @patch('handlers.branding_handler.get_user_features')
+    @patch("handlers.subscription_handler.get_user_features")
     @patch('handlers.branding_handler.users_table')
-    def test_get_public_branding_success(self, mock_table, mock_features, mock_branding_settings):
+    def test_get_public_branding_success(self, mock_table, mock_get_features, mock_branding_settings):
         """Test successful public branding retrieval"""
-        mock_features.return_value = ({'remove_branding': True}, None, None)
+        mock_get_features.return_value = ({'remove_branding': True}, None, None)
         photographer_data = {'id': 'photographer-123', 'name': 'Test Photographer'}
         photographer_data.update(mock_branding_settings)
         mock_table.query.return_value = {'Items': [photographer_data]}
@@ -264,11 +265,11 @@ class TestGetPublicBranding:
         assert body['custom_branding']['enabled'] is True
         assert body['photographer_name'] == 'Test Photographer'
     
-    @patch('handlers.branding_handler.get_user_features')
+    @patch("handlers.subscription_handler.get_user_features")
     @patch('handlers.branding_handler.users_table')
-    def test_get_public_branding_respects_plan_limits(self, mock_table, mock_features, mock_branding_settings):
+    def test_get_public_branding_respects_plan_limits(self, mock_table, mock_get_features, mock_branding_settings):
         """Test that branding is hidden if user doesn't have access"""
-        mock_features.return_value = ({'remove_branding': False}, None, None)
+        mock_get_features.return_value = ({'remove_branding': False}, None, None)
         photographer_data = {'id': 'photographer-123', 'name': 'Test Photographer'}
         photographer_data.update(mock_branding_settings)
         mock_table.query.return_value = {'Items': [photographer_data]}
@@ -306,12 +307,12 @@ class TestEdgeCases:
         body = json.loads(response['body'])
         assert 'error' in body
     
-    @patch('handlers.branding_handler.get_user_features')
+    @patch("handlers.subscription_handler.get_user_features")
     @patch('handlers.branding_handler.users_table')
     @patch('handlers.branding_handler.s3_client')
-    def test_upload_logo_handles_s3_errors(self, mock_s3, mock_table, mock_features, mock_user):
+    def test_upload_logo_handles_s3_errors(self, mock_s3, mock_table, mock_get_features, mock_user):
         """Test handling of S3 upload errors"""
-        mock_features.return_value = ({'remove_branding': True}, None, None)
+        mock_get_features.return_value = ({'remove_branding': True}, None, None)
         mock_s3.put_object.side_effect = Exception('S3 error')
         
         image_data = b'fake-image-data'
@@ -326,11 +327,11 @@ class TestEdgeCases:
         
         assert response['statusCode'] == 500
     
-    @patch('handlers.branding_handler.get_user_features')
+    @patch("handlers.subscription_handler.get_user_features")
     @patch('handlers.branding_handler.users_table')
-    def test_update_with_empty_body_returns_error(self, mock_table, mock_features, mock_user):
+    def test_update_with_empty_body_returns_error(self, mock_table, mock_get_features, mock_user):
         """Test that empty update body returns error"""
-        mock_features.return_value = ({'remove_branding': True}, None, None)
+        mock_get_features.return_value = ({'remove_branding': True}, None, None)
         
         body = {}
         
