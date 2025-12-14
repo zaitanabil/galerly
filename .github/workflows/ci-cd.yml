@@ -332,9 +332,9 @@ jobs:
               "STRIPE_SECRET_KEY": "${{ secrets.STRIPE_SECRET_KEY }}",
               "STRIPE_WEBHOOK_SECRET": "${{ secrets.STRIPE_WEBHOOK_SECRET }}",
               "JWT_SECRET": "${{ secrets.JWT_SECRET }}",
-              "SMTP_HOST": "${{ secrets.SMTP_HOST }}",
-              "SMTP_PORT": "${{ secrets.SMTP_PORT }}",
-              "SMTP_USER": "${{ secrets.SMTP_USER }}",
+              "SMTP_HOST": "${{ vars.SMTP_HOST }}",
+              "SMTP_PORT": "${{ vars.SMTP_PORT }}",
+              "SMTP_USER": "${{ vars.SMTP_USER }}",
               "SMTP_PASSWORD": "${{ secrets.SMTP_PASSWORD }}",
               "FROM_EMAIL": "${{ vars.FROM_EMAIL }}",
               "FROM_NAME": "${{ vars.FROM_NAME }}"
@@ -342,33 +342,24 @@ jobs:
           }
           EOF
           
-          # Check if Lambda function exists
-          if aws lambda get-function --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} 2>/dev/null; then
-            # Update existing function code
-            aws lambda update-function-code \
-              --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
-              --zip-file fileb://lambda-package/deployment-${{ github.sha }}.zip \
-              --publish
-            
-            # Update environment variables from JSON file
-            aws lambda update-function-configuration \
-              --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
-              --environment file:///tmp/lambda-env.json
-          else
-            # Create new function with environment from JSON file
-            aws lambda create-function \
-              --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
-              --runtime python3.11 \
-              --role arn:aws:iam::${{ vars.AWS_ACCOUNT_ID }}:role/galerly-lambda-execution-role \
-              --handler api.handler \
-              --zip-file fileb://lambda-package/deployment-${{ github.sha }}.zip \
-              --timeout 30 \
-              --memory-size 512 \
-              --publish \
-              --environment file:///tmp/lambda-env.json
-          fi
+          # Check if Lambda function exists (lambda already exists from setup script)
+          echo "Updating existing Lambda function..."
+          aws lambda update-function-code \
+            --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
+            --zip-file fileb://lambda-package/deployment-${{ github.sha }}.zip \
+            --region ${{ vars.AWS_REGION }} \
+            --publish
           
-          NEW_VERSION=$(aws lambda get-function --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} --query 'Configuration.Version' --output text)
+          # Wait for update to complete
+          sleep 5
+          
+          # Update environment variables from JSON file
+          aws lambda update-function-configuration \
+            --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} \
+            --environment file:///tmp/lambda-env.json \
+            --region ${{ vars.AWS_REGION }}
+          
+          NEW_VERSION=$(aws lambda get-function --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} --query 'Configuration.Version' --output text --region ${{ vars.AWS_REGION }})
           echo "deployed=true" >> $GITHUB_OUTPUT
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "Deployed Lambda version: $NEW_VERSION"
