@@ -128,12 +128,20 @@ class TestUpdatePortfolioSettings:
 class TestVerifyCustomDomain:
     """Test custom domain verification"""
     
+    @patch('handlers.portfolio_handler.users_table')
     @patch('handlers.portfolio_handler.get_user_features')
     @patch('handlers.portfolio_handler.dns.resolver.resolve')
-    def test_verify_custom_domain_success(self, mock_dns_resolve, mock_get_features):
+    def test_verify_custom_domain_success(self, mock_dns_resolve, mock_get_features, mock_users):
         """Valid custom domain can be verified"""
         mock_get_features.return_value = ({'custom_domain': True}, 'ultimate', 'ultimate')
-        mock_dns_resolve.return_value = ['galerly.com']
+        
+        # Mock DNS CNAME response
+        mock_rdata = type('obj', (object,), {'target': 'galerly.com.'})()
+        mock_dns_resolve.return_value = [mock_rdata]
+        
+        # Mock domain check
+        mock_users.scan.return_value = {'Items': []}
+        mock_users.update_item.return_value = {}
         
         user = {'id': 'user123', 'email': 'user@test.com'}
         body = {'domain': 'photos.example.com'}

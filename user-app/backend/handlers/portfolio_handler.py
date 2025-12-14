@@ -2,6 +2,8 @@
 Portfolio customization handlers
 """
 import os
+import json
+import dns.resolver
 from datetime import datetime, timezone
 from boto3.dynamodb.conditions import Key
 from utils.config import users_table, galleries_table, dynamodb
