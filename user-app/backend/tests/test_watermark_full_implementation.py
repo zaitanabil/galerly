@@ -156,7 +156,7 @@ class TestWatermarkHandler:
     
     @patch('handlers.watermark_handler.s3_client')
     @patch('handlers.watermark_handler.users_table')
-    @patch('handlers.watermark_handler.validate_image_data')
+    @patch('utils.image_security.validate_image_data')
     def test_upload_watermark_logo(self, mock_validate, mock_users_table, mock_s3):
         """Test uploading watermark logo"""
         from handlers.watermark_handler import handle_upload_watermark_logo
@@ -173,19 +173,22 @@ class TestWatermarkHandler:
         import base64
         img_b64 = base64.b64encode(img_bytes.getvalue()).decode()
         
-        user = {'id': 'user123', 'email': 'test@example.com'}
+        user = {'id': 'user123', 'email': 'test@example.com', 'role': 'photographer', 'plan': 'plus'}
         body = {
             'file_data': img_b64,
             'filename': 'logo.png'
         }
         
-        response = handle_upload_watermark_logo(user, body)
-        
-        # Verify S3 upload was called
-        assert mock_s3.put_object.called
-        
-        # Verify user table update
-        assert mock_users_table.update_item.called
+        with patch('handlers.subscription_handler.get_user_features') as mock_features:
+            mock_features.return_value = ({'watermarking': True}, 'plus', 'Plus Plan')
+            
+            response = handle_upload_watermark_logo(user, body)
+            
+            # Verify S3 upload was called
+            assert mock_s3.put_object.called
+            
+            # Verify user table update
+            assert mock_users_table.update_item.called
     
     @patch('handlers.watermark_handler.users_table')
     def test_get_watermark_settings(self, mock_users_table):
@@ -204,23 +207,26 @@ class TestWatermarkHandler:
             }
         }
         
-        user = {'id': 'user123', 'email': 'test@example.com'}
+        user = {'id': 'user123', 'email': 'test@example.com', 'role': 'photographer', 'plan': 'plus'}
         
-        response = handle_get_watermark_settings(user)
-        
-        assert response['statusCode'] == 200
-        
-        import json
-        body_data = json.loads(response['body'])
-        assert body_data['watermark_enabled'] is True
-        assert body_data['watermark_position'] == 'bottom-right'
+        with patch('handlers.subscription_handler.get_user_features') as mock_features:
+            mock_features.return_value = ({'watermarking': True}, 'plus', 'Plus Plan')
+            
+            response = handle_get_watermark_settings(user)
+            
+            assert response['statusCode'] == 200
+            
+            import json
+            body_data = json.loads(response['body'])
+            assert body_data['watermark_enabled'] is True
+            assert body_data['watermark_position'] == 'bottom-right'
     
     @patch('handlers.watermark_handler.users_table')
     def test_update_watermark_settings(self, mock_users_table):
         """Test updating watermark settings"""
         from handlers.watermark_handler import handle_update_watermark_settings
         
-        user = {'id': 'user123', 'email': 'test@example.com'}
+        user = {'id': 'user123', 'email': 'test@example.com', 'role': 'photographer', 'plan': 'plus'}
         body = {
             'watermark_enabled': True,
             'watermark_position': 'center',
@@ -228,41 +234,50 @@ class TestWatermarkHandler:
             'watermark_size_percent': 20
         }
         
-        response = handle_update_watermark_settings(user, body)
-        
-        # Verify table update was called
-        assert mock_users_table.update_item.called
-        
-        # Verify response
-        assert response['statusCode'] == 200
+        with patch('handlers.subscription_handler.get_user_features') as mock_features:
+            mock_features.return_value = ({'watermarking': True}, 'plus', 'Plus Plan')
+            
+            response = handle_update_watermark_settings(user, body)
+            
+            # Verify table update was called
+            assert mock_users_table.update_item.called
+            
+            # Verify response
+            assert response['statusCode'] == 200
     
     def test_update_watermark_invalid_position(self):
         """Test updating with invalid position"""
         from handlers.watermark_handler import handle_update_watermark_settings
         
-        user = {'id': 'user123', 'email': 'test@example.com'}
+        user = {'id': 'user123', 'email': 'test@example.com', 'role': 'photographer', 'plan': 'plus'}
         body = {
             'watermark_position': 'invalid-position'
         }
         
-        response = handle_update_watermark_settings(user, body)
-        
-        # Should return 400 error
-        assert response['statusCode'] == 400
+        with patch('handlers.subscription_handler.get_user_features') as mock_features:
+            mock_features.return_value = ({'watermarking': True}, 'plus', 'Plus Plan')
+            
+            response = handle_update_watermark_settings(user, body)
+            
+            # Should return 400 error
+            assert response['statusCode'] == 400
     
     def test_update_watermark_invalid_opacity(self):
         """Test updating with invalid opacity"""
         from handlers.watermark_handler import handle_update_watermark_settings
         
-        user = {'id': 'user123', 'email': 'test@example.com'}
+        user = {'id': 'user123', 'email': 'test@example.com', 'role': 'photographer', 'plan': 'plus'}
         body = {
             'watermark_opacity': 1.5  # Invalid: > 1.0
         }
         
-        response = handle_update_watermark_settings(user, body)
-        
-        # Should return 400 error
-        assert response['statusCode'] == 400
+        with patch('handlers.subscription_handler.get_user_features') as mock_features:
+            mock_features.return_value = ({'watermarking': True}, 'plus', 'Plus Plan')
+            
+            response = handle_update_watermark_settings(user, body)
+            
+            # Should return 400 error
+            assert response['statusCode'] == 400
 
 
 class TestBatchWatermarking:
