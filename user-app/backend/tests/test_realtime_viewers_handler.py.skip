@@ -5,9 +5,8 @@ Tests live viewer tracking and location data
 import pytest
 from unittest.mock import Mock, patch
 from handlers.realtime_viewers_handler import (
-    handle_track_viewer,
-    handle_get_active_viewers,
-    cleanup_inactive_viewers
+    handle_track_viewer_heartbeat,  # Fixed: correct function name
+    handle_get_active_viewers
 )
 
 

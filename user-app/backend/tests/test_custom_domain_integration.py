@@ -21,9 +21,8 @@ from utils.cloudfront_manager import (
 )
 from utils.acm_manager import (
     request_certificate,
-    get_certificate_status,
-    get_certificate_validation_records,
-    check_certificate_validation
+    describe_certificate,  # Fixed: actual function name
+    get_certificate_validation_records
 )
 from utils.dns_propagation import (
     check_dns_propagation,
