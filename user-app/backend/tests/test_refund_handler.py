@@ -96,6 +96,12 @@ class TestRefundProcessing:
             }]
         }
         
+        # Mock Stripe invoice list (handler needs this first)
+        mock_invoice = Mock()
+        mock_invoice.status = 'paid'
+        mock_invoice.payment_intent = 'pi_123'
+        mock_stripe.Invoice.list.return_value = Mock(data=[mock_invoice])
+        
         # Mock Stripe refund creation
         mock_stripe.Refund.create.return_value = Mock(
             id='re_123',
@@ -103,9 +109,13 @@ class TestRefundProcessing:
             status='succeeded'
         )
         
-        result = handle_request_refund(user, body)
-        # Verify refund was processed
-        assert mock_stripe.Refund.create.called
+        # Mock users_table
+        with patch('handlers.refund_handler.users_table') as mock_users:
+            mock_users.get_item.return_value = {'Item': {'email': 'user@test.com', 'plan': 'pro'}}
+            
+            result = handle_request_refund(user, body)
+            # Verify refund was processed
+            assert mock_stripe.Refund.create.called
     
     @patch('handlers.refund_handler.handle_check_refund_eligibility')
     def test_refund_blocked_when_not_eligible(self, mock_eligibility):

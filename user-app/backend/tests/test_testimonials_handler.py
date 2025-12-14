@@ -182,7 +182,7 @@ class TestTestimonialDeletion:
 class TestTestimonialRequest:
     """Test testimonial request email sending"""
     
-    @patch('handlers.testimonials_handler.send_email')
+    @patch('utils.email.send_email')
     @patch('handlers.subscription_handler.get_user_features')
     def test_request_testimonial_sends_email(self, mock_features, mock_send_email):
         """Test testimonial request email is sent"""

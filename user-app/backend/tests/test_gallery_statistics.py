@@ -94,25 +94,15 @@ class TestGalleryStatistics:
         return get_views_for_photo
     
     @patch('handlers.gallery_statistics_handler.galleries_table')
-    @patch('handlers.gallery_statistics_handler.gallery_views_table')
     @patch('handlers.gallery_statistics_handler.photos_table')
-    @patch('handlers.gallery_statistics_handler.photo_views_table')
     def test_get_gallery_statistics_success(
-        self, mock_photo_views_table, mock_photos_table,
-        mock_gallery_views_table, mock_galleries_table,
+        self, mock_photos_table, mock_galleries_table,
         mock_user, mock_gallery, mock_gallery_views, mock_photos
     ):
         """Test successful gallery statistics retrieval"""
         # Setup mocks
         mock_galleries_table.get_item.return_value = {'Item': mock_gallery}
-        mock_gallery_views_table.query.return_value = {'Items': mock_gallery_views}
         mock_photos_table.query.return_value = {'Items': mock_photos}
-        
-        # Mock photo views
-        def mock_photo_views_query(*args, **kwargs):
-            photo_id = kwargs.get('KeyConditionExpression')
-            return {'Items': []}  # Simplified for test
-        mock_photo_views_table.query.side_effect = mock_photo_views_query
         
         # Call handler
         response = handle_get_gallery_statistics(mock_user, 'gallery123')
