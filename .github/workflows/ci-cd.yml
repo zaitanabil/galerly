@@ -280,7 +280,7 @@ jobs:
           echo "Backed up Lambda version: $CURRENT_VERSION"
           
       - name: Download frontend build
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: frontend-dist-${{ github.sha }}
           path: user-app/frontend/dist
@@ -304,7 +304,7 @@ jobs:
           fi
           
       - name: Download Lambda package
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: lambda-package-${{ github.sha }}
           path: lambda-package
