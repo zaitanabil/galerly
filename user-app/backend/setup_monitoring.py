@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 
 # AWS clients
-cloudwatch = boto3.client('cloudwatch', region_name=os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'))
+cloudwatch = boto3.client('cloudwatch', region_name=os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1'))
 
 # Configuration
 DASHBOARD_NAME = os.environ.get('CLOUDWATCH_DASHBOARD_NAME', 'Galerly-NewFeatures-Dashboard')
@@ -50,7 +50,7 @@ def create_dashboard():
                     ],
                     "view": "timeSeries",
                     "stacked": false,
-                    "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+                    "region": os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1'),
                     "title": "Lambda Function Health",
                     "period": 300,
                     "yAxis": {
@@ -75,7 +75,7 @@ def create_dashboard():
                     ],
                     "view": "timeSeries",
                     "stacked": false,
-                    "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+                    "region": os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1'),
                     "title": "Lambda Duration (ms)",
                     "period": 300,
                     "yAxis": {
@@ -102,7 +102,7 @@ def create_dashboard():
                     ],
                     "view": "timeSeries",
                     "stacked": false,
-                    "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+                    "region": os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1'),
                     "title": "API Gateway Requests & Errors",
                     "period": 300
                 }
@@ -122,7 +122,7 @@ def create_dashboard():
                     ],
                     "view": "timeSeries",
                     "stacked": false,
-                    "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+                    "region": os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1'),
                     "title": "API Gateway Latency (ms)",
                     "period": 300,
                     "yAxis": {
@@ -146,7 +146,7 @@ def create_dashboard():
                     ],
                     "view": "timeSeries",
                     "stacked": false,
-                    "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+                    "region": os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1'),
                     "title": "API Gateway Cache Performance",
                     "period": 300
                 }
@@ -166,7 +166,7 @@ def create_dashboard():
                     ],
                     "view": "timeSeries",
                     "stacked": false,
-                    "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+                    "region": os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1'),
                     "title": "DynamoDB - client_selections Table",
                     "period": 300
                 }
@@ -186,7 +186,7 @@ def create_dashboard():
                     ],
                     "view": "timeSeries",
                     "stacked": false,
-                    "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+                    "region": os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1'),
                     "title": "DynamoDB Errors & Throttling",
                     "period": 300
                 }
@@ -201,7 +201,7 @@ def create_dashboard():
                 "height": 6,
                 "properties": {
                     "query": f"SOURCE '/aws/lambda/{LAMBDA_FUNCTION_NAME}'\n| fields @timestamp, @message\n| filter @message like /ERROR/\n| sort @timestamp desc\n| limit 100",
-                    "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+                    "region": os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1'),
                     "stacked": false,
                     "title": "Recent Errors",
                     "view": "table"
@@ -228,7 +228,7 @@ def create_dashboard():
                 "height": 6,
                 "properties": {
                     "query": f"SOURCE '/aws/lambda/{LAMBDA_FUNCTION_NAME}'\n| fields @timestamp\n| filter @message like /\\/seo\\/recommendations/\n| stats count() by bin(5m)",
-                    "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+                    "region": os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1'),
                     "stacked": false,
                     "title": "SEO Recommendations Requests",
                     "view": "timeSeries"
@@ -243,7 +243,7 @@ def create_dashboard():
                 "height": 6,
                 "properties": {
                     "query": f"SOURCE '/aws/lambda/{LAMBDA_FUNCTION_NAME}'\n| fields @timestamp\n| filter @message like /\\/analytics\\/export\\/excel/\n| stats count() by bin(5m)",
-                    "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+                    "region": os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1'),
                     "stacked": false,
                     "title": "Excel Export Requests",
                     "view": "timeSeries"
@@ -258,7 +258,7 @@ def create_dashboard():
                 "height": 6,
                 "properties": {
                     "query": f"SOURCE '/aws/lambda/{LAMBDA_FUNCTION_NAME}'\n| fields @timestamp\n| filter @message like /\\/selections\\//\n| stats count() by bin(5m)",
-                    "region": os.environ.get('AWS_DEFAULT_REGION', 'us-east-1'),
+                    "region": os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1'),
                     "stacked": false,
                     "title": "Selection Workflow Requests",
                     "view": "timeSeries"
@@ -286,9 +286,9 @@ def create_dashboard():
                 "properties": {
                     "title": "Alarm Status",
                     "alarms": [
-                        f"arn:aws:cloudwatch:{os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')}:{os.environ.get('AWS_ACCOUNT_ID', '123456789012')}:alarm:galerly-lambda-errors",
-                        f"arn:aws:cloudwatch:{os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')}:{os.environ.get('AWS_ACCOUNT_ID', '123456789012')}:alarm:galerly-lambda-duration",
-                        f"arn:aws:cloudwatch:{os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')}:{os.environ.get('AWS_ACCOUNT_ID', '123456789012')}:alarm:galerly-api-5xx"
+                        f"arn:aws:cloudwatch:{os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1')}:{os.environ.get('AWS_ACCOUNT_ID', '123456789012')}:alarm:galerly-lambda-errors",
+                        f"arn:aws:cloudwatch:{os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1')}:{os.environ.get('AWS_ACCOUNT_ID', '123456789012')}:alarm:galerly-lambda-duration",
+                        f"arn:aws:cloudwatch:{os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1')}:{os.environ.get('AWS_ACCOUNT_ID', '123456789012')}:alarm:galerly-api-5xx"
                     ]
                 }
             }
@@ -304,7 +304,7 @@ def create_dashboard():
         print(f"✓ Dashboard created successfully: {DASHBOARD_NAME}")
         print(f"  Dashboard ARN: {response.get('DashboardValidationMessages', [])}")
         print(f"\nView dashboard at:")
-        print(f"https://console.aws.amazon.com/cloudwatch/home?region={os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')}#dashboards:name={DASHBOARD_NAME}")
+        print(f"https://console.aws.amazon.com/cloudwatch/home?region={os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1')}#dashboards:name={DASHBOARD_NAME}")
         
         return response
         

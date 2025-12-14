@@ -1,0 +1,204 @@
+{
+  "IAMUsers": [
+    {
+      "username": "galerly-cicd",
+      "description": "GitHub Actions CI/CD deployment user",
+      "policyGroup": "galerly-cicd-group",
+      "policies": [
+        "GalerlyCICDDeploymentPolicy",
+        "GalerlyS3DeploymentPolicy",
+        "GalerlyLambdaDeploymentPolicy",
+        "GalerlyCloudFrontInvalidationPolicy"
+      ]
+    },
+    {
+      "username": "galerly-app-runtime",
+      "description": "Application runtime user (backend operations)",
+      "policyGroup": "galerly-app-runtime-group",
+      "policies": [
+        "GalerlyDynamoDBFullAccessPolicy",
+        "GalerlyS3StoragePolicy",
+        "GalerlySESEmailPolicy",
+        "GalerlyCloudWatchLogsPolicy"
+      ]
+    },
+    {
+      "username": "galerly-admin",
+      "description": "Administrative user for manual operations",
+      "policyGroup": "galerly-admin-group",
+      "policies": [
+        "GalerlyAdminPolicy"
+      ]
+    }
+  ],
+  
+  "PolicyGroups": [
+    {
+      "name": "galerly-cicd-group",
+      "description": "CI/CD deployment permissions",
+      "users": ["galerly-cicd"]
+    },
+    {
+      "name": "galerly-app-runtime-group",
+      "description": "Application runtime permissions",
+      "users": ["galerly-app-runtime"]
+    },
+    {
+      "name": "galerly-admin-group",
+      "description": "Administrative permissions",
+      "users": ["galerly-admin"]
+    }
+  ],
+  
+  "Policies": [
+    {
+      "name": "GalerlyCICDDeploymentPolicy",
+      "description": "Core CI/CD deployment permissions",
+      "actions": [
+        "iam:GetRole",
+        "iam:PassRole",
+        "iam:CreateRole",
+        "iam:AttachRolePolicy",
+        "lambda:GetFunction",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:PublishVersion",
+        "apigateway:GET",
+        "apigateway:POST",
+        "apigateway:PUT",
+        "apigateway:PATCH"
+      ],
+      "resources": [
+        "arn:aws:lambda:us-east-1:*:function:galerly-*",
+        "arn:aws:apigateway:us-east-1::/restapis/*",
+        "arn:aws:iam::*:role/galerly-*"
+      ]
+    },
+    {
+      "name": "GalerlyS3DeploymentPolicy",
+      "description": "S3 deployment permissions for frontend",
+      "actions": [
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:PutObjectAcl"
+      ],
+      "resources": [
+        "arn:aws:s3:::galerly-frontend",
+        "arn:aws:s3:::galerly-frontend/*"
+      ]
+    },
+    {
+      "name": "GalerlyLambdaDeploymentPolicy",
+      "description": "Lambda function deployment",
+      "actions": [
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:PublishVersion",
+        "lambda:CreateAlias",
+        "lambda:UpdateAlias",
+        "lambda:GetFunction",
+        "lambda:GetFunctionConfiguration"
+      ],
+      "resources": [
+        "arn:aws:lambda:us-east-1:*:function:galerly-api"
+      ]
+    },
+    {
+      "name": "GalerlyCloudFrontInvalidationPolicy",
+      "description": "CloudFront cache invalidation",
+      "actions": [
+        "cloudfront:CreateInvalidation",
+        "cloudfront:GetInvalidation",
+        "cloudfront:ListInvalidations"
+      ],
+      "resources": [
+        "arn:aws:cloudfront::*:distribution/E1234567890ABC"
+      ]
+    },
+    {
+      "name": "GalerlyDynamoDBFullAccessPolicy",
+      "description": "Full access to all Galerly DynamoDB tables",
+      "actions": [
+        "dynamodb:BatchGetItem",
+        "dynamodb:BatchWriteItem",
+        "dynamodb:PutItem",
+        "dynamodb:GetItem",
+        "dynamodb:UpdateItem",
+        "dynamodb:DeleteItem",
+        "dynamodb:Query",
+        "dynamodb:Scan",
+        "dynamodb:DescribeTable"
+      ],
+      "resources": [
+        "arn:aws:dynamodb:us-east-1:*:table/galerly-*"
+      ]
+    },
+    {
+      "name": "GalerlyS3StoragePolicy",
+      "description": "S3 storage for photos and renditions",
+      "actions": [
+        "s3:ListBucket",
+        "s3:GetObject",
+        "s3:PutObject",
+        "s3:DeleteObject",
+        "s3:PutObjectAcl",
+        "s3:GetObjectAcl",
+        "s3:AbortMultipartUpload",
+        "s3:ListMultipartUploadParts"
+      ],
+      "resources": [
+        "arn:aws:s3:::galerly-images-storage",
+        "arn:aws:s3:::galerly-images-storage/*",
+        "arn:aws:s3:::galerly-renditions",
+        "arn:aws:s3:::galerly-renditions/*"
+      ]
+    },
+    {
+      "name": "GalerlySESEmailPolicy",
+      "description": "SES email sending permissions",
+      "actions": [
+        "ses:SendEmail",
+        "ses:SendRawEmail",
+        "ses:SendTemplatedEmail",
+        "ses:GetSendQuota",
+        "ses:GetSendStatistics"
+      ],
+      "resources": ["*"]
+    },
+    {
+      "name": "GalerlyCloudWatchLogsPolicy",
+      "description": "CloudWatch Logs write permissions",
+      "actions": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents",
+        "logs:DescribeLogStreams"
+      ],
+      "resources": [
+        "arn:aws:logs:us-east-1:*:log-group:/aws/lambda/galerly-*",
+        "arn:aws:logs:us-east-1:*:log-group:/aws/lambda/galerly-*:*"
+      ]
+    },
+    {
+      "name": "GalerlyAdminPolicy",
+      "description": "Full administrative access for manual operations",
+      "actions": [
+        "dynamodb:*",
+        "s3:*",
+        "lambda:*",
+        "cloudfront:*",
+        "apigateway:*",
+        "ses:*",
+        "logs:*",
+        "cloudwatch:*",
+        "acm:*",
+        "iam:GetRole",
+        "iam:PassRole"
+      ],
+      "resources": ["*"],
+      "condition": "Limited to galerly-* resources where possible"
+    }
+  ]
+}

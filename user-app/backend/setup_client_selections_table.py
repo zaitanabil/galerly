@@ -9,7 +9,7 @@ from botocore.exceptions import ClientError
 
 # Environment detection
 LOCALSTACK_ENDPOINT = os.environ.get('DYNAMODB_ENDPOINT_URL', 'http://localhost:4566')
-AWS_REGION = os.environ.get('AWS_DEFAULT_REGION', 'us-east-1')
+AWS_REGION = os.environ.get('AWS_DEFAULT_REGION', 'eu-central-1')
 
 # Check if running in LocalStack or AWS
 IS_LOCALSTACK = os.environ.get('USE_LOCALSTACK', 'false').lower() == 'true'

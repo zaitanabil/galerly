@@ -8,7 +8,7 @@ import time
 from typing import Dict, Any, List, Optional
 
 # Get AWS configuration from environment
-AWS_REGION = os.environ.get('AWS_REGION', 'us-east-1')
+AWS_REGION = os.environ.get('AWS_REGION', 'eu-central-1')
 AWS_ENDPOINT_URL = os.environ.get('AWS_ENDPOINT_URL')
 
 # ACM client (must be in us-east-1 for CloudFront)

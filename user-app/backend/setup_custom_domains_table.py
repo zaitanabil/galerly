@@ -17,7 +17,7 @@ load_dotenv()
 endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
 dynamodb_config = {
     'service_name': 'dynamodb',
-    'region_name': os.environ.get('AWS_REGION', 'us-east-1')
+    'region_name': os.environ.get('AWS_REGION', 'eu-central-1')
 }
 
 if endpoint_url:

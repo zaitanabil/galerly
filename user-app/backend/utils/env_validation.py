@@ -73,7 +73,7 @@ def validate_env_var_format(var_name: str, var_value: str) -> Tuple[bool, str]:
     
     # AWS Region
     if var_name == 'AWS_REGION':
-        valid_regions = ['us-east-1', 'us-west-2', 'eu-west-1', 'eu-central-1', 'ap-southeast-1']
+        valid_regions = ['eu-central-1', 'eu-west-1', 'us-east-1', 'us-west-2', 'ap-southeast-1']
         if var_value not in valid_regions:
             return False, f"AWS_REGION '{var_value}' may be invalid"
     

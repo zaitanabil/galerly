@@ -20,6 +20,11 @@ build/
 *.swo
 *~
 
+# Credentials and secrets
+.github/credentials/
+.github/generated/gh-commands.sh
+.github/AWS_SETUP_COMPLETE.md
+
 # Environment files
 .env
 .env.local

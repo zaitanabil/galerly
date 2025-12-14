@@ -1,0 +1,261 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  ANALYTICS_TABLE: ${{ vars.ANALYTICS_TABLE }}
+  API_BASE_URL: ${{ vars.API_BASE_URL }}
+  API_GATEWAY_ID: ${{ vars.API_GATEWAY_ID }}
+  AUDIT_LOG_TABLE: ${{ vars.AUDIT_LOG_TABLE }}
+  AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+  AWS_REGION: ${{ vars.AWS_REGION }}
+  AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+  BILLING_TABLE: ${{ vars.BILLING_TABLE }}
+  CDN_DOMAIN: ${{ vars.CDN_DOMAIN }}
+  CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+  CLOUDFRONT_FUNCTION_NAME: ${{ vars.CLOUDFRONT_FUNCTION_NAME }}
+  CNAME_TARGET: ${{ vars.CNAME_TARGET }}
+  DEBUG: ${{ vars.DEBUG }}
+  DEFAULT_INVOICE_CURRENCY: ${{ vars.DEFAULT_INVOICE_CURRENCY }}
+  DEFAULT_INVOICE_DUE_DATE: ${{ vars.DEFAULT_INVOICE_DUE_DATE }}
+  DEFAULT_INVOICE_PAYMENT_METHOD: ${{ vars.DEFAULT_INVOICE_PAYMENT_METHOD }}
+  DEFAULT_ITEM_PRICE: ${{ vars.DEFAULT_ITEM_PRICE }}
+  DEFAULT_ITEM_QUANTITY: ${{ vars.DEFAULT_ITEM_QUANTITY }}
+  DEFAULT_PAGE_SIZE: ${{ vars.DEFAULT_PAGE_SIZE }}
+  DEFAULT_PHOTOGRAPHER_NAME: ${{ vars.DEFAULT_PHOTOGRAPHER_NAME }}
+  DEFAULT_SERVICE_NAME: ${{ vars.DEFAULT_SERVICE_NAME }}
+  DYNAMODB_TABLE_ANALYTICS: ${{ vars.DYNAMODB_TABLE_ANALYTICS }}
+  DYNAMODB_TABLE_APPOINTMENTS: ${{ vars.DYNAMODB_TABLE_APPOINTMENTS }}
+  DYNAMODB_TABLE_AUDIT_LOG: ${{ vars.DYNAMODB_TABLE_AUDIT_LOG }}
+  DYNAMODB_TABLE_BACKGROUND_JOBS: ${{ vars.DYNAMODB_TABLE_BACKGROUND_JOBS }}
+  DYNAMODB_TABLE_BILLING: ${{ vars.DYNAMODB_TABLE_BILLING }}
+  DYNAMODB_TABLE_CITIES: ${{ vars.DYNAMODB_TABLE_CITIES }}
+  DYNAMODB_TABLE_CLIENT_FAVORITES: ${{ vars.DYNAMODB_TABLE_CLIENT_FAVORITES }}
+  DYNAMODB_TABLE_CLIENT_FEEDBACK: ${{ vars.DYNAMODB_TABLE_CLIENT_FEEDBACK }}
+  DYNAMODB_TABLE_CONTACT: ${{ vars.DYNAMODB_TABLE_CONTACT }}
+  DYNAMODB_TABLE_CONTRACTS: ${{ vars.DYNAMODB_TABLE_CONTRACTS }}
+  DYNAMODB_TABLE_CUSTOM_DOMAINS: ${{ vars.DYNAMODB_TABLE_CUSTOM_DOMAINS }}
+  DYNAMODB_TABLE_DOWNLOADS: ${{ vars.DYNAMODB_TABLE_DOWNLOADS }}
+  DYNAMODB_TABLE_EMAIL_TEMPLATES: ${{ vars.DYNAMODB_TABLE_EMAIL_TEMPLATES }}
+  DYNAMODB_TABLE_FEATURES: ${{ vars.DYNAMODB_TABLE_FEATURES }}
+  DYNAMODB_TABLE_FEATURE_REQUESTS: ${{ vars.DYNAMODB_TABLE_FEATURE_REQUESTS }}
+  DYNAMODB_TABLE_FOLLOWUP_SEQUENCES: ${{ vars.DYNAMODB_TABLE_FOLLOWUP_SEQUENCES }}
+  DYNAMODB_TABLE_GALLERIES: ${{ vars.DYNAMODB_TABLE_GALLERIES }}
+  DYNAMODB_TABLE_INVOICES: ${{ vars.DYNAMODB_TABLE_INVOICES }}
+  DYNAMODB_TABLE_LEADS: ${{ vars.DYNAMODB_TABLE_LEADS }}
+  DYNAMODB_TABLE_NEWSLETTERS: ${{ vars.DYNAMODB_TABLE_NEWSLETTERS }}
+  DYNAMODB_TABLE_NOTIFICATION_PREFERENCES: ${{ vars.DYNAMODB_TABLE_NOTIFICATION_PREFERENCES }}
+  DYNAMODB_TABLE_ONBOARDING_WORKFLOWS: ${{ vars.DYNAMODB_TABLE_ONBOARDING_WORKFLOWS }}
+  DYNAMODB_TABLE_PACKAGES: ${{ vars.DYNAMODB_TABLE_PACKAGES }}
+  DYNAMODB_TABLE_PAYMENT_REMINDERS: ${{ vars.DYNAMODB_TABLE_PAYMENT_REMINDERS }}
+  DYNAMODB_TABLE_PHOTOS: ${{ vars.DYNAMODB_TABLE_PHOTOS }}
+  DYNAMODB_TABLE_PLAN_VIOLATIONS: ${{ vars.DYNAMODB_TABLE_PLAN_VIOLATIONS }}
+  DYNAMODB_TABLE_RATE_LIMITS: ${{ vars.DYNAMODB_TABLE_RATE_LIMITS }}
+  DYNAMODB_TABLE_RAW_VAULT: ${{ vars.DYNAMODB_TABLE_RAW_VAULT }}
+  DYNAMODB_TABLE_REFUNDS: ${{ vars.DYNAMODB_TABLE_REFUNDS }}
+  DYNAMODB_TABLE_SALES: ${{ vars.DYNAMODB_TABLE_SALES }}
+  DYNAMODB_TABLE_SEO_SETTINGS: ${{ vars.DYNAMODB_TABLE_SEO_SETTINGS }}
+  DYNAMODB_TABLE_SERVICES: ${{ vars.DYNAMODB_TABLE_SERVICES }}
+  DYNAMODB_TABLE_SESSIONS: ${{ vars.DYNAMODB_TABLE_SESSIONS }}
+  DYNAMODB_TABLE_SUBSCRIPTIONS: ${{ vars.DYNAMODB_TABLE_SUBSCRIPTIONS }}
+  DYNAMODB_TABLE_TESTIMONIALS: ${{ vars.DYNAMODB_TABLE_TESTIMONIALS }}
+  DYNAMODB_TABLE_USERS: ${{ vars.DYNAMODB_TABLE_USERS }}
+  DYNAMODB_TABLE_USER_FEATURES: ${{ vars.DYNAMODB_TABLE_USER_FEATURES }}
+  DYNAMODB_TABLE_VIDEO_ANALYTICS: ${{ vars.DYNAMODB_TABLE_VIDEO_ANALYTICS }}
+  DYNAMODB_TABLE_VISITOR_TRACKING: ${{ vars.DYNAMODB_TABLE_VISITOR_TRACKING }}
+  ENVIRONMENT: ${{ vars.ENVIRONMENT }}
+  FROM_EMAIL: ${{ vars.FROM_EMAIL }}
+  FROM_NAME: ${{ vars.FROM_NAME }}
+  FRONTEND_URL: ${{ vars.FRONTEND_URL }}
+  GALLERIES_TABLE: ${{ vars.GALLERIES_TABLE }}
+  JWT_SECRET: ${{ secrets.JWT_SECRET }}
+  LAMBDA_FUNCTION_NAME: ${{ vars.LAMBDA_FUNCTION_NAME }}
+  LIFECYCLE_DELETED_RETENTION_DAYS: ${{ vars.LIFECYCLE_DELETED_RETENTION_DAYS }}
+  LIFECYCLE_ORIGINAL_GLACIER_DAYS: ${{ vars.LIFECYCLE_ORIGINAL_GLACIER_DAYS }}
+  LIFECYCLE_ORIGINAL_STANDARD_DAYS: ${{ vars.LIFECYCLE_ORIGINAL_STANDARD_DAYS }}
+  LIFECYCLE_RENDITION_IA_DAYS: ${{ vars.LIFECYCLE_RENDITION_IA_DAYS }}
+  LIFECYCLE_TEMP_EXPIRY_DAYS: ${{ vars.LIFECYCLE_TEMP_EXPIRY_DAYS }}
+  MAX_USERNAME_BASE_LENGTH: ${{ vars.MAX_USERNAME_BASE_LENGTH }}
+  MULTIPART_CHUNK_SIZE: ${{ vars.MULTIPART_CHUNK_SIZE }}
+  PHOTOS_TABLE: ${{ vars.PHOTOS_TABLE }}
+  PRESIGNED_URL_EXPIRY: ${{ vars.PRESIGNED_URL_EXPIRY }}
+  REFUND_LIST_LIMIT: ${{ vars.REFUND_LIST_LIMIT }}
+  S3_BUCKET: ${{ vars.S3_BUCKET }}
+  S3_PHOTOS_BUCKET: ${{ vars.S3_PHOTOS_BUCKET }}
+  S3_RENDITIONS_BUCKET: ${{ vars.S3_RENDITIONS_BUCKET }}
+  SESSION_MAX_AGE: ${{ vars.SESSION_MAX_AGE }}
+  SMTP_HOST: ${{ vars.SMTP_HOST }}
+  SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+  SMTP_PORT: ${{ vars.SMTP_PORT }}
+  SMTP_USER: ${{ vars.SMTP_USER }}
+  STRIPE_PRICE_PLUS: ${{ vars.STRIPE_PRICE_PLUS }}
+  STRIPE_PRICE_PLUS_ANNUAL: ${{ vars.STRIPE_PRICE_PLUS_ANNUAL }}
+  STRIPE_PRICE_PLUS_MONTHLY: ${{ vars.STRIPE_PRICE_PLUS_MONTHLY }}
+  STRIPE_PRICE_PRO: ${{ vars.STRIPE_PRICE_PRO }}
+  STRIPE_PRICE_PRO_ANNUAL: ${{ vars.STRIPE_PRICE_PRO_ANNUAL }}
+  STRIPE_PRICE_PRO_MONTHLY: ${{ vars.STRIPE_PRICE_PRO_MONTHLY }}
+  STRIPE_PRICE_STARTER: ${{ vars.STRIPE_PRICE_STARTER }}
+  STRIPE_PRICE_STARTER_ANNUAL: ${{ vars.STRIPE_PRICE_STARTER_ANNUAL }}
+  STRIPE_PRICE_STARTER_MONTHLY: ${{ vars.STRIPE_PRICE_STARTER_MONTHLY }}
+  STRIPE_PRICE_ULTIMATE: ${{ vars.STRIPE_PRICE_ULTIMATE }}
+  STRIPE_PRICE_ULTIMATE_ANNUAL: ${{ vars.STRIPE_PRICE_ULTIMATE_ANNUAL }}
+  STRIPE_PRICE_ULTIMATE_MONTHLY: ${{ vars.STRIPE_PRICE_ULTIMATE_MONTHLY }}
+  STRIPE_PUBLISHABLE_KEY: ${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+  STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+  STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+  SUBSCRIPTIONS_TABLE: ${{ vars.SUBSCRIPTIONS_TABLE }}
+  SUPPORT_EMAIL: ${{ vars.SUPPORT_EMAIL }}
+  USERS_TABLE: ${{ vars.USERS_TABLE }}
+  VITE_API_TIMEOUT: ${{ vars.VITE_API_TIMEOUT }}
+  VITE_BACKEND_HOST: ${{ vars.VITE_BACKEND_HOST }}
+  VITE_BACKEND_PORT: ${{ vars.VITE_BACKEND_PORT }}
+  VITE_BACKEND_PROTOCOL: ${{ vars.VITE_BACKEND_PROTOCOL }}
+  VITE_CHUNK_SIZE: ${{ vars.VITE_CHUNK_SIZE }}
+  VITE_DEFAULT_PAGE_SIZE: ${{ vars.VITE_DEFAULT_PAGE_SIZE }}
+  VITE_DOUBLE_TAP_THRESHOLD: ${{ vars.VITE_DOUBLE_TAP_THRESHOLD }}
+  VITE_ENABLE_ANALYTICS: ${{ vars.VITE_ENABLE_ANALYTICS }}
+  VITE_ENABLE_ERROR_REPORTING: ${{ vars.VITE_ENABLE_ERROR_REPORTING }}
+  VITE_ENVIRONMENT: ${{ vars.VITE_ENVIRONMENT }}
+  VITE_IS_LOCALSTACK: ${{ vars.VITE_IS_LOCALSTACK }}
+  VITE_MAX_CONCURRENT_UPLOADS: ${{ vars.VITE_MAX_CONCURRENT_UPLOADS }}
+  VITE_MAX_PAGE_SIZE: ${{ vars.VITE_MAX_PAGE_SIZE }}
+  VITE_PAGE_SIZE: ${{ vars.VITE_PAGE_SIZE }}
+  VITE_S3_RENDITIONS_BUCKET: ${{ vars.VITE_S3_RENDITIONS_BUCKET }}
+  VITE_SCROLL_DEBOUNCE_DELAY: ${{ vars.VITE_SCROLL_DEBOUNCE_DELAY }}
+  VITE_SCROLL_THRESHOLD: ${{ vars.VITE_SCROLL_THRESHOLD }}
+  VITE_SLIDESHOW_INTERVAL: ${{ vars.VITE_SLIDESHOW_INTERVAL }}
+  VITE_UPLOAD_TIMEOUT: ${{ vars.VITE_UPLOAD_TIMEOUT }}
+  VITE_VIDEO_AUTOPLAY_DELAY: ${{ vars.VITE_VIDEO_AUTOPLAY_DELAY }}
+  VITE_VIDEO_PROGRESS_UPDATE_INTERVAL: ${{ vars.VITE_VIDEO_PROGRESS_UPDATE_INTERVAL }}
+  WEBSITE_URL: ${{ vars.WEBSITE_URL }}
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: user-app/frontend/package-lock.json
+          
+      - name: Install backend dependencies
+        working-directory: user-app/backend
+        run: pip install -r requirements.txt
+        
+      - name: Install frontend dependencies
+        working-directory: user-app/frontend
+        run: npm ci
+        
+      - name: Run backend tests
+        working-directory: user-app/backend
+        run: pytest tests/ -v
+        
+      - name: Run frontend tests
+        working-directory: user-app/frontend
+        run: npm test
+        
+  build-frontend:
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: user-app/frontend/package-lock.json
+          
+      - name: Install dependencies
+        working-directory: user-app/frontend
+        run: npm ci
+        
+      - name: Build frontend
+        working-directory: user-app/frontend
+        run: npm run build
+        
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-dist
+          path: user-app/frontend/dist
+          retention-days: 7
+          
+  build-docker:
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Build test Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.test
+          push: false
+          tags: galerly-test:${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [test, build-frontend, build-docker]
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+          
+      - name: Download frontend build
+        uses: actions/download-artifact@v4
+        with:
+          name: frontend-dist
+          path: user-app/frontend/dist
+          
+      - name: Deploy frontend to S3
+        run: |
+          aws s3 sync user-app/frontend/dist/ s3://${{ vars.S3_BUCKET }}/ --delete
+          
+      - name: Invalidate CloudFront cache
+        run: |
+          aws cloudfront create-invalidation --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} --paths "/*"
+          
+      - name: Deploy backend Lambda
+        working-directory: user-app/backend
+        run: |
+          pip install -r requirements.txt -t package/
+          cd package && zip -r ../deployment.zip . && cd ..
+          zip -g deployment.zip *.py handlers/*.py utils/*.py
+          aws lambda update-function-code --function-name ${{ vars.LAMBDA_FUNCTION_NAME }} --zip-file fileb://deployment.zip

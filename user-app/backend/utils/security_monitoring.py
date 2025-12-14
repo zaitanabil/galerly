@@ -9,8 +9,8 @@ from datetime import datetime, timezone
 from typing import Dict, Any
 
 # Initialize AWS clients
-cloudwatch = boto3.client('cloudwatch', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
-sns = boto3.client('sns', region_name=os.environ.get('AWS_REGION', 'us-east-1'))
+cloudwatch = boto3.client('cloudwatch', region_name=os.environ.get('AWS_REGION', 'eu-central-1'))
+sns = boto3.client('sns', region_name=os.environ.get('AWS_REGION', 'eu-central-1'))
 
 # SNS topic for security alerts
 SECURITY_ALERT_TOPIC_ARN = os.environ.get('SECURITY_ALERT_TOPIC_ARN', '')
