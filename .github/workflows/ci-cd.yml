@@ -184,10 +184,11 @@ jobs:
           # Build Lambda package in Docker (Lambda-compatible environment)
           echo "Building Lambda package in Docker for Lambda compatibility..."
           docker run --rm \
+            --entrypoint /bin/bash \
             -v "$PWD":/var/task \
             -w /var/task \
             public.ecr.aws/lambda/python:3.11 \
-            bash -c "
+            -c "
               pip install -r requirements.txt -t package/ && \
               find package/ -type d -name 'tests' -exec rm -rf {} + 2>/dev/null || true && \
               find package/ -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
