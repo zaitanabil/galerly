@@ -182,7 +182,7 @@ jobs:
         working-directory: user-app/backend
         run: |
           # Build Lambda package in Docker (Lambda-compatible environment)
-          # The Docker container builds dependencies and creates the ZIP in one go
+          # Use only binary wheels to avoid compilation
           echo "Building Lambda package in Docker for Lambda compatibility..."
           docker run --rm \
             --entrypoint /bin/bash \
@@ -190,7 +190,7 @@ jobs:
             -w /var/task \
             public.ecr.aws/lambda/python:3.11 \
             -c "
-              pip install -r requirements.txt -t package/ && \
+              pip install --only-binary=:all: -r requirements.txt -t package/ && \
               cd package && zip -r9 ../deployment-${{ github.sha }}.zip . && cd .. && \
               zip -g deployment-${{ github.sha }}.zip *.py && \
               zip -rg deployment-${{ github.sha }}.zip handlers/ utils/
