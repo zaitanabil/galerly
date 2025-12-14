@@ -35,7 +35,7 @@ class TestDecoratorIntegration:
     @patch('handlers.subscription_handler.get_user_features')
     def test_raw_vault_blocked_without_ultimate_plan(self, mock_features):
         """Test RAW vault blocked without Ultimate plan"""
-        from handlers.raw_vault_handler import handle_archive_raw_file
+        from handlers.raw_vault_handler import handle_archive_to_vault
         
         user = {'id': 'user123', 'email': 'test@example.com', 'role': 'photographer', 'plan': 'pro'}
         body = {'photo_id': 'photo123', 'filename': 'test.raw'}
@@ -43,7 +43,7 @@ class TestDecoratorIntegration:
         # Mock Pro plan without raw_vault feature
         mock_features.return_value = ({'raw_vault': False}, {}, 'pro')
         
-        result = handle_archive_raw_file(user, body)
+        result = handle_archive_to_vault(user, body)
         assert result['statusCode'] == 403
         response_body = json.loads(result['body'])
         assert 'upgrade_required' in response_body
