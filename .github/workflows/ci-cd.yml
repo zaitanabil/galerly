@@ -181,12 +181,20 @@ jobs:
         id: lambda-package
         working-directory: user-app/backend
         run: |
-          pip install -r requirements.txt -t package/
-          find package/ -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true
-          find package/ -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
-          find package/ -name "*.pyc" -delete
-          find package/ -name "*.pyo" -delete
-          find package/ -name "*.dist-info" -exec rm -rf {} + 2>/dev/null || true
+          # Build Lambda package in Docker (Lambda-compatible environment)
+          echo "Building Lambda package in Docker for Lambda compatibility..."
+          docker run --rm \
+            -v "$PWD":/var/task \
+            -w /var/task \
+            public.ecr.aws/lambda/python:3.11 \
+            bash -c "
+              pip install -r requirements.txt -t package/ && \
+              find package/ -type d -name 'tests' -exec rm -rf {} + 2>/dev/null || true && \
+              find package/ -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true && \
+              find package/ -name '*.pyc' -delete && \
+              find package/ -name '*.pyo' -delete && \
+              find package/ -name '*.dist-info' -exec rm -rf {} + 2>/dev/null || true
+            "
           cd package && zip -r9 ../deployment-${{ github.sha }}.zip . && cd ..
           zip -g deployment-${{ github.sha }}.zip *.py
           zip -rg deployment-${{ github.sha }}.zip handlers/ utils/
