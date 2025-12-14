@@ -8,7 +8,7 @@ from utils.response import create_response
 from utils.plan_enforcement import require_role
 
 
-@require_role('photographer', 'client')
+@require_role('photographer')  # Fixed: require_role only accepts one role
 def handle_bulk_download(gallery_id, user, event):
     """
     Return pre-generated ZIP file URL for all gallery photos

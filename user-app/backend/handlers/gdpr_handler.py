@@ -29,7 +29,7 @@ def decimal_to_float(obj):
     return obj
 
 
-@require_role('photographer', 'client')
+@require_role('photographer')  # Fixed: require_role only accepts one role  
 def handle_export_user_data(user):
     """
     Export all user data in machine-readable format (GDPR Article 20)
@@ -295,7 +295,7 @@ def handle_export_user_data(user):
         })
 
 
-@require_role('photographer', 'client')
+@require_role('photographer')  # Fixed: require_role only accepts one role
 def handle_get_data_retention_info(user):
     """
     Get information about data retention policies (GDPR Article 13)

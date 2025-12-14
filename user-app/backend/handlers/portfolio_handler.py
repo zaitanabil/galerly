@@ -7,6 +7,7 @@ from boto3.dynamodb.conditions import Key
 from utils.config import users_table, galleries_table, dynamodb
 from utils.response import create_response
 from handlers.subscription_handler import get_user_features
+from utils.plan_enforcement import require_plan, require_role  # Added missing imports
 
 # Import custom domain utilities
 try:

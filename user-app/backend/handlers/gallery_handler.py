@@ -13,7 +13,7 @@ from handlers.subscription_handler import enforce_gallery_limit
 from utils.email import send_gallery_shared_email
 from utils.gallery_layouts import get_layout, get_all_layouts, get_layouts_by_category, get_layout_categories, validate_layout_photos
 from utils.gallery_layouts import get_all_layouts, get_layout, get_layouts_by_category, get_layout_categories
-from utils.plan_enforcement import require_role
+from utils.plan_enforcement import require_role, require_plan  # Added require_plan
 
 def enrich_photos_with_any_favorites(photos, gallery, photographer_email=None):
     """Add is_favorite field and favorites_count to photos - TRUE if ANY client (or photographer) favorited it"""
