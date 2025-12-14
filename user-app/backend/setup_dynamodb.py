@@ -1012,7 +1012,7 @@ def main():
         # Note: S3 bucket setup is handled by init scripts in LocalStack
         # The init-resources.sh script already creates and configures S3 buckets
         if AWS_ENDPOINT_URL:
-                print("")
+            print("")
             print("ℹ️  S3 bucket setup is handled by LocalStack init scripts")
     elif command == 'optimize':
         optimize_tables()
