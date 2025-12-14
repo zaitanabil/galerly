@@ -781,9 +781,9 @@ def handle_refresh_custom_domain_certificate(user, domain):
             return create_response(400, {'error': 'Incomplete domain configuration'})
         
         # Check certificate status
-        cert_result = get_certificate_status(certificate_arn)
+        cert_result = describe_certificate(certificate_arn)
         
-        if not cert_result['success']:
+        if cert_result.get('error'):
             return create_response(500, {
                 'error': f'Failed to check certificate: {cert_result.get("error")}'
             })
@@ -794,11 +794,19 @@ def handle_refresh_custom_domain_certificate(user, domain):
             # Certificate is validated! Update CloudFront distribution
             print(f"Certificate validated for {domain}, updating CloudFront...")
             
-            update_result = update_distribution_certificate(distribution_id, certificate_arn)
-            
-            if not update_result['success']:
+            try:
+                update_result = update_distribution(distribution_id, {
+                    'certificate_arn': certificate_arn,
+                    'aliases': [domain]
+                })
+                
+                if update_result.get('error'):
+                    return create_response(500, {
+                        'error': f'Failed to update distribution: {update_result.get("error")}'
+                    })
+            except Exception as e:
                 return create_response(500, {
-                    'error': f'Failed to update distribution: {update_result.get("error")}'
+                    'error': f'Failed to update distribution: {str(e)}'
                 })
             
             # Update config status
