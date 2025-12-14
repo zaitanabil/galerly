@@ -10,6 +10,7 @@ def mock_user():
     return {
         'id': 'user123',
         'email': 'test@example.com',
+        'role': 'photographer',
         'plan': 'plus'
     }
 

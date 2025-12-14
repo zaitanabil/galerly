@@ -22,6 +22,7 @@ def mock_user():
         'id': 'test-user-123',
         'email': 'photographer@test.com',
         'name': 'Test Photographer',
+        'role': 'photographer',
         'plan': 'pro'
     }
 
@@ -46,11 +47,11 @@ def mock_scheduled_email():
 class TestScheduleAutomatedEmail:
     """Test email scheduling functionality"""
     
-    @patch('handlers.email_automation_handler.get_user_features')
+    @patch("handlers.subscription_handler.get_user_features")
     @patch('handlers.email_automation_handler.email_queue_table')
-    def test_schedule_email_success(self, mock_table, mock_features, mock_user):
+    def test_schedule_email_success(self, mock_table, mock_get_features, mock_user):
         """Test successful email scheduling"""
-        mock_features.return_value = ({'email_templates': True}, None, None)
+        mock_get_features.return_value = ({'email_templates': True}, "pro", "Pro")
         
         body = {
             'recipient_email': 'client@test.com',
@@ -68,10 +69,10 @@ class TestScheduleAutomatedEmail:
         assert 'email_id' in body_data
         mock_table.put_item.assert_called_once()
     
-    @patch('handlers.email_automation_handler.get_user_features')
-    def test_schedule_email_requires_pro_plan(self, mock_features, mock_user):
+    @patch("handlers.subscription_handler.get_user_features")
+    def test_schedule_email_requires_pro_plan(self, mock_get_features, mock_user):
         """Test that email automation requires Pro/Ultimate plan"""
-        mock_features.return_value = ({'email_templates': False}, None, None)
+        mock_get_features.return_value = ({'email_templates': False}, "pro", "Pro")
         
         body = {
             'recipient_email': 'client@test.com',
@@ -87,10 +88,10 @@ class TestScheduleAutomatedEmail:
         body_data = json.loads(response['body'])
         assert 'upgrade_required' in body_data
     
-    @patch('handlers.email_automation_handler.get_user_features')
-    def test_schedule_email_validates_required_fields(self, mock_features, mock_user):
+    @patch("handlers.subscription_handler.get_user_features")
+    def test_schedule_email_validates_required_fields(self, mock_get_features, mock_user):
         """Test validation of required fields"""
-        mock_features.return_value = ({'email_templates': True}, None, None)
+        mock_get_features.return_value = ({'email_templates': True}, "pro", "Pro")
         
         body = {
             'recipient_email': 'client@test.com'
@@ -103,10 +104,10 @@ class TestScheduleAutomatedEmail:
         body_data = json.loads(response['body'])
         assert 'required' in body_data['error'].lower()
     
-    @patch('handlers.email_automation_handler.get_user_features')
-    def test_schedule_email_prevents_past_scheduling(self, mock_features, mock_user):
+    @patch("handlers.subscription_handler.get_user_features")
+    def test_schedule_email_prevents_past_scheduling(self, mock_get_features, mock_user):
         """Test that emails cannot be scheduled in the past"""
-        mock_features.return_value = ({'email_templates': True}, None, None)
+        mock_get_features.return_value = ({'email_templates': True}, "pro", "Pro")
         
         body = {
             'recipient_email': 'client@test.com',
@@ -127,12 +128,12 @@ class TestScheduleAutomatedEmail:
 class TestSetupGalleryAutomation:
     """Test gallery automation setup"""
     
-    @patch('handlers.email_automation_handler.get_user_features')
+    @patch("handlers.subscription_handler.get_user_features")
     @patch('utils.config.galleries_table')
     @patch('handlers.email_automation_handler.email_queue_table')
-    def test_setup_gallery_automation_success(self, mock_queue, mock_galleries, mock_features, mock_user):
+    def test_setup_gallery_automation_success(self, mock_queue, mock_galleries, mock_get_features, mock_user):
         """Test successful gallery automation setup"""
-        mock_features.return_value = ({'email_templates': True}, None, None)
+        mock_get_features.return_value = ({'email_templates': True}, "pro", "Pro")
         mock_galleries.get_item.return_value = {
             'Item': {
                 'id': 'gallery-123',
@@ -158,11 +159,11 @@ class TestSetupGalleryAutomation:
         body_data = json.loads(response['body'])
         assert 'scheduled_emails' in body_data or 'count' in body_data
     
-    @patch('handlers.email_automation_handler.get_user_features')
+    @patch("handlers.subscription_handler.get_user_features")
     @patch('utils.config.galleries_table')
-    def test_setup_gallery_automation_validates_ownership(self, mock_galleries, mock_features, mock_user):
+    def test_setup_gallery_automation_validates_ownership(self, mock_galleries, mock_get_features, mock_user):
         """Test that users can only setup automation for their galleries"""
-        mock_features.return_value = ({'email_templates': True}, None, None)
+        mock_get_features.return_value = ({'email_templates': True}, "pro", "Pro")
         mock_galleries.get_item.return_value = {
             'Item': {
                 'id': 'gallery-123',
