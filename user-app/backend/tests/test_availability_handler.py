@@ -84,16 +84,27 @@ class TestGetAvailabilitySettings:
 class TestUpdateAvailabilitySettings:
     """Test availability settings updates"""
     
-    @patch('handlers.availability_handler.dynamodb')
-    def test_update_settings_success(self, mock_dynamodb):
+    @patch('handlers.availability_handler.availability_settings_table')
+    @patch('handlers.subscription_handler.get_user_features')
+    def test_update_settings_success(self, mock_get_features, mock_table):
         """Test successful settings update"""
+        # Mock get_user_features to allow access
+        mock_get_features.return_value = (
+            {'scheduler': True},  # features
+            'ultimate',  # plan_id
+            'Ultimate'  # plan_name
+        )
+        
         # Mock table
-        mock_table = MagicMock()
-        mock_dynamodb.Table.return_value = mock_table
         mock_table.put_item.return_value = {}
         
-        # Mock user
-        mock_user = {'id': 'test-user-123', 'email': 'photographer@test.com', 'plan': 'ultimate'}
+        # Mock user with all required fields
+        mock_user = {
+            'id': 'test-user-123',
+            'email': 'photographer@test.com',
+            'role': 'photographer',
+            'plan': 'ultimate'
+        }
         
         body = {
             'timezone': 'America/Los_Angeles',
@@ -106,22 +117,31 @@ class TestUpdateAvailabilitySettings:
         assert response['statusCode'] == 200
         mock_table.put_item.assert_called_once()
     
-    @patch('handlers.availability_handler.dynamodb')
-    def test_update_settings_requires_scheduler_feature(self, mock_dynamodb):
+    @patch('handlers.availability_handler.availability_settings_table')
+    @patch('handlers.subscription_handler.get_user_features')
+    def test_update_settings_requires_scheduler_feature(self, mock_get_features, mock_table):
         """Test that scheduler feature is required"""
-        # Mock table
-        mock_table = MagicMock()
-        mock_dynamodb.Table.return_value = mock_table
+        # Mock get_user_features to deny access
+        mock_get_features.return_value = (
+            {'scheduler': False},  # No scheduler feature
+            'starter',  # plan_id
+            'Starter'  # plan_name
+        )
         
         # Mock user
-        mock_user = {'id': 'test-user-123', 'email': 'photographer@test.com', 'plan': 'starter'}
+        mock_user = {
+            'id': 'test-user-123',
+            'email': 'photographer@test.com',
+            'role': 'photographer',
+            'plan': 'starter'
+        }
         
         body = {'timezone': 'America/Los_Angeles'}
         
         response = handle_update_availability_settings(mock_user, body)
         
-        # Decorator should block this
-        assert response['statusCode'] in [403, 200]
+        # Decorator should block this with 403
+        assert response['statusCode'] == 403
 
 
 class TestGetAvailableSlots:

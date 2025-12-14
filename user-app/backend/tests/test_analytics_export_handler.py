@@ -15,10 +15,23 @@ class TestAnalyticsExportHandler:
     
     @patch('handlers.analytics_export_handler.generate_summary_csv')
     @patch('handlers.analytics_export_handler.dynamodb')
-    def test_export_csv(self, mock_dynamodb, mock_generate):
+    @patch('handlers.subscription_handler.get_user_features')
+    def test_export_csv(self, mock_get_features, mock_dynamodb, mock_generate):
         """Test CSV export"""
-        # Mock user from decorator
-        user = {'id': 'photo1', 'role': 'photographer'}
+        # Mock user with required fields for decorator
+        user = {
+            'id': 'photo1',
+            'email': 'photographer@test.com',
+            'role': 'photographer',
+            'plan': 'pro'
+        }
+        
+        # Mock get_user_features to allow access
+        mock_get_features.return_value = (
+            {'analytics_export': True},  # features
+            'pro',  # plan_id
+            'Pro'  # plan_name
+        )
         
         # Mock DynamoDB response
         mock_table = MagicMock()
@@ -42,10 +55,23 @@ class TestAnalyticsExportHandler:
     
     @patch('handlers.analytics_export_handler.dynamodb')
     @patch('handlers.analytics_export_handler.s3_client')
-    def test_export_pdf(self, mock_s3, mock_dynamodb):
+    @patch('handlers.subscription_handler.get_user_features')
+    def test_export_pdf(self, mock_get_features, mock_s3, mock_dynamodb):
         """Test PDF export"""
-        # Mock user from decorator
-        user = {'id': 'photo1', 'role': 'photographer'}
+        # Mock user with required fields for decorator
+        user = {
+            'id': 'photo1',
+            'email': 'photographer@test.com',
+            'role': 'photographer',
+            'plan': 'pro'
+        }
+        
+        # Mock get_user_features to allow access
+        mock_get_features.return_value = (
+            {'analytics_export': True},  # features
+            'pro',  # plan_id
+            'Pro'  # plan_name
+        )
         
         # Mock DynamoDB response
         mock_table = MagicMock()

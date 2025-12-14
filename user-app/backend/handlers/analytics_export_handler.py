@@ -39,8 +39,8 @@ def handle_export_analytics_csv(user, query_params):
         
         # Parse parameters
         export_type = query_params.get('type', 'summary')  # summary, galleries, photos, clients
-        start_date = params.get('start_date')
-        end_date = params.get('end_date', datetime.now().isoformat())
+        start_date = query_params.get('start_date')
+        end_date = query_params.get('end_date', datetime.now().isoformat())
         
         # Default to last 30 days if no start date
         if not start_date:
