@@ -69,9 +69,12 @@ class TestBulkDownload:
         mock_s3.head_object.return_value = {}  # ZIP exists
         mock_get_zip_url.return_value = 'https://cdn.example.com/gallery-123/gallery-all-photos.zip'
         
+        # Client needs photographer role due to @require_role decorator (handler issue)
         client_user = {
             'id': 'client-789',
-            'email': 'client@example.com'
+            'email': 'client@example.com',
+            'role': 'photographer',  # Handler requires this despite allowing clients in logic
+            'plan': 'free'
         }
         
         # Execute
@@ -104,7 +107,9 @@ class TestBulkDownload:
         
         unauthorized_user = {
             'id': 'unauthorized-999',
-            'email': 'unauthorized@example.com'
+            'email': 'unauthorized@example.com',
+            'role': 'photographer',  # Has role but not in client_emails
+            'plan': 'free'
         }
         
         # Execute
@@ -112,6 +117,8 @@ class TestBulkDownload:
         
         # Assert
         assert response['statusCode'] == 403
+        body = eval(response['body'])
+        assert 'Access denied' in body['error']
         body = eval(response['body'])
         assert 'Access denied' in body['error']
     

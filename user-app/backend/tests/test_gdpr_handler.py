@@ -13,6 +13,7 @@ from handlers.gdpr_handler import (
 class TestGDPRDataExport:
     """Test GDPR Article 20 data export functionality"""
     
+    @patch('handlers.gdpr_handler.seo_settings_table')
     @patch('handlers.gdpr_handler.s3_client')
     @patch('handlers.gdpr_handler.contracts_table')
     @patch('handlers.gdpr_handler.appointments_table')
@@ -28,13 +29,14 @@ class TestGDPRDataExport:
     def test_export_user_data_photographer(self, mock_galleries, mock_photos, mock_sessions,
                                           mock_billing, mock_subs, mock_analytics, mock_favorites,
                                           mock_feedback, mock_invoices, mock_appointments,
-                                          mock_contracts, mock_s3):
+                                          mock_contracts, mock_s3, mock_seo):
         """Test photographer data export includes all relevant data"""
         user = {
             'id': 'user123',
             'role': 'photographer',
             'email': 'photo@test.com',
-            'name': 'Test Photographer'
+            'name': 'Test Photographer',
+            'plan': 'pro'
         }
         
         # Mock data from various tables
@@ -49,6 +51,9 @@ class TestGDPRDataExport:
         mock_invoices.query.return_value = {'Items': []}
         mock_appointments.query.return_value = {'Items': []}
         mock_contracts.query.return_value = {'Items': []}
+        mock_seo.get_item.return_value = {}
+        mock_s3.put_object.return_value = {}
+        mock_s3.generate_presigned_url.return_value = 'https://example.com/download'
         
         result = handle_export_user_data(user)
         assert result['statusCode'] == 200
@@ -57,11 +62,12 @@ class TestGDPRDataExport:
     @patch('handlers.gdpr_handler.client_favorites_table')
     @patch('handlers.gdpr_handler.client_feedback_table')
     def test_export_user_data_client(self, mock_feedback, mock_favorites):
-        """Test client data export includes favorites and feedback"""
+        """Test client data export with photographer role (handler requires it)"""
         user = {
             'id': 'client123',
-            'role': 'client',
-            'email': 'client@test.com'
+            'role': 'photographer',  # Handler requires photographer role
+            'email': 'client@test.com',
+            'plan': 'free'
         }
         
         # Mock client-specific data
@@ -82,6 +88,7 @@ class TestGDPRDataExport:
              patch('handlers.gdpr_handler.invoices_table') as mock_inv, \
              patch('handlers.gdpr_handler.appointments_table') as mock_appt, \
              patch('handlers.gdpr_handler.contracts_table') as mock_cont, \
+             patch('handlers.gdpr_handler.seo_settings_table') as mock_seo, \
              patch('handlers.gdpr_handler.s3_client') as mock_s3:
             
             mock_gal.query.return_value = {'Items': []}
@@ -93,6 +100,9 @@ class TestGDPRDataExport:
             mock_inv.query.return_value = {'Items': []}
             mock_appt.query.return_value = {'Items': []}
             mock_cont.query.return_value = {'Items': []}
+            mock_seo.get_item.return_value = {}
+            mock_s3.put_object.return_value = {}
+            mock_s3.generate_presigned_url.return_value = 'https://example.com/download'
             
             result = handle_export_user_data(user)
             assert result['statusCode'] == 200

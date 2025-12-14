@@ -14,6 +14,7 @@ from utils.email import (
     send_download_reminder_email
 )
 from handlers.notification_handler import should_send_notification
+from handlers.subscription_handler import get_user_features
 from utils.plan_enforcement import require_plan, require_role
 
 # Email automation queue table
