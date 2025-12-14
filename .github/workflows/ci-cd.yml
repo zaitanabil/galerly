@@ -286,10 +286,16 @@ jobs:
           echo "deployed=true" >> $GITHUB_OUTPUT
           
       - name: Invalidate CloudFront cache
+        continue-on-error: true
         run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} \
-            --paths "/*"
+          if [ "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" != "E1234567890ABC" ] && [ -n "${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}" ]; then
+            aws cloudfront create-invalidation \
+              --distribution-id ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }} \
+              --paths "/*"
+            echo "CloudFront cache invalidated"
+          else
+            echo "CloudFront distribution not configured yet, skipping invalidation"
+          fi
           
       - name: Download Lambda package
         uses: actions/download-artifact@v4
