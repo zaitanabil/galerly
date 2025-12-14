@@ -17,20 +17,21 @@ def mock_user():
         'id': 'test-user-123',
         'email': 'photographer@example.com',
         'name': 'Test Photographer',
+        'role': 'photographer',
         'plan': 'plus'  # Plus plan has custom_domain feature
     }
 
 
 @pytest.fixture
 def mock_get_features():
-    with patch('handlers.portfolio_handler.get_user_features') as mock:
+    with patch('handlers.subscription_handler.get_user_features') as mock:
         mock.return_value = (
             {
                 'custom_domain': True,
                 'portfolio_customization': True
             },
-            {},
-            'plus'
+            'plus',
+            'Plus Plan'
         )
         yield mock
 
@@ -168,11 +169,11 @@ def test_setup_custom_domain_success(mock_user, mock_get_features, mock_cloudfro
 
 def test_setup_custom_domain_without_feature(mock_user, mock_tables):
     """Test custom domain setup without required plan feature"""
-    with patch('handlers.portfolio_handler.get_user_features') as mock_features:
+    with patch('handlers.subscription_handler.get_user_features') as mock_features:
         mock_features.return_value = (
             {'custom_domain': False},  # No custom domain feature
-            {},
-            'starter'
+            'starter',
+            'Starter Plan'
         )
         
         body = {
