@@ -17,7 +17,9 @@ def mock_user():
         'id': 'test-user-id-123',
         'email': 'test@example.com',
         'name': 'Test User',
-        'password_hash': 'hashed_password'
+        'password_hash': 'hashed_password',
+        'role': 'photographer',
+        'plan': 'pro'
     }
 
 
