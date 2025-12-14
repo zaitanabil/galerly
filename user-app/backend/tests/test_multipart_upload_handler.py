@@ -14,13 +14,13 @@ from handlers.multipart_upload_handler import (
 class TestMultipartUploadInitialization:
     """Test multipart upload initialization"""
     
-    @patch('handlers.multipart_upload_handler.enforce_storage_limit')
+    @patch('handlers.subscription_handler.enforce_storage_limit')
     @patch('handlers.multipart_upload_handler.s3_client')
     @patch('handlers.multipart_upload_handler.galleries_table')
     def test_initialize_upload_success(self, mock_galleries, mock_s3, mock_storage):
         """Test successful multipart upload initialization"""
         gallery_id = 'gallery123'
-        user = {'id': 'user123', 'role': 'photographer'}
+        user = {'id': 'user123', 'email': 'test@test.com', 'role': 'photographer', 'plan': 'pro'}
         event = {
             'body': '{"filename": "large_photo.raw", "file_size": 104857600, "content_type": "image/raw"}'
         }
@@ -50,29 +50,23 @@ class TestMultipartUploadInitialization:
     def test_initialize_upload_blocks_non_owner(self, mock_galleries):
         """Test initialization blocked for non-gallery owner"""
         gallery_id = 'gallery123'
-        user = {'id': 'user456', 'role': 'photographer'}  # Different user
+        user = {'id': 'user456', 'email': 'test2@test.com', 'role': 'photographer', 'plan': 'pro'}  # Different user
         event = {
             'body': '{"filename": "photo.jpg", "file_size": 1048576}'
         }
         
         # Mock gallery owned by different user
-        mock_galleries.get_item.return_value = {
-            'Item': {
-                'id': 'gallery123',
-                'user_id': 'user123',  # Different owner
-                'name': 'Test Gallery'
-            }
-        }
+        mock_galleries.get_item.return_value = {}  # No Item means not found for this user
         
         result = handle_initialize_multipart_upload(gallery_id, user, event)
         assert result['statusCode'] == 403
     
-    @patch('handlers.multipart_upload_handler.enforce_storage_limit')
+    @patch('handlers.subscription_handler.enforce_storage_limit')
     @patch('handlers.multipart_upload_handler.galleries_table')
     def test_initialize_upload_enforces_storage_limit(self, mock_galleries, mock_storage):
         """Test storage limit enforcement on initialization"""
         gallery_id = 'gallery123'
-        user = {'id': 'user123', 'role': 'photographer'}
+        user = {'id': 'user123', 'email': 'test@test.com', 'role': 'photographer', 'plan': 'pro'}
         event = {
             'body': '{"filename": "huge_file.raw", "file_size": 10737418240}'  # 10GB
         }
@@ -97,7 +91,7 @@ class TestMultipartUploadCompletion:
     def test_complete_upload_success(self, mock_galleries, mock_photos, mock_s3):
         """Test successful multipart upload completion"""
         gallery_id = 'gallery123'
-        user = {'id': 'user123', 'role': 'photographer'}
+        user = {'id': 'user123', 'email': 'test@test.com', 'role': 'photographer', 'plan': 'pro'}
         event = {
             'body': '{"photo_id": "photo123", "upload_id": "upload123", "parts": [{"PartNumber": 1, "ETag": "etag1"}]}'
         }
@@ -124,14 +118,12 @@ class TestMultipartUploadCompletion:
     def test_complete_upload_verifies_ownership(self, mock_galleries):
         """Test completion verifies gallery ownership"""
         gallery_id = 'gallery123'
-        user = {'id': 'user456', 'role': 'photographer'}  # Different user
+        user = {'id': 'user456', 'email': 'test2@test.com', 'role': 'photographer', 'plan': 'pro'}  # Different user
         event = {
             'body': '{"photo_id": "photo123", "upload_id": "upload123", "parts": []}'
         }
         
-        mock_galleries.get_item.return_value = {
-            'Item': {'id': 'gallery123', 'user_id': 'user123'}  # Different owner
-        }
+        mock_galleries.get_item.return_value = {}  # No Item
         
         result = handle_complete_multipart_upload(gallery_id, user, event)
         assert result['statusCode'] == 403
@@ -146,7 +138,7 @@ class TestMultipartUploadAbort:
     def test_abort_upload_success(self, mock_galleries, mock_photos, mock_s3):
         """Test successful upload abort and cleanup"""
         gallery_id = 'gallery123'
-        user = {'id': 'user123', 'role': 'photographer'}
+        user = {'id': 'user123', 'email': 'test@test.com', 'role': 'photographer', 'plan': 'pro'}
         event = {
             'body': '{"photo_id": "photo123", "upload_id": "upload123"}'
         }
@@ -170,14 +162,12 @@ class TestMultipartUploadAbort:
     def test_abort_upload_blocks_non_owner(self, mock_galleries):
         """Test abort blocked for non-owner"""
         gallery_id = 'gallery123'
-        user = {'id': 'user456', 'role': 'photographer'}
+        user = {'id': 'user456', 'email': 'test2@test.com', 'role': 'photographer', 'plan': 'pro'}
         event = {
             'body': '{"photo_id": "photo123", "upload_id": "upload123"}'
         }
         
-        mock_galleries.get_item.return_value = {
-            'Item': {'id': 'gallery123', 'user_id': 'user123'}
-        }
+        mock_galleries.get_item.return_value = {}  # No Item
         
         result = handle_abort_multipart_upload(gallery_id, user, event)
         assert result['statusCode'] == 403
