@@ -19,6 +19,7 @@ def mock_user():
     return {
         'id': 'user_123',
         'email': 'test@example.com',
+        'role': 'photographer',
         'plan': 'plus'
     }
 
@@ -29,7 +30,8 @@ def mock_user_free():
     return {
         'id': 'user_456',
         'email': 'free@example.com',
-        'plan': 'free'
+        'role': 'photographer',
+        'plan': 'starter'
     }
 
 
@@ -43,7 +45,7 @@ def sample_image_base64():
     return base64.b64encode(png_bytes).decode('utf-8')
 
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 @patch('handlers.watermark_handler.s3_client')
 def test_upload_logo_success(mock_s3, mock_get_features, mock_user, sample_image_base64):
     """Test successful logo upload"""
@@ -72,7 +74,7 @@ def test_upload_logo_success(mock_s3, mock_get_features, mock_user, sample_image
         mock_s3.put_object.assert_called_once()
 
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 def test_upload_logo_free_plan_denied(mock_get_features, mock_user_free):
     """Test that free plan users cannot upload logos"""
     mock_get_features.return_value = ({'watermarking': False}, 'free', {})
@@ -90,7 +92,7 @@ def test_upload_logo_free_plan_denied(mock_get_features, mock_user_free):
     assert 'upgrade_required' in body_data
 
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 def test_upload_logo_missing_file_data(mock_get_features, mock_user):
     """Test upload with missing file data"""
     mock_get_features.return_value = ({'watermarking': True}, 'plus', {})
@@ -107,7 +109,7 @@ def test_upload_logo_missing_file_data(mock_get_features, mock_user):
     assert 'file_data required' in body_data['error']
 
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 def test_upload_logo_invalid_base64(mock_get_features, mock_user):
     """Test upload with invalid base64 data"""
     mock_get_features.return_value = ({'watermarking': True}, 'plus', {})
@@ -125,7 +127,7 @@ def test_upload_logo_invalid_base64(mock_get_features, mock_user):
     assert 'Invalid base64' in body_data['error']
 
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 def test_upload_logo_file_too_large(mock_get_features, mock_user):
     """Test upload with file exceeding 2MB limit"""
     mock_get_features.return_value = ({'watermarking': True}, 'plus', {})
@@ -146,7 +148,7 @@ def test_upload_logo_file_too_large(mock_get_features, mock_user):
     assert 'less than 2MB' in body_data['error']
 
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 def test_upload_logo_invalid_image(mock_get_features, mock_user, sample_image_base64):
     """Test upload with invalid image file"""
     mock_get_features.return_value = ({'watermarking': True}, 'plus', {})
@@ -165,7 +167,7 @@ def test_upload_logo_invalid_image(mock_get_features, mock_user, sample_image_ba
     assert 'Invalid' in body_data['error'] or 'base64' in body_data['error']
 
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 @patch('handlers.watermark_handler.s3_client')
 def test_upload_logo_s3_failure(mock_s3, mock_get_features, mock_user, sample_image_base64):
     """Test upload when S3 upload fails"""
@@ -188,7 +190,7 @@ def test_upload_logo_s3_failure(mock_s3, mock_get_features, mock_user, sample_im
     assert 'Failed to upload logo' in body_data['error']
 
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 @patch('handlers.watermark_handler.s3_client')
 def test_upload_logo_different_formats(mock_s3, mock_get_features, mock_user):
     """Test uploading different image formats (PNG, JPG, WEBP)"""
@@ -223,7 +225,7 @@ def test_upload_logo_different_formats(mock_s3, mock_get_features, mock_user):
 
 # Tests for watermark settings endpoints
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 @patch('handlers.watermark_handler.users_table')
 def test_get_watermark_settings(mock_users_table, mock_get_features, mock_user):
     """Test getting watermark settings"""
@@ -249,7 +251,7 @@ def test_get_watermark_settings(mock_users_table, mock_get_features, mock_user):
     assert body_data['watermark_size_percent'] == 15
 
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 @patch('handlers.watermark_handler.users_table')
 def test_update_watermark_settings(mock_users_table, mock_get_features, mock_user):
     """Test updating watermark settings"""
@@ -271,7 +273,7 @@ def test_update_watermark_settings(mock_users_table, mock_get_features, mock_use
     mock_users_table.update_item.assert_called_once()
 
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 def test_update_watermark_settings_invalid_position(mock_get_features, mock_user):
     """Test updating with invalid position"""
     mock_get_features.return_value = ({'watermarking': True}, 'plus', {})
@@ -287,7 +289,7 @@ def test_update_watermark_settings_invalid_position(mock_get_features, mock_user
     assert 'Invalid position' in body_data['error']
 
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 def test_update_watermark_settings_invalid_opacity(mock_get_features, mock_user):
     """Test updating with invalid opacity"""
     mock_get_features.return_value = ({'watermarking': True}, 'plus', {})
@@ -303,7 +305,7 @@ def test_update_watermark_settings_invalid_opacity(mock_get_features, mock_user)
     assert 'Opacity must be between' in body_data['error']
 
 
-@patch('handlers.watermark_handler.get_user_features')
+@patch("handlers.subscription_handler.get_user_features")
 @patch('handlers.watermark_handler.users_table')
 def test_batch_apply_watermark(mock_users_table, mock_get_features, mock_user):
     """Test batch applying watermark to existing photos"""
