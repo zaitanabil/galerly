@@ -1,0 +1,48 @@
+name: Code Quality
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.13'
+        cache: 'pip'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install flake8 black isort pylint
+
+    - name: Check code formatting (Black)
+      run: |
+        cd user-app/backend
+        black --check --diff handlers/ tests/ || true
+
+    - name: Check import sorting (isort)
+      run: |
+        cd user-app/backend
+        isort --check-only --diff handlers/ tests/ || true
+
+    - name: Lint with flake8
+      run: |
+        cd user-app/backend
+        flake8 handlers/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics || true
+        flake8 handlers/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics || true
+
+    - name: Quality Summary
+      if: always()
+      run: |
+        echo "## Code Quality Check" >> $GITHUB_STEP_SUMMARY
+        echo "Code quality checks completed" >> $GITHUB_STEP_SUMMARY

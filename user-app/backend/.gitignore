@@ -13,3 +13,6 @@ uploads/
 .DS_Store
 *.log
 
+htmlcov/
+.coverage
+coverage.xml
