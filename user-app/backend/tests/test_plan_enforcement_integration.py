@@ -182,9 +182,46 @@ class TestHandlerIntegration:
             assert result['statusCode'] == 403
     
     def test_raw_vault_requires_ultimate_plan(self):
-        """Test that RAW vault operations require Ultimate plan"""
-        # Skip - handle_archive_raw_file not implemented yet
-        pytest.skip("RAW vault handler not fully implemented")
+        """Test that RAW vault operations require Ultimate plan with real AWS"""
+        from handlers.raw_vault_handler import handle_archive_to_vault
+        from utils.config import users_table
+        import uuid
+        
+        user_id = f'test-user-{uuid.uuid4()}'
+        user_pro = {
+            'id': user_id,
+            'email': f'{user_id}@test.com',
+            'role': 'photographer',
+            'plan': 'pro'
+        }
+        
+        try:
+            # Create user in real DB
+            users_table.put_item(Item={
+                'email': user_pro['email'],
+                'id': user_id,
+                'plan': 'pro'
+            })
+            
+            body = {'photo_id': f'photo-{uuid.uuid4()}'}
+            
+            with patch('handlers.subscription_handler.get_user_features') as mock_features:
+                mock_features.return_value = (
+                    {'raw_vault': False},
+                    'pro',
+                    'Pro Plan'
+                )
+                
+                result = handle_archive_to_vault(user_pro, body)
+                
+                # Should deny access - RAW vault requires Ultimate
+                assert result['statusCode'] == 403
+                
+        finally:
+            try:
+                users_table.delete_item(Key={'email': user_pro['email']})
+            except:
+                pass
     
     def test_email_templates_requires_pro_plan(self):
         """Test that custom email templates require Pro+ plan"""
