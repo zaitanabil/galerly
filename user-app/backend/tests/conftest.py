@@ -33,6 +33,7 @@ os.environ.setdefault('DYNAMODB_TABLE_CONTACT', 'galerly-contact-local')
 os.environ.setdefault('DYNAMODB_TABLE_VIDEO_ANALYTICS', 'galerly-video-analytics-local')
 os.environ.setdefault('DYNAMODB_TABLE_VISITOR_TRACKING', 'galerly-visitor-tracking-local')
 os.environ.setdefault('DYNAMODB_TABLE_BACKGROUND_JOBS', 'galerly-background-jobs')
+os.environ.setdefault('DYNAMODB_CLIENT_SELECTIONS_TABLE', 'galerly-client-selections-local')
 
 # Add backend directory to path BEFORE any imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
