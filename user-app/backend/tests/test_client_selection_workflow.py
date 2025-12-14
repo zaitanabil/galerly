@@ -2,6 +2,7 @@
 Test Suite for Client Selection Workflow
 Tests the client photo selection process and session management
 """
+import json
 import pytest
 from unittest.mock import Mock, patch
 from datetime import datetime, timezone
@@ -87,7 +88,7 @@ class TestClientSelectionWorkflow:
         response = handle_create_selection_session(mock_photographer, body)
         
         assert response['statusCode'] == 200
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         
         assert body_data['success'] == True
         assert 'session' in body_data
@@ -112,7 +113,7 @@ class TestClientSelectionWorkflow:
         response = handle_create_selection_session(mock_photographer, body)
         
         assert response['statusCode'] == 400
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         assert 'error' in body_data
     
     @patch('handlers.client_selection_handler.galleries_table')
@@ -168,7 +169,7 @@ class TestClientSelectionWorkflow:
         response = handle_add_to_selection(None, body)
         
         assert response['statusCode'] == 200
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         
         assert body_data['success'] == True
         assert body_data['selections_count'] == 1
@@ -198,7 +199,7 @@ class TestClientSelectionWorkflow:
         response = handle_add_to_selection(None, body)
         
         assert response['statusCode'] == 400
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         assert 'limit_reached' in body_data
         assert body_data['limit_reached'] == True
     
@@ -220,7 +221,7 @@ class TestClientSelectionWorkflow:
         response = handle_add_to_selection(None, body)
         
         assert response['statusCode'] == 400
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         assert 'already' in body_data['error'].lower()
     
     @patch('handlers.client_selection_handler.client_selections_table')
@@ -239,7 +240,7 @@ class TestClientSelectionWorkflow:
         response = handle_add_to_selection(None, body)
         
         assert response['statusCode'] == 400
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         assert 'not active' in body_data['error'].lower()
     
     @patch('handlers.client_selection_handler.client_selections_table')
@@ -261,7 +262,7 @@ class TestClientSelectionWorkflow:
         response = handle_remove_from_selection(None, body)
         
         assert response['statusCode'] == 200
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         
         assert body_data['success'] == True
         assert body_data['selections_count'] == 1
@@ -304,7 +305,7 @@ class TestClientSelectionWorkflow:
         response = handle_get_selection_session(None, 'session123')
         
         assert response['statusCode'] == 200
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         
         assert body_data['id'] == 'session123'
         assert len(body_data['selections']) == 1
@@ -336,7 +337,7 @@ class TestClientSelectionWorkflow:
         response = handle_submit_selection(None, body)
         
         assert response['statusCode'] == 200
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         
         assert body_data['success'] == True
         assert body_data['selections_count'] == 2
@@ -360,7 +361,7 @@ class TestClientSelectionWorkflow:
         response = handle_submit_selection(None, body)
         
         assert response['statusCode'] == 400
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         assert 'no photos' in body_data['error'].lower()
     
     @patch('handlers.client_selection_handler.client_selections_table')
@@ -379,7 +380,7 @@ class TestClientSelectionWorkflow:
         response = handle_submit_selection(None, body)
         
         assert response['statusCode'] == 400
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         assert 'already submitted' in body_data['error'].lower()
     
     @patch('handlers.client_selection_handler.client_selections_table')
@@ -406,7 +407,7 @@ class TestClientSelectionWorkflow:
         response = handle_list_selection_sessions(mock_photographer, {})
         
         assert response['statusCode'] == 200
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         
         assert 'sessions' in body_data
         assert body_data['count'] == 2
@@ -428,7 +429,7 @@ class TestClientSelectionWorkflow:
         response = handle_list_selection_sessions(mock_photographer, query_params)
         
         assert response['statusCode'] == 200
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         
         # Should only return submitted sessions
         assert body_data['count'] == 2
@@ -483,7 +484,7 @@ class TestClientSelectionEdgeCases:
         response = handle_add_to_selection(None, body)
         
         assert response['statusCode'] == 200
-        body_data = response['body'] if isinstance(response['body'], dict) else eval(response['body'])
+        body_data = response['body'] if isinstance(response['body'], dict) else json.loads(response['body'])
         assert body_data['remaining'] is None  # No limit
     
     def test_missing_required_fields(self):
