@@ -83,7 +83,15 @@ class TestCloudFrontManager:
     @patch('utils.cloudfront_manager.cloudfront_client')
     def test_get_distribution_status_not_found(self, mock_cf_client):
         """Test getting status for non-existent distribution"""
-        mock_cf_client.get_distribution.side_effect = mock_cf_client.exceptions.NoSuchDistribution()
+        # Create a proper exception class
+        class NoSuchDistribution(Exception):
+            pass
+        
+        # Attach it to the mock
+        mock_cf_client.exceptions.NoSuchDistribution = NoSuchDistribution
+        
+        # Make the method raise the exception
+        mock_cf_client.get_distribution.side_effect = NoSuchDistribution("Not found")
         
         result = get_distribution_status('INVALID')
         
@@ -163,7 +171,15 @@ class TestACMManager:
     @patch('utils.acm_manager.acm_client')
     def test_describe_certificate_not_found(self, mock_acm_client):
         """Test describing non-existent certificate"""
-        mock_acm_client.describe_certificate.side_effect = mock_acm_client.exceptions.ResourceNotFoundException()
+        # Create a proper exception class
+        class ResourceNotFoundException(Exception):
+            pass
+        
+        # Attach it to the mock
+        mock_acm_client.exceptions.ResourceNotFoundException = ResourceNotFoundException
+        
+        # Make the method raise the exception
+        mock_acm_client.describe_certificate.side_effect = ResourceNotFoundException("Not found")
         
         result = describe_certificate('arn:aws:acm:us-east-1:123:certificate/invalid')
         
@@ -269,18 +285,22 @@ class TestPortfolioHandlerIntegration:
         # Import handler
         from handlers.portfolio_handler import handle_setup_custom_domain
         
-        user = {'id': 'user123', 'email': 'test@example.com'}
-        body = {'domain': 'gallery.example.com', 'auto_provision': True}
-        
-        response = handle_setup_custom_domain(user, body)
-        
-        # Verify response structure
-        assert response['statusCode'] == 200
-        body_data = response.get('body', '{}')
-        import json
-        response_data = json.loads(body_data) if isinstance(body_data, str) else body_data
-        
-        assert 'certificate_arn' in response_data or 'error' in response_data
+        # Mock get_user_features for decorator
+        with patch('handlers.subscription_handler.get_user_features') as mock_features:
+            mock_features.return_value = ({'custom_domain': True}, 'plus', 'Plus Plan')
+            
+            user = {'id': 'user123', 'email': 'test@example.com', 'role': 'photographer', 'plan': 'plus'}
+            body = {'domain': 'gallery.example.com', 'auto_provision': True}
+            
+            response = handle_setup_custom_domain(user, body)
+            
+            # Verify response structure
+            assert response['statusCode'] == 200
+            body_data = response.get('body', '{}')
+            import json
+            response_data = json.loads(body_data) if isinstance(body_data, str) else body_data
+            
+            assert 'certificate_arn' in response_data or 'error' in response_data
 
 
 if __name__ == '__main__':
