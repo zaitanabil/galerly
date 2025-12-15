@@ -1,6 +1,7 @@
 """
 Configuration and AWS clients with LocalStack support
 Automatically detects LocalStack endpoint and configures boto3 accordingly
+Uses resource naming conventions to reduce environment variables
 """
 import os
 import boto3
@@ -24,20 +25,52 @@ if os.environ.get('ENVIRONMENT') == 'production':
 # override=False ensures Docker environment variables are NOT overwritten
 load_dotenv(env_file, override=False)
 
-def get_required_env(key):
-    """Get required environment variable or raise error"""
-    value = os.environ.get(key)
-    if value is None:
-        raise ValueError(f"Required environment variable '{key}' is not set")
-    return value
-
-# AWS Region - REQUIRED
-AWS_REGION = get_required_env('AWS_REGION')
+# Import resource names (uses convention over configuration)
+from utils.resource_names import (
+    # Environment
+    ENVIRONMENT,
+    AWS_REGION,
+    DEBUG,
+    # DynamoDB Tables
+    USERS_TABLE,
+    GALLERIES_TABLE,
+    PHOTOS_TABLE,
+    SESSIONS_TABLE,
+    SUBSCRIPTIONS_TABLE,
+    BILLING_TABLE,
+    ANALYTICS_TABLE,
+    AUDIT_LOG_TABLE,
+    RATE_LIMITS_TABLE,
+    PLAN_VIOLATIONS_TABLE,
+    # S3 Buckets
+    S3_FRONTEND_BUCKET,
+    S3_PHOTOS_BUCKET,
+    S3_RENDITIONS_BUCKET,
+    # Secrets and URLs
+    FRONTEND_URL,
+    API_BASE_URL,
+    CDN_DOMAIN,
+    JWT_SECRET,
+    STRIPE_SECRET_KEY,
+    STRIPE_PUBLISHABLE_KEY,
+    STRIPE_WEBHOOK_SECRET,
+    SMTP_HOST,
+    SMTP_PORT,
+    SMTP_USER,
+    SMTP_PASSWORD,
+    FROM_EMAIL,
+    FROM_NAME,
+    # Defaults
+    DEFAULT_INVOICE_CURRENCY,
+    DEFAULT_INVOICE_DUE_DATE,
+    DEFAULT_INVOICE_PAYMENT_METHOD,
+    DEFAULT_ITEM_PRICE,
+    DEFAULT_ITEM_QUANTITY,
+    PRESIGNED_URL_EXPIRY,
+)
 
 # LocalStack endpoint detection
 AWS_ENDPOINT_URL = os.environ.get('AWS_ENDPOINT_URL')
-# Accept 'development' or 'local' as local environment
-ENVIRONMENT = get_required_env('ENVIRONMENT')
 IS_LOCAL = ENVIRONMENT in ['development', 'local']
 
 # Configure boto3 client settings
@@ -174,18 +207,16 @@ dynamodb = LazyClient(get_dynamodb)
 lambda_client = LazyClient(get_lambda_client)
 ses_client = LazyClient(get_ses_client)
 
-# Configuration - ALL REQUIRED
-S3_BUCKET = get_required_env('S3_PHOTOS_BUCKET')
-S3_FRONTEND_BUCKET = get_required_env('S3_BUCKET')
-S3_RENDITIONS_BUCKET = get_required_env('S3_RENDITIONS_BUCKET')
+# Configuration - using naming conventions (no env vars needed for bucket names)
+# S3_BUCKET is an alias for backwards compatibility
+S3_BUCKET = S3_PHOTOS_BUCKET
 
 # DynamoDB Tables - lazy-loaded to allow test mocking
-# FIX: In test mode, return the conftest global mock instead of real tables
 _tables_cache = {}
 
-def get_table(table_name_env):
-    """Get DynamoDB table by environment variable name (lazy-loaded, mockable)"""
-    # FIX: In test mode, return the global mock table from conftest
+def get_table(table_name):
+    """Get DynamoDB table by name (lazy-loaded, mockable)"""
+    # In test mode, return the global mock table from conftest
     if IS_TEST_MODE:
         try:
             from tests.conftest import global_mock_table
@@ -193,36 +224,37 @@ def get_table(table_name_env):
         except ImportError:
             pass  # Not in test environment
     
-    if table_name_env not in _tables_cache:
-        _tables_cache[table_name_env] = get_dynamodb().Table(get_required_env(table_name_env))
-    return _tables_cache[table_name_env]
+    if table_name not in _tables_cache:
+        _tables_cache[table_name] = get_dynamodb().Table(table_name)
+    return _tables_cache[table_name]
 
 # Backwards compatibility: Create lazy-loading properties
 class LazyTable:
     """Proxy that lazy-loads DynamoDB tables on attribute access"""
-    def __init__(self, env_var):
-        self._env_var = env_var
+    def __init__(self, table_name):
+        self._table_name = table_name
         self._table = None
     
     def __getattr__(self, name):
-        # FIX: Don't cache in test mode, always get fresh table
+        # Don't cache in test mode, always get fresh table
         # This allows tests to reconfigure global_mock_table between tests
         if IS_TEST_MODE:
-            table = get_table(self._env_var)
+            table = get_table(self._table_name)
             return getattr(table, name)
         
         if self._table is None:
-            self._table = get_table(self._env_var)
+            self._table = get_table(self._table_name)
         return getattr(self._table, name)
 
-users_table = LazyTable('DYNAMODB_TABLE_USERS')
-galleries_table = LazyTable('DYNAMODB_TABLE_GALLERIES')
-photos_table = LazyTable('DYNAMODB_TABLE_PHOTOS')
-sessions_table = LazyTable('DYNAMODB_TABLE_SESSIONS')
-billing_table = LazyTable('DYNAMODB_TABLE_BILLING')
-subscriptions_table = LazyTable('DYNAMODB_TABLE_SUBSCRIPTIONS')
-analytics_table = LazyTable('DYNAMODB_TABLE_ANALYTICS')
-client_favorites_table = LazyTable('DYNAMODB_TABLE_CLIENT_FAVORITES')
+# Table references using naming conventions (not env vars)
+users_table = LazyTable(USERS_TABLE)
+galleries_table = LazyTable(GALLERIES_TABLE)
+photos_table = LazyTable(PHOTOS_TABLE)
+sessions_table = LazyTable(SESSIONS_TABLE)
+billing_table = LazyTable(BILLING_TABLE)
+subscriptions_table = LazyTable(SUBSCRIPTIONS_TABLE)
+analytics_table = LazyTable(ANALYTICS_TABLE)
+client_favorites_table = LazyTable(CLIENT_FAVORITES_TABLE)
 client_feedback_table = LazyTable('DYNAMODB_TABLE_CLIENT_FEEDBACK')
 email_templates_table = LazyTable('DYNAMODB_TABLE_EMAIL_TEMPLATES')
 features_table = LazyTable('DYNAMODB_TABLE_FEATURES')

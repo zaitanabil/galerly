@@ -2,13 +2,14 @@
 Plan Violation Monitoring and Alerting
 Tracks attempts to access features outside plan limits
 """
-import os
 from datetime import datetime, timezone
 from decimal import Decimal
-from utils.config import dynamodb
+from utils.config import get_dynamodb
+from utils.resource_names import PLAN_VIOLATIONS_TABLE
 
-# Initialize violations tracking table
-violations_table = dynamodb.Table(os.environ['DYNAMODB_TABLE_PLAN_VIOLATIONS'])
+# Initialize violations tracking table using naming convention
+dynamodb = get_dynamodb()
+violations_table = dynamodb.Table(PLAN_VIOLATIONS_TABLE)
 
 
 def log_plan_violation(user_id, violation_type, details=None):

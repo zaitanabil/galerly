@@ -6,11 +6,12 @@ import time
 import hashlib
 from functools import wraps
 from utils.response import create_response
-from utils.config import dynamodb
-import os
+from utils.config import get_dynamodb
+from utils.resource_names import RATE_LIMITS_TABLE
 
-# Initialize rate limit tracking table
-rate_limits_table = dynamodb.Table(os.environ['DYNAMODB_TABLE_RATE_LIMITS'])
+# Initialize rate limit tracking table using naming convention
+dynamodb = get_dynamodb()
+rate_limits_table = dynamodb.Table(RATE_LIMITS_TABLE)
 
 # Rate limit configurations by endpoint type
 RATE_LIMITS = {
