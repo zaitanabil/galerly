@@ -100,30 +100,30 @@ fi
 if command -v aws &> /dev/null; then
     echo -e "${GREEN}Building Lambda environment JSON...${NC}"
     
-    # Lambda-relevant prefixes (exclude frontend VITE_*, LIFECYCLE_*, CDN_*, etc.)
-    LAMBDA_PREFIXES=("DYNAMODB_TABLE_" "S3_" "STRIPE_" "SMTP_" "JWT_" "FROM_" "API_" "FRONTEND_URL" "ENVIRONMENT" "DEBUG" "AWS_REGION" "DEFAULT_INVOICE" "DEFAULT_ITEM" "PRESIGNED_URL_EXPIRY")
+    # Excluded prefixes (frontend-only and AWS internals)
+    EXCLUDED_PREFIXES=("VITE_" "LIFECYCLE_" "AWS_ACCESS_KEY" "AWS_SECRET_ACCESS" "AWS_ENDPOINT" "LOCALSTACK" "PYTHONPATH" "NPY_" "PYTHON" "__PYVENV" "windir" "FOO" "TWITTER" "YOURAPPLICATION")
     
     # Start JSON
     json='{"Variables":{'
     first=true
     
-    # Add filtered variables (excluding AWS_REGION which is reserved)
+    # Add filtered variables (excluding AWS reserved and frontend-only)
     for key in "${!VARIABLES[@]}"; do
         # Skip AWS reserved variables
         if [ "$key" = "AWS_REGION" ] || [ "$key" = "AWS_ACCESS_KEY_ID" ] || [ "$key" = "AWS_SECRET_ACCESS_KEY" ]; then
             continue
         fi
         
-        # Check if key matches Lambda-relevant prefixes
-        include=false
-        for prefix in "${LAMBDA_PREFIXES[@]}"; do
-            if [[ "$key" == "$prefix"* ]] || [[ "$key" == "$prefix" ]]; then
-                include=true
+        # Check if key matches excluded prefixes
+        exclude=false
+        for prefix in "${EXCLUDED_PREFIXES[@]}"; do
+            if [[ "$key" == "$prefix"* ]]; then
+                exclude=true
                 break
             fi
         done
         
-        if [ "$include" = true ]; then
+        if [ "$exclude" = false ]; then
             if [ "$first" = true ]; then
                 first=false
             else
