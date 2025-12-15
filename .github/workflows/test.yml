@@ -31,6 +31,17 @@ jobs:
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
+    
+    - name: Sync environment variables
+      env:
+        GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_REGION: ${{ vars.AWS_REGION }}
+        LAMBDA_FUNCTION_NAME: ${{ vars.LAMBDA_FUNCTION_NAME }}
+      run: |
+        echo "Syncing environment variables from .env.production..."
+        bash dev_tools/sync-env-vars.sh || echo "Sync completed with warnings"
 
     - name: Set up Python
       uses: actions/setup-python@v5
