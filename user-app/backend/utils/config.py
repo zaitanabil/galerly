@@ -42,6 +42,19 @@ from utils.resource_names import (
     AUDIT_LOG_TABLE,
     RATE_LIMITS_TABLE,
     PLAN_VIOLATIONS_TABLE,
+    CLIENT_FAVORITES_TABLE,
+    CLIENT_FEEDBACK_TABLE,
+    EMAIL_TEMPLATES_TABLE,
+    FEATURES_TABLE,
+    USER_FEATURES_TABLE,
+    INVOICES_TABLE,
+    APPOINTMENTS_TABLE,
+    CONTRACTS_TABLE,
+    RAW_VAULT_TABLE,
+    SEO_SETTINGS_TABLE,
+    BACKGROUND_JOBS_TABLE,
+    VISITOR_TRACKING_TABLE,
+    VIDEO_ANALYTICS_TABLE,
     # S3 Buckets
     S3_FRONTEND_BUCKET,
     S3_PHOTOS_BUCKET,
@@ -255,6 +268,18 @@ billing_table = LazyTable(BILLING_TABLE)
 subscriptions_table = LazyTable(SUBSCRIPTIONS_TABLE)
 analytics_table = LazyTable(ANALYTICS_TABLE)
 client_favorites_table = LazyTable(CLIENT_FAVORITES_TABLE)
+client_feedback_table = LazyTable(CLIENT_FEEDBACK_TABLE)
+email_templates_table = LazyTable(EMAIL_TEMPLATES_TABLE)
+features_table = LazyTable(FEATURES_TABLE)
+user_features_table = LazyTable(USER_FEATURES_TABLE)
+invoices_table = LazyTable(INVOICES_TABLE)
+appointments_table = LazyTable(APPOINTMENTS_TABLE)
+contracts_table = LazyTable(CONTRACTS_TABLE)
+raw_vault_table = LazyTable(RAW_VAULT_TABLE)
+seo_settings_table = LazyTable(SEO_SETTINGS_TABLE)
+background_jobs_table = LazyTable(BACKGROUND_JOBS_TABLE)
+visitor_tracking_table = LazyTable(VISITOR_TRACKING_TABLE)
+video_analytics_table = LazyTable(VIDEO_ANALYTICS_TABLE)
 client_feedback_table = LazyTable('DYNAMODB_TABLE_CLIENT_FEEDBACK')
 email_templates_table = LazyTable('DYNAMODB_TABLE_EMAIL_TEMPLATES')
 features_table = LazyTable('DYNAMODB_TABLE_FEATURES')
